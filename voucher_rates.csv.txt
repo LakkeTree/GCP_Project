@@ -1,0 +1,3 @@
+voucher_name,target_cash_name,purchase_discount_rate,charge_fee_rate,net_benefit_rate,supported_platforms,note
+컬쳐랜드 문화상품권,컬쳐랜드 캐쉬,0.0300,0.0000,0.0300,갤럭시스토어 등,문화상품권 핀번호 1:1 충전 (3% 할인 온전히 적용)
+도서문화상품권 (북앤라이프),북앤라이프 캐시,0.0300,0.0000,0.0300,지원 스토어,북앤라이프 공식 핀번호 1:1 충전 (3% 할인 온전히 적용)
