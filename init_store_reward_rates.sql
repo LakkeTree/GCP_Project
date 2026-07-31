@@ -1,0 +1,23 @@
+-- 1. 플랫폼(스토어) 등급별 상시 적립률 테이블 생성
+CREATE TABLE IF NOT EXISTS store_reward_rates (
+    store_reward_id SERIAL PRIMARY KEY,
+    platform_name VARCHAR(50) NOT NULL,          -- 플랫폼 (스토어)
+    user_tier VARCHAR(50) NOT NULL,              -- 등급 / 단계
+    base_unit VARCHAR(50),                      -- 기본 적립 단위
+    reward_rate DECIMAL(5, 4) NOT NULL,         -- 실질 적립률 (환산)
+    point_name VARCHAR(50) NOT NULL,            -- 적립 수단 / 포인트 명칭
+    note TEXT                                   -- 비고 / 특이사항
+);
+
+-- 2. 마스터 데이터 적재
+INSERT INTO store_reward_rates 
+(platform_name, user_tier, base_unit, reward_rate, point_name, note) 
+VALUES
+('구글 플레이', '브론즈', '1,000원당 1pt', 0.0100, '구글 Play 포인트', '상시 기본 등급 (1pt = 약 10원 가치)'),
+('구글 플레이', '실버', '1,000원당 1.1pt', 0.0110, '구글 Play 포인트', '상시 등급 기준'),
+('구글 플레이', '골드', '1,000원당 1.3pt', 0.0130, '구글 Play 포인트', '상시 등급 기준'),
+('구글 플레이', '플래티넘', '1,000원당 1.6pt', 0.0160, '구글 Play 포인트', '상시 등급 기준'),
+('구글 플레이', '다이아몬드', '1,000원당 2pt', 0.0200, '구글 Play 포인트', '상시 최상위 등급'),
+('갤럭시 스토어', '기본 (상시)', '-', 0.0020, '삼성전자 포인트', '결제 시 삼성전자 멤버십 기본 연동 적립'),
+('원스토어', '기본 (상시)', '-', 0.0100, '원스토어 캐시/포인트', '상시 결제 기본 적립'),
+('애플 앱스토어', '전체', '-', 0.0000, '없음', '자체 결제 적립 포인트 제도 없음');
