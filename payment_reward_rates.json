@@ -1,0 +1,100 @@
+[
+  {
+    "payment_method": "네이버페이",
+    "base_reward_rate": 0.01,
+    "membership_reward_rate": 0.04,
+    "cash_receipt_deduction_rate": 0.0,
+    "note": "네이버플러스 멤버십 이용 시 추가 4% (20만 원 한도)"
+  },
+  {
+    "payment_method": "카카오페이",
+    "base_reward_rate": 0.0,
+    "membership_reward_rate": 0.0,
+    "cash_receipt_deduction_rate": 0.0,
+    "note": "상시 적립 없음 (결제 후 랜덤 알적립만 제공)"
+  },
+  {
+    "payment_method": "PAYCO",
+    "base_reward_rate": 0.002,
+    "membership_reward_rate": 0.0,
+    "cash_receipt_deduction_rate": 0.0,
+    "note": "PAYCO 포인트 결제 및 VIP 등급별 차등"
+  },
+  {
+    "payment_method": "Toss 페이",
+    "base_reward_rate": 0.0,
+    "membership_reward_rate": 0.04,
+    "cash_receipt_deduction_rate": 0.0,
+    "note": "토스프라임 이용 시 4% 적립 (20만 원 초과 시 1%)"
+  },
+  {
+    "payment_method": "삼성페이",
+    "base_reward_rate": 0.0,
+    "membership_reward_rate": 0.0,
+    "cash_receipt_deduction_rate": 0.0,
+    "note": "연동된 신용/체크카드 자체 혜택 적용"
+  },
+  {
+    "payment_method": "애플페이",
+    "base_reward_rate": 0.0,
+    "membership_reward_rate": 0.0,
+    "cash_receipt_deduction_rate": 0.0,
+    "note": "연동된 신용/체크카드 자체 혜택 적용"
+  },
+  {
+    "payment_method": "퀵계좌이체",
+    "base_reward_rate": 0.0,
+    "membership_reward_rate": 0.0,
+    "cash_receipt_deduction_rate": 0.3,
+    "note": "현금영수증 발행 대상 (30% 소득공제)"
+  },
+  {
+    "payment_method": "은행계좌(kcp)",
+    "base_reward_rate": 0.0,
+    "membership_reward_rate": 0.0,
+    "cash_receipt_deduction_rate": 0.3,
+    "note": "현금영수증 발행 대상 (30% 소득공제)"
+  },
+  {
+    "payment_method": "통신사 할인",
+    "base_reward_rate": 0.0,
+    "membership_reward_rate": 0.1,
+    "cash_receipt_deduction_rate": 0.0,
+    "note": "원스토어 전용 (T멤버십 등급별 10% 할인/적립)"
+  },
+  {
+    "payment_method": "컬쳐랜드(우회)",
+    "base_reward_rate": 0.05,
+    "membership_reward_rate": 0.0,
+    "cash_receipt_deduction_rate": 0.0,
+    "note": "오픈마켓 할인구매 -> 페이코 전환 우회(수수료 차감 후 실혜택)"
+  },
+  {
+    "payment_method": "구글 기프트카드",
+    "base_reward_rate": 0.03,
+    "membership_reward_rate": 0.0,
+    "cash_receipt_deduction_rate": 0.0,
+    "note": "온라인 오픈마켓 상시 3% 평균 할인 구매"
+  },
+  {
+    "payment_method": "원 스토어 기프트카드",
+    "base_reward_rate": 0.01,
+    "membership_reward_rate": 0.0,
+    "cash_receipt_deduction_rate": 0.0,
+    "note": "G마켓 등 오픈마켓 평균 1% 할인 구매"
+  },
+  {
+    "payment_method": "애플 기프트카드",
+    "base_reward_rate": 0.0,
+    "membership_reward_rate": 0.0,
+    "cash_receipt_deduction_rate": 0.0,
+    "note": "국내 정가 판매 위주 / 해외 구매 시 환전 수수료 손실"
+  },
+  {
+    "payment_method": "갤럭시 스토어 기프트카드",
+    "base_reward_rate": 0.0,
+    "membership_reward_rate": 0.0,
+    "cash_receipt_deduction_rate": 0.0,
+    "note": "온라인 단독 구매 수단 없음 (이벤트성 쿠폰 위주)"
+  }
+]

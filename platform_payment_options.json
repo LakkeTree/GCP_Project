@@ -49,13 +49,6 @@
     "app_store": true
   },
   {
-    "payment_method": "자체기프트카드",
-    "google_play": true,
-    "galaxy_store": true,
-    "one_store": true,
-    "app_store": true
-  },
-  {
     "payment_method": "삼성페이",
     "google_play": false,
     "galaxy_store": true,
@@ -92,6 +85,34 @@
   },
   {
     "payment_method": "통신사 할인",
+    "google_play": false,
+    "galaxy_store": false,
+    "one_store": true,
+    "app_store": false
+  },
+  {
+    "payment_method": "애플 기프트카드",
+    "google_play": false,
+    "galaxy_store": false,
+    "one_store": false,
+    "app_store": true
+  },
+  {
+    "payment_method": "구글 기프트카드",
+    "google_play": true,
+    "galaxy_store": false,
+    "one_store": false,
+    "app_store": false
+  },
+  {
+    "payment_method": "갤럭시 스토어 기프트카드",
+    "google_play": false,
+    "galaxy_store": true,
+    "one_store": false,
+    "app_store": false
+  },
+  {
+    "payment_method": "원 스토어 기프트카드",
     "google_play": false,
     "galaxy_store": false,
     "one_store": true,
