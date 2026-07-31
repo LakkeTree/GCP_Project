@@ -1,0 +1,100 @@
+[
+  {
+    "payment_method": "신용/체크카드",
+    "google_play": true,
+    "galaxy_store": true,
+    "one_store": true,
+    "app_store": true
+  },
+  {
+    "payment_method": "통신사",
+    "google_play": true,
+    "galaxy_store": true,
+    "one_store": true,
+    "app_store": true
+  },
+  {
+    "payment_method": "네이버페이",
+    "google_play": true,
+    "galaxy_store": true,
+    "one_store": true,
+    "app_store": true
+  },
+  {
+    "payment_method": "카카오페이",
+    "google_play": true,
+    "galaxy_store": true,
+    "one_store": true,
+    "app_store": true
+  },
+  {
+    "payment_method": "은행계좌(kcp)",
+    "google_play": true,
+    "galaxy_store": true,
+    "one_store": true,
+    "app_store": false
+  },
+  {
+    "payment_method": "Toss 페이",
+    "google_play": true,
+    "galaxy_store": true,
+    "one_store": true,
+    "app_store": true
+  },
+  {
+    "payment_method": "PAYCO",
+    "google_play": true,
+    "galaxy_store": true,
+    "one_store": true,
+    "app_store": true
+  },
+  {
+    "payment_method": "자체기프트카드",
+    "google_play": true,
+    "galaxy_store": true,
+    "one_store": true,
+    "app_store": true
+  },
+  {
+    "payment_method": "삼성페이",
+    "google_play": false,
+    "galaxy_store": true,
+    "one_store": true,
+    "app_store": false
+  },
+  {
+    "payment_method": "컬쳐랜드결제",
+    "google_play": false,
+    "galaxy_store": true,
+    "one_store": false,
+    "app_store": false
+  },
+  {
+    "payment_method": "퀵계좌이체",
+    "google_play": false,
+    "galaxy_store": true,
+    "one_store": true,
+    "app_store": false
+  },
+  {
+    "payment_method": "애플페이",
+    "google_play": false,
+    "galaxy_store": false,
+    "one_store": false,
+    "app_store": true
+  },
+  {
+    "payment_method": "스토어전용멤버십적립",
+    "google_play": true,
+    "galaxy_store": true,
+    "one_store": true,
+    "app_store": false
+  },
+  {
+    "payment_method": "통신사 할인",
+    "google_play": false,
+    "galaxy_store": false,
+    "one_store": true,
+    "app_store": false
+  }
+]
