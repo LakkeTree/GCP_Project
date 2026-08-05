@@ -1,0 +1,26 @@
+[
+  {
+    "name": "payment_method",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "결제수단 코드 (예: TOSS_PAY, PAYCO, CULTURELAND_CASH 등, 20종)"
+  },
+  {
+    "name": "platform",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "스토어/플랫폼 코드 (GOOGLE_PLAY, APP_STORE, GALAXY_STORE, ONE_STORE)"
+  },
+  {
+    "name": "is_supported",
+    "type": "BOOL",
+    "mode": "REQUIRED",
+    "description": "해당 플랫폼에서 결제수단 지원 여부"
+  },
+  {
+    "name": "note",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "지원/미지원 관련 부가 설명 (대부분 비어있음)"
+  }
+]
