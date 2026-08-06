@@ -232,3 +232,6 @@ dist-ssr/
 # Editor directories
 .vscode/
 .idea/
+
+node_modules/
+fe-app/node_modules/

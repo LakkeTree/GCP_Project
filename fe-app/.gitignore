@@ -25,3 +25,6 @@ dist-ssr
 
 node_modules/
 dist/
+
+node_modules/
+fe-app/node_modules/
