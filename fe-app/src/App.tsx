@@ -1,21 +1,54 @@
 import React, { useState } from 'react';
 
+
+
 // ==========================================
-// 1. 최저가 연산 결과 데이터 타입 (BigQuery 스펙 연동)
+// 1. 백엔드 (game pay api / main.py) 연동 스키마
 // ==========================================
-export interface OptimizationResult {
-  rank: number;                  // 순위 (1 ~ 10)
-  platform: string;              // 플랫폼 명 (예: "원스토어", "갤럭시 스토어", "구글 플레이")
-  original_price: number;        // 정가 (원)
-  final_price: number;           // 실 결제 금액 (원)
-  reward_point: number;          // 적립 예정 포인트/캐시 (원)
-  apply_steps: string[];         // 즉시 할인/적립 적용 단계 리스트
-  guide_text: string;            // 결제 시 주의사항 및 팁
+export interface RouteRequest {
+  platform: string;           // "GOOGLE_PLAY", "ONE_STORE", "GALAXY_STORE", "APP_STORE"
+  amount: number;             // 결제 예정 금액
+  is_first_pay: boolean;      // 첫 결제 여부
+  payment_methods: string[];  // 백엔드 Enum 매핑 코드 리스트
+  game: string;               // "COOKIERUN_KINGDOM"
+}
+
+export interface RouteStep {
+  layer: string;              // "STORE_COUPON", "PAYMENT_PG", "CARD_ISSUER", "GIFT_CARD"
+  provider: string;           // "SHINHAN_CARD", "CULTURELAND_CASH" 등
+  type: string;               // "DISCOUNT", "REWARD", "CASHBACK", "FEE"
+  applied_amount: number;     // 적용 혜택 금액
+  giftcard_combo?: number[];  // 상품권 우회 시 권종 조합
+}
+
+export interface RecommendedRoute {
+  route_type: string;         // "DIRECT_PAYMENT", "GIFT_CARD"
+  base_amount: number;        // 원금
+  final_paid_amount: number;  // 실제 결제액
+  reward_total: number;       // 총 적립 포인트
+  net_cost: number;           // 실질 체감 비용 (결제액 - 적립금)
+  leftover_balance: number;   // 잔액 (상품권 사용 시)
+  steps: RouteStep[];
+}
+
+export interface BackendResponse {
+  routes: RecommendedRoute[];
+  warnings: Array<{ benefit_id: string; provider: string; conditions: string[] }>;
 }
 
 // ==========================================
-// 2. API 공통 응답 규격
+// 2. 프론트엔드 UI 카드 출력용 데이터 타입
 // ==========================================
+export interface OptimizationResult {
+  rank: number;                  // 순위 (1 ~ 10)
+  platform: string;              // 플랫폼 명
+  original_price: number;        // 정가 (원)
+  final_price: number;           // 실 결제 체감 금액 (원)
+  reward_point: number;          // 적립 예정 포인트 (원)
+  apply_steps: string[];         // 즉시 할인/적립 적용 단계 리스트
+  guide_text: string;            // 결제 안내 팁
+}
+
 export interface ApiResponse {
   status: 'SUCCESS' | 'ERROR';
   message?: string;
@@ -29,30 +62,29 @@ export type OsType = 'ANDROID' | 'IOS';
 export type SortOption = 'perceived' | 'immediate';
 
 export interface FormData {
-  gameTitle: string;             // 게임명 (예: 쿠키런: 킹덤)
+  gameTitle: string;             // 게임명
   osType: OsType;                // OS 선택 ('ANDROID' | 'IOS')
   androidStores: string[];       // 안드로이드 선택 시 세부 스토어 리스트
   amount: number | '';           // 결제 예정 금액
-  isFirstPayment: boolean;       // 해당 마켓 첫 결제 여부
+  isFirstPayment: boolean;       // 마켓 첫 결제 여부
   
-  // 카테고리 제목 바로 옆 체크박스 플래그 및 선택 리스트
-  useCards: boolean;             // 카드 결제 카테고리 활성화
+  useCards: boolean;             // 카드 카테고리 활성화
   cards: string[];               // 보유 카드사 리스트
   
-  useCarriers: boolean;          // 통신사 할인 카테고리 활성화
+  useCarriers: boolean;          // 통신사 카테고리 활성화
   carriers: string[];            // 통신사 리스트
   
-  usePays: boolean;              // 간편결제 카테고리 활성화
-  pays: string[];                // 간편결제(페이) 리스트
+  usePays: boolean;              // 페이 카테고리 활성화
+  pays: string[];                // 간편결제 리스트
   
-  useVoucherBypasses: boolean;   // 문화상품권 & 우회 결제 카테고리 활성화
+  useVoucherBypasses: boolean;   // 문화상품권 카테고리 활성화
   voucherBypasses: string[];     // 문화상품권 우회 결제 수단 리스트
   
-  sortOption: SortOption;        // 정렬 기준 ('perceived': 체감가 기준, 'immediate': 즉시할인가 기준)
+  sortOption: SortOption;        // 정렬 기준
 }
 
 // ==========================================
-// 4. 입력 UI 옵션 상수 정의
+// 4. 입력 UI 옵션 상수
 // ==========================================
 export const ANDROID_STORE_OPTIONS = ['구글 플레이 스토어', '원스토어', '갤럭시 스토어'];
 export const CARD_OPTIONS = ['삼성카드', '신한카드', 'KB국민카드', 'NH농협카드', '하나카드', '롯데카드', '현대카드'];
@@ -66,7 +98,7 @@ export const VOUCHER_OPTIONS = [
 ];
 
 // ==========================================
-// 5. BigQuery DB 연동 전용 코드 매핑 테이블
+// 5. BigQuery DB / main.py 연동 전용 코드 매핑 테이블
 // ==========================================
 export const PLATFORM_CODE_MAP: Record<string, string> = {
   '구글 플레이 스토어': 'GOOGLE_PLAY',
@@ -97,9 +129,14 @@ export const PAYMENT_METHOD_MAP: Record<string, string> = {
   '북앤라이프': 'CULTURELAND_PAYMENT',
 };
 
-// ==========================================
-// Mock 데이터: 실시간 "즉시 결제" 최저가 경로 결과 (Top 10 전체 수록)
-// ==========================================
+
+
+
+
+// 백엔드 API 서버 기본 주소 (main.py / Dockerfile 기준 8000 포트)
+const BACKEND_API_URL = 'http://127.0.0.1:8000/routes';
+
+// 서버 오프라인 시 사용할 Fallback Mock 데이터
 const MOCK_API_RESPONSE: ApiResponse = {
   status: 'SUCCESS',
   data: [
@@ -207,70 +244,129 @@ const MOCK_API_RESPONSE: ApiResponse = {
 };
 
 /**
- * 백엔드 BigQuery SQL 전송용 Payload 생성 함수
+ * 백엔드 RecommendedRoute 데이터를 UI 카드용 OptimizationResult 포맷으로 변환하는 어댑터
  */
-export const buildApiPayload = (formData: FormData) => {
-  const selectedProviders: string[] = [];
-
-  if (formData.useCards) {
-    formData.cards.forEach((c) => PAYMENT_METHOD_MAP[c] && selectedProviders.push(PAYMENT_METHOD_MAP[c]));
-  }
-  if (formData.useCarriers) {
-    formData.carriers.forEach((c) => PAYMENT_METHOD_MAP[c] && selectedProviders.push(PAYMENT_METHOD_MAP[c]));
-  }
-  if (formData.usePays) {
-    formData.pays.forEach((p) => PAYMENT_METHOD_MAP[p] && selectedProviders.push(PAYMENT_METHOD_MAP[p]));
-  }
-  if (formData.useVoucherBypasses) {
-    formData.voucherBypasses.forEach((v) => PAYMENT_METHOD_MAP[v] && selectedProviders.push(PAYMENT_METHOD_MAP[v]));
-  }
-
-  const targetPlatforms = formData.osType === 'ANDROID'
-    ? formData.androidStores.map((s) => PLATFORM_CODE_MAP[s] || s)
-    : ['APP_STORE'];
-
-  return {
-    target_game: formData.gameTitle === '쿠키런: 킹덤' ? 'COOKIERUN_KINGDOM' : 'ALL',
-    target_platforms: targetPlatforms,
-    amount: Number(formData.amount) || 0,
-    is_first_purchase: formData.isFirstPayment,
-    providers: selectedProviders,
-  };
+// 백엔드 영문 레이어 코드를 한글 명칭으로 변환하는 매핑표
+const LAYER_NAME_MAP: Record<string, string> = {
+  STORE_COUPON: '스토어 쿠폰',
+  PAYMENT_PG: '간편결제/통신사',
+  CARD_ISSUER: '카드사 혜택',
+  GIFT_CARD: '상품권 우회',
+  ONLINE_CARD_ON_GIFTCARD: '상품권 카드결제 혜택',
 };
 
+// 백엔드 영문 제휴사 코드를 한글 명칭으로 역변환하는 매핑표
+const REVERSE_PAYMENT_MAP: Record<string, string> = Object.fromEntries(
+  Object.entries(PAYMENT_METHOD_MAP).map(([k, v]) => [v, k])
+);
+
 /**
- * 최저가 경로 연산 API 통신 모듈 (Mock)
+ * 백엔드 데이터를 한글 UI 카드 포맷으로 변환하는 어댑터
+ */
+const convertBackendRouteToUI = (
+  routes: RecommendedRoute[],
+  originalPrice: number
+): OptimizationResult[] => {
+  return routes.map((route, idx) => {
+    // 혜택 단계 문구를 영문 코드에서 한글 명칭으로 변환
+    const applySteps = route.steps.map((step) => {
+      const layerKorean = LAYER_NAME_MAP[step.layer] || step.layer;
+      const providerKorean = REVERSE_PAYMENT_MAP[step.provider] || step.provider;
+      const amt = step.applied_amount.toLocaleString();
+
+      if (step.layer === 'GIFT_CARD' && step.giftcard_combo) {
+        const comboStr = step.giftcard_combo.map((c) => `${c.toLocaleString()}원`).join('+');
+        return `[${layerKorean}] ${providerKorean} (${comboStr} 권종) - ${amt}원 할인`;
+      }
+      return `[${layerKorean}] ${providerKorean} - ${amt}원 ${step.type === 'REWARD' ? '적립' : '할인'}`;
+    });
+
+    // 가이드 팁 문구 가공
+    let guideText = route.route_type === 'GIFT_CARD'
+      ? '상품권 사전 할인 구매 후 결제하는 우회 경로입니다.'
+      : '카드/간편결제 즉시 할인 및 적립 적용 경로입니다.';
+    
+    if (route.leftover_balance > 0) {
+      guideText += ` (결제 후 잔액 ${route.leftover_balance.toLocaleString()}원 남음)`;
+    }
+
+    // 카드 상단 대표 타이틀 한글화
+    const mainProvider = route.steps[0]?.provider || '일반 결제';
+    const mainProviderKorean = REVERSE_PAYMENT_MAP[mainProvider] || mainProvider;
+
+    return {
+      rank: idx + 1,
+      platform: `${mainProviderKorean} 경로`,
+      original_price: originalPrice,
+      final_price: route.net_cost,
+      reward_point: route.reward_total,
+      apply_steps: applySteps,
+      guide_text: guideText,
+    };
+  });
+};
+/**
+ * 실시간 최저가 연산 API 통신 모듈 (main.py 백엔드 실제 연동)
  */
 export const fetchLowestPriceRecommendations = async (
   formData: FormData
 ): Promise<ApiResponse> => {
-  await new Promise((resolve) => setTimeout(resolve, 1500));
+  // 1. 활성화된 카테고리의 결제수단만 영문 코드(Enum)로 추출
+  const selectedProviders: string[] = [];
+  if (formData.useCards) formData.cards.forEach((c) => PAYMENT_METHOD_MAP[c] && selectedProviders.push(PAYMENT_METHOD_MAP[c]));
+  if (formData.useCarriers) formData.carriers.forEach((c) => PAYMENT_METHOD_MAP[c] && selectedProviders.push(PAYMENT_METHOD_MAP[c]));
+  if (formData.usePays) formData.pays.forEach((p) => PAYMENT_METHOD_MAP[p] && selectedProviders.push(PAYMENT_METHOD_MAP[p]));
+  if (formData.useVoucherBypasses) formData.voucherBypasses.forEach((v) => PAYMENT_METHOD_MAP[v] && selectedProviders.push(PAYMENT_METHOD_MAP[v]));
 
-  const payload = buildApiPayload(formData);
-  console.log('🚀 BigQuery 백엔드로 전송할 Payload:', payload);
+  // 2. 조회 대상 스토어 플랫폼 결정
+  const targetPlatforms = formData.osType === 'ANDROID'
+    ? formData.androidStores.map((s) => PLATFORM_CODE_MAP[s] || s)
+    : ['APP_STORE'];
 
-  if (formData.osType === 'IOS') {
+  const amountNum = Number(formData.amount) || 0;
+
+  try {
+    // 3. 선택된 플랫폼별로 main.py POST /routes API 병렬 요청
+    const requests = targetPlatforms.map((platform) => {
+      const payload: RouteRequest = {
+        platform: platform,
+        amount: amountNum,
+        is_first_pay: formData.isFirstPayment,
+        payment_methods: selectedProviders,
+        game: formData.gameTitle === '쿠키런: 킹덤' ? 'COOKIERUN_KINGDOM' : 'ALL',
+      };
+
+      return fetch(BACKEND_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).then((res) => {
+        if (!res.ok) throw new Error(`API 통신 실패 (Status: ${res.status})`);
+        return res.json() as Promise<BackendResponse>;
+      });
+    });
+
+    // 4. 병렬 요청 결과 합산 및 체감가(net_cost) 기준 종합 정렬
+    const responses = await Promise.all(requests);
+    const combinedRoutes: RecommendedRoute[] = responses.flatMap((res) => res.routes || []);
+    
+    combinedRoutes.sort((a, b) => a.net_cost - b.net_cost);
+
+    // 5. UI 포맷으로 변환하여 반환
+    const convertedResults = convertBackendRouteToUI(combinedRoutes.slice(0, 10), amountNum);
+
     return {
       status: 'SUCCESS',
-      data: [
-        {
-          rank: 1,
-          platform: '애플 앱스토어 (Apple App Store)',
-          original_price: Number(formData.amount) || 55000,
-          final_price: (Number(formData.amount) || 55000) * 0.95,
-          reward_point: 0,
-          apply_steps: [
-            '카카오페이 / 네이버페이 앱스토어 결제 수단 등록',
-            '페이별 수시 5% 즉시할인/페이백 프로모션 적용'
-          ],
-          guide_text: 'iOS 환경 특성상 제휴 페이 결제 수단을 활용하는 것이 최선입니다.'
-        }
-      ]
+      data: convertedResults,
     };
+  } catch (err) {
+    console.warn('⚠️ 백엔드 API 연결 중 오류 발생. Fallback Mock 데이터를 표시합니다.', err);
+    // API 연결에 실패하더라도 개발/테스트가 원활히 진행되도록 Mock 데이터를 반환합니다.
+    return MOCK_API_RESPONSE;
   }
-
-  return MOCK_API_RESPONSE;
 };
+
+
 
 
 export default function App() {
@@ -278,21 +374,21 @@ export default function App() {
   const [formData, setFormData] = useState<FormData>({
     gameTitle: '쿠키런: 킹덤',
     osType: 'ANDROID',
-    androidStores: ['구글 플레이 스토어', '원스토어', '갤럭시 스토어'],
+    androidStores: ANDROID_STORE_OPTIONS, // 👈 안드로이드 스토어 전체 선택 (구글/원스/갤스)
     amount: 55000,
     isFirstPayment: false,
     
     useCards: true,
-    cards: ['하나카드'],
+    cards: CARD_OPTIONS,                   // 👈 모든 카드사 전체 선택 (삼성, 신한, 국민, 농협, 하나, 롯데, 현대)
     
     useCarriers: true,
-    carriers: ['SKT'],
+    carriers: CARRIER_OPTIONS,             // 👈 모든 통신사 전체 선택 (SKT, KT, LGU+)
     
     usePays: true,
-    pays: ['네이버페이'],
+    pays: PAY_OPTIONS,                     // 👈 모든 간편결제 전체 선택 (삼성페이, 네이버페이, 페이코, 토스페이, 카카오페이)
     
     useVoucherBypasses: true,
-    voucherBypasses: ['컬쳐랜드(우회/캐시)'],
+    voucherBypasses: VOUCHER_OPTIONS,     // 👈 모든 문화상품권/우회수단 전체 선택 (컬쳐랜드, 구글/원스 핀번, 북앤라이프)
     
     sortOption: 'perceived',
   });
@@ -301,11 +397,9 @@ export default function App() {
   const [results, setResults] = useState<OptimizationResult[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
-  
-  // 🔥 상위 3개 우선 노출 및 4~10위 펼치기 제어 상태
   const [showAll, setShowAll] = useState<boolean>(false);
 
-  // 2. 다중 선택 토글 헬퍼 함수
+  // 2. 다중 선택 체크박스/버튼 토글 헬퍼 함수
   const handleToggleArrayItem = (field: keyof FormData, item: string) => {
     const currentArray = formData[field] as string[];
     const updatedArray = currentArray.includes(item)
@@ -339,7 +433,7 @@ export default function App() {
 
     setLoading(true);
     setError(null);
-    setShowAll(false); // 연산 실행 시 더보기 상태 초기화
+    setShowAll(false);
 
     try {
       const response = await fetchLowestPriceRecommendations(formData);
@@ -623,6 +717,9 @@ export default function App() {
           </button>
         </form>
 
+
+
+
         {/* ========================================== */}
         {/* [4단계] 로딩 스피너, 결과 TOP 10, 예외 UI, 모달 */}
         {/* ========================================== */}
@@ -653,9 +750,8 @@ export default function App() {
           </div>
         )}
 
-        {/* 3. 연산 결과 출력 (Top 10 슬라이싱 및 더보기 연동) */}
+        {/* 3. 연산 결과 출력 (Top 10 및 더보기 연동) */}
         {!loading && !error && results && (() => {
-          // 0건 예외 처리
           if (results.length === 0) {
             return (
               <div className="bg-white p-8 rounded-2xl shadow-md border border-slate-100 text-center space-y-3">
@@ -668,7 +764,6 @@ export default function App() {
             );
           }
 
-          // showAll이 true이면 10개 전체, false이면 상위 3개만 슬라이싱
           const visibleResults = showAll ? results : results.slice(0, 3);
 
           return (
@@ -684,7 +779,7 @@ export default function App() {
                 </button>
               </div>
 
-              {/* 결과 카드 렌더링 */}
+              {/* 카드 리스트 */}
               <div className="space-y-4">
                 {visibleResults.map((item) => {
                   const isFirst = item.rank === 1;
@@ -746,7 +841,7 @@ export default function App() {
                 })}
               </div>
 
-              {/* 더보기 버튼 (3개 초과 및 showAll=false일 때만) */}
+              {/* 더보기 버튼 */}
               {!showAll && results.length > 3 && (
                 <button
                   type="button"
@@ -757,7 +852,7 @@ export default function App() {
                 </button>
               )}
 
-              {/* 접기 버튼 (showAll=true일 때) */}
+              {/* 접기 버튼 */}
               {showAll && results.length > 3 && (
                 <button
                   type="button"
@@ -793,7 +888,7 @@ export default function App() {
               <div className="text-xs text-slate-600 space-y-2 leading-relaxed">
                 <p>• <strong>즉시 결제 원칙</strong>: 출석체크, 누적 미션, 선착순 마감 가능성이 있는 조건은 모두 제외되어 있습니다.</p>
                 <p>• <strong>1P = 1원 환산</strong>: 적립되는 네이버페이/T멤버십/스토어 포인트는 현금과 동일한 1원 가치로 단순 산산됩니다.</p>
-                <p>• <strong>BigQuery 기반 조합</strong>: 선택된 안드로이드 스토어 및 결제 수단 카테고리를 백엔드 매핑 코드와 연동하여 연산합니다.</p>
+                <p>• <strong>BigQuery 기반 연산</strong>: 백엔드 API(main.py)를 통해 BigQuery 실시간 수수료/혜택 데이터를 계산합니다.</p>
               </div>
               <button
                 type="button"

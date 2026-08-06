@@ -43,6 +43,6 @@ def get_optimal_routes(request: RouteRequest):
         held_methods=request.payment_methods,
         game=request.game,
         is_first_purchase=request.is_first_pay,
-        top_n=3
+        top_n=10
     )
     return result
