@@ -13,7 +13,7 @@
   },
   {
     "name": "is_supported",
-    "type": "BOOL",
+    "type": "BOOLEAN",
     "mode": "REQUIRED",
     "description": "해당 플랫폼에서 결제수단 지원 여부"
   },
