@@ -51,6 +51,18 @@ EXCLUDED_RESTRICTION = {"POINT_ONLY"}
 # 진짜 무제한은 null(None)로 따로 표기되어 있으므로 둘을 구분해서 처리한다.
 FALLBACK_PERCENT_CAP_KRW = 10000
 
+# ★ 신규: 스토어 자체 쿠폰의 provider_or_retailer 값 -> 실제 플랫폼 코드 매핑.
+# 데이터 표기 방식이 통일되어 있지 않아(GOOGLE_PLAY_STORE처럼 "_STORE"가 붙는 경우와,
+# ONE_STORE/GALAXY_STORE처럼 이미 스토어 코드 자체가 플랫폼 코드인 경우가 섞여 있다)
+# 명시적 매핑표로 안전하게 비교한다. STORE_COUPON 계층에만 사용한다.
+STORE_PROVIDER_TO_PLATFORM = {
+    "GOOGLE_PLAY_STORE": "GOOGLE_PLAY",
+    "GOOGLE_PLAY": "GOOGLE_PLAY",
+    "ONE_STORE": "ONE_STORE",
+    "GALAXY_STORE": "GALAXY_STORE",
+    "APP_STORE": "APP_STORE",
+}
+
 
 # =============================================================================
 # [호환성 검증] platform_connection 데이터로 "이 플랫폼에서 쓸 수 있는 수단인지" 확인
@@ -110,8 +122,33 @@ def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
             continue
         if b["target_platform"] != "ALL" and b["target_platform"] != platform:
             continue
-        if b["provider_or_retailer"] not in held_methods:
-            continue
+
+        # ★ 버그 수정: 보유 결제수단(held_methods) 체크는 STORE_COUPON 계층에는 적용하지 않는다.
+        #   원인: STORE_COUPON 계층 혜택(BNF_0017/0018/0021/0024/0105/0106 등)은
+        #   provider_or_retailer 필드에 "결제수단"이 아니라 "스토어 이름"(ONE_STORE,
+        #   GALAXY_STORE, GOOGLE_PLAY_STORE 등)이 들어있다. 이런 쿠폰은 유저가 그
+        #   스토어에서 "결제수단으로 보유"하는 게 아니라, 해당 플랫폼에서 구매하면
+        #   누구나 자동으로 받는 쿠폰이다. 프론트엔드에서도 유저가 "ONE_STORE"를
+        #   보유 결제수단으로 체크할 방법 자체가 없으므로, 기존처럼 held_methods로
+        #   걸러내면 STORE_COUPON 계층 혜택이 구조적으로 절대 통과할 수 없었다.
+        #   (실제 배포 후 100,000원 예시에서 원스토어 20% 쿠폰이 통째로 빠지는
+        #    현상으로 발견됨. 같은 이유로 BNF_0106 원스토어 50% 첫결제 쿠폰도 함께 빠져있었음.)
+        #   대신 바로 위의 target_platform 체크가 "이 쿠폰이 지금 플랫폼에 맞는지"를
+        #   이미 검증해주므로, STORE_COUPON 계층에서는 아래 held_methods 체크를
+        #   건너뛰어도 안전하다.
+        if b["stacking_layer"] != "STORE_COUPON":
+            if b["provider_or_retailer"] not in held_methods:
+                continue
+        else:
+            # ★ 버그 수정 2: STORE_COUPON 계층은 target_platform 필드가 일부 행에서
+            #   부정확하다(예: BNF_0105/0106은 provider_or_retailer=ONE_STORE인데
+            #   target_platform=ALL로 잘못 표기되어 있어, 위 target_platform 체크만으로는
+            #   구글플레이 구매에도 원스토어 전용 쿠폰이 잘못 적용되는 현상이 실제로 발생함).
+            #   provider_or_retailer를 실제 플랫폼 코드로 변환해 다시 한 번 검증한다.
+            provider_platform = STORE_PROVIDER_TO_PLATFORM.get(b["provider_or_retailer"])
+            if provider_platform is not None and provider_platform != platform:
+                continue
+
         if amount < b["min_spend_krw"]:      # 이제 int라 형변환 불필요
             continue
         if b["is_first_purchase"] and not is_first_purchase:
