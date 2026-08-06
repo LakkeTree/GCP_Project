@@ -8,7 +8,7 @@ import React, { useState } from 'react';
 // 1. 최저가 연산 결과 데이터 타입 (백엔드 응답 형태)
 // ==========================================
 export interface OptimizationResult {
-  rank: number;                  // 순위 (1, 2, 3)
+  rank: number;                  // 순위 (1 ~ 10)
   platform: string;              // 플랫폼 명 (예: "원스토어", "갤럭시 스토어", "구글 플레이")
   original_price: number;        // 정가 (원)
   final_price: number;           // 실 결제 금액 (원)
@@ -27,7 +27,7 @@ export interface ApiResponse {
 }
 
 // ==========================================
-// 3. 사용자 입력 폼 데이터 타입 (안드로이드 세부 스토어 선택 배열 추가)
+// 3. 사용자 입력 폼 데이터 타입
 // ==========================================
 export type OsType = 'ANDROID' | 'IOS';
 export type SortOption = 'perceived' | 'immediate';
@@ -35,7 +35,7 @@ export type SortOption = 'perceived' | 'immediate';
 export interface FormData {
   gameTitle: string;             // 게임명 (예: 쿠키런: 킹덤)
   osType: OsType;                // OS 선택 ('ANDROID' | 'IOS')
-  androidStores: string[];       // 안드로이드 선택 시 세부 스토어 리스트 (구글 플레이, 원스토어, 갤럭시 스토어)
+  androidStores: string[];       // 안드로이드 선택 시 세부 스토어 리스트
   amount: number | '';           // 결제 예정 금액
   isFirstPayment: boolean;       // 해당 마켓 첫 결제 여부
   
@@ -74,9 +74,8 @@ export const VOUCHER_OPTIONS = [
 // [2단계] 백엔드 모의 연동 규격 & 통신 모듈 (Mock API Protocol)
 // ==========================================
 
-
 // ==========================================
-// Mock 데이터: 실시간 "즉시 결제" 최저가 경로 결과
+// Mock 데이터: 실시간 "즉시 결제" 최저가 경로 결과 (Top 10 확장)
 // ==========================================
 const MOCK_API_RESPONSE: ApiResponse = {
   status: 'SUCCESS',
@@ -117,6 +116,69 @@ const MOCK_API_RESPONSE: ApiResponse = {
         '네이버페이 포인트/머니 결제 시 3% 포인트 적립'
       ],
       guide_text: '추가 우회 절차 없이 즉시 결제 가능한 경로 중 가장 적립율이 높습니다.'
+    },
+    {
+      rank: 4,
+      platform: '원스토어 (삼성카드 간편결제)',
+      original_price: 55000,
+      final_price: 53900,
+      reward_point: 550,
+      apply_steps: ['원스토어 삼성카드 즉시할인 2% 적용'],
+      guide_text: '상품권 충전 절차 없이 카드로 즉시 결제 시 유용한 경로입니다.'
+    },
+    {
+      rank: 5,
+      platform: '갤럭시 스토어 (페이코 결제)',
+      original_price: 55000,
+      final_price: 54450,
+      reward_point: 1100,
+      apply_steps: ['페이코 포인트 결제 1% 리워드 적립'],
+      guide_text: '페이코 포인트를 보유 중일 때 추천합니다.'
+    },
+    {
+      rank: 6,
+      platform: '구글 플레이 (카카오페이)',
+      original_price: 55000,
+      final_price: 54450,
+      reward_point: 550,
+      apply_steps: ['카카오페이 포인트 1% 기본 적립'],
+      guide_text: '기본 구글 플레이 계정 결제 경로입니다.'
+    },
+    {
+      rank: 7,
+      platform: '원스토어 (KT 휴대폰 소액결제)',
+      original_price: 55000,
+      final_price: 55000,
+      reward_point: 2000,
+      apply_steps: ['KT 소액결제 이벤트 대상 2,000P 캐시백'],
+      guide_text: '다음 달 통신비로 청구되는 결제 수단입니다.'
+    },
+    {
+      rank: 8,
+      platform: '갤럭시 스토어 (토스페이)',
+      original_price: 55000,
+      final_price: 55000,
+      reward_point: 500,
+      apply_steps: ['토스 행운퀴즈/무작위 포인트 적용'],
+      guide_text: '토스프라임 이용 시 추가 적립이 가능합니다.'
+    },
+    {
+      rank: 9,
+      platform: '구글 플레이 (신한카드 결제)',
+      original_price: 55000,
+      final_price: 55000,
+      reward_point: 275,
+      apply_steps: ['신한 마이신한포인트 0.5% 기본 적립'],
+      guide_text: '신한카드 기본 적립 혜택 경로입니다.'
+    },
+    {
+      rank: 10,
+      platform: '구글 플레이 (일반 신용카드 결제)',
+      original_price: 55000,
+      final_price: 55000,
+      reward_point: 0,
+      apply_steps: ['할인 및 적립 혜택 없음 (정가 결제)'],
+      guide_text: '별도 혜택 없이 기본 정가로 결제되는 경로입니다.'
     }
   ]
 };
@@ -132,7 +194,6 @@ export const fetchLowestPriceRecommendations = async (
   // 백엔드 연산 지연 1.5초
   await new Promise((resolve) => setTimeout(resolve, 1500));
 
-  // 백엔드 전송용 파라미터 구조화
   const payload = {
     ...formData,
     androidStores: formData.osType === 'ANDROID' ? formData.androidStores : ['앱스토어'],
@@ -173,31 +234,18 @@ export const fetchLowestPriceRecommendations = async (
     };
   }
 
-  // 선택된 안드로이드 스토어에 맞게 Mock 데이터 필터링 예시
-  const filteredData = MOCK_API_RESPONSE.data.filter((item) => {
-    if (!formData.androidStores.includes('원스토어') && item.platform.includes('원스토어')) return false;
-    if (!formData.androidStores.includes('갤럭시 스토어') && item.platform.includes('갤럭시 스토어')) return false;
-    if (!formData.androidStores.includes('구글 플레이 스토어') && item.platform.includes('구글 플레이')) return false;
-    return true;
-  }).map((item, idx) => ({ ...item, rank: idx + 1 }));
-
-  return {
-    status: 'SUCCESS',
-    data: filteredData.length > 0 ? filteredData : MOCK_API_RESPONSE.data
-  };
+  return MOCK_API_RESPONSE;
 };
-
 
 // ==========================================
 // [3단계] 메인 컴포넌트 & 카테고리별 결제수단 병렬 입력 폼 UI (Main Form Step)
 // ==========================================
-
 export default function App() {
-  // 1. Form 및 UI 상태 관리
+  // 1. Form 및 UI 상태 관리 (showAll 상태 추가)
   const [formData, setFormData] = useState<FormData>({
     gameTitle: '쿠키런: 킹덤',
     osType: 'ANDROID',
-    androidStores: ['구글 플레이 스토어', '원스토어', '갤럭시 스토어'], // 기본 전체 선택
+    androidStores: ['구글 플레이 스토어', '원스토어', '갤럭시 스토어'],
     amount: 55000,
     isFirstPayment: false,
     
@@ -220,6 +268,9 @@ export default function App() {
   const [results, setResults] = useState<OptimizationResult[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  
+  // 🔥 상위 3개 우선 노출 후 4~10위 펼치기 상태
+  const [showAll, setShowAll] = useState<boolean>(false);
 
   // 2. 다중 선택 체크박스/버튼 토글 헬퍼 함수
   const handleToggleArrayItem = (field: keyof FormData, item: string) => {
@@ -255,6 +306,7 @@ export default function App() {
 
     setLoading(true);
     setError(null);
+    setShowAll(false); // 재검색 시 더보기 상태 초기화
     try {
       const response = await fetchLowestPriceRecommendations(formData);
       if (response.status === 'SUCCESS') {
@@ -289,7 +341,7 @@ export default function App() {
         {/* 메인 입력 폼 */}
         <form onSubmit={handleSubmit} className="bg-white p-6 rounded-2xl shadow-md border border-slate-100 space-y-6">
           
-          {/* [영역 1] OS 선택 및 안드로이드 세부 스토어 선택 조건부 UI */}
+          {/* [영역 1] OS 선택 및 안드로이드 세부 스토어 선택 */}
           <div className="space-y-3">
             <label className="block text-sm font-bold text-slate-700">1. 사용 중인 스마트폰 OS 선택</label>
             <div className="grid grid-cols-2 gap-3">
@@ -309,11 +361,10 @@ export default function App() {
               ))}
             </div>
 
-            {/* 안드로이드 선택 시 하위 세부 스토어 체크박스/버튼 선택 영역 */}
             {formData.osType === 'ANDROID' && (
               <div className="p-3.5 bg-amber-50/60 rounded-xl border border-amber-200 space-y-2 transition-all">
                 <span className="text-xs font-bold text-amber-900 block">
-                  🛒 이용할 안드로이드 스토어 선택 (다중 선택 가능)
+                  🛒 이용 가능한 안드로이드 스토어 선택 (다중 선택 가능)
                 </span>
                 <div className="flex flex-wrap gap-2">
                   {ANDROID_STORE_OPTIONS.map((store) => {
@@ -376,7 +427,7 @@ export default function App() {
             </label>
           </div>
 
-          {/* [영역 3] 보유 결제 수단 선택 (제목 바로 옆 체크박스) */}
+          {/* [영역 3] 보유 결제 수단 선택 */}
           <div className="space-y-5 pt-2">
             <h3 className="text-base font-bold text-slate-800 border-b pb-2">
               2. 현재 즉시 사용 가능한 결제 수단 선택
@@ -490,10 +541,10 @@ export default function App() {
               </div>
             </div>
 
-            {/* 카테고리 4: 문화상품권 & 기타 결제 수단 */}
+            {/* 카테고리 4: 문화상품권 & 우회 결제 수단 */}
             <div className="space-y-2">
               <div className="flex items-center space-x-2">
-                <span className="text-xs font-bold text-slate-700">🎟️ 문화상품권 & 기타 결제 수단</span>
+                <span className="text-xs font-bold text-slate-700">🎟️ 문화상품권 & 우회 결제 수단</span>
                 <label className="inline-flex items-center space-x-1 cursor-pointer text-xs font-semibold text-orange-600 hover:text-orange-700">
                   <input
                     type="checkbox"
@@ -501,7 +552,7 @@ export default function App() {
                     onChange={(e) => setFormData({ ...formData, useVoucherBypasses: e.target.checked })}
                     className="w-3.5 h-3.5 text-orange-600 rounded focus:ring-orange-400 border-slate-300"
                   />
-                  <span>사용하기</span>
+                  <span>우회 사용하기</span>
                 </label>
               </div>
               <div className={`flex flex-wrap gap-2 transition-opacity ${formData.useVoucherBypasses ? 'opacity-100' : 'opacity-30 pointer-events-none'}`}>
@@ -560,97 +611,127 @@ export default function App() {
           </div>
         )}
 
-        {/* 연산 결과 상위 3개 경로 카드 렌더링 */}
-        {!loading && results && (
-          <section className="space-y-4">
-            <div className="flex justify-between items-center">
-              <h2 className="text-lg font-bold text-slate-800">
-                🏆 실시간 최저가 결제 경로 TOP {results.length}
-              </h2>
-              <button
-                type="button"
-                onClick={() => setIsModalOpen(true)}
-                className="text-xs font-semibold text-slate-500 hover:text-amber-600 underline"
-              >
-                [환산 기준 보기]
-              </button>
-            </div>
+        {/* 연산 결과 상위 경로 카드 렌더링 (Top 10 더보기 적용) */}
+        {!loading && results && (() => {
+          // showAll 상태에 따라 3개 또는 전체 결과 조각 생성
+          const visibleResults = showAll ? results : results.slice(0, 3);
 
-            <div className="space-y-4">
-              {results.map((item) => {
-                const isFirst = item.rank === 1;
-                return (
-                  <div
-                    key={item.rank}
-                    className={`p-6 rounded-2xl bg-white transition-all border ${
-                      isFirst
-                        ? 'border-amber-400 ring-2 ring-amber-400 shadow-xl relative'
-                        : 'border-slate-200 shadow-sm'
-                    }`}
-                  >
-                    {/* 1위 강조 배지 */}
-                    {isFirst && (
-                      <span className="absolute -top-3 right-6 bg-amber-500 text-white text-xs font-extrabold px-3 py-1 rounded-full shadow-md">
-                        👑 최저가 추천
-                      </span>
-                    )}
+          return (
+            <section className="space-y-4">
+              {/* 결과 타이틀 수정 적용 */}
+              <div className="flex justify-between items-center">
+                <h2 className="text-lg font-bold text-slate-900">추천 결제 경로 Top 10</h2>
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(true)}
+                  className="text-xs font-semibold text-slate-500 hover:text-amber-600 underline"
+                >
+                  [환산 기준 보기]
+                </button>
+              </div>
 
-                    {/* 카드 헤더: 순위 및 플랫폼 */}
-                    <div className="flex items-center justify-between border-b pb-3 mb-3">
-                      <div className="flex items-center space-x-2">
-                        <span
-                          className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-sm ${
-                            isFirst ? 'bg-amber-500 text-white' : 'bg-slate-200 text-slate-600'
-                          }`}
-                        >
-                          {item.rank}
-                        </span>
-                        <h3 className="font-extrabold text-base text-slate-800">{item.platform}</h3>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-xs text-slate-400 line-through block">
-                          정가 {item.original_price.toLocaleString()}원
-                        </span>
-                        <span className="text-xl font-black text-amber-600">
-                          {item.final_price.toLocaleString()}원
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* 실용 혜택 단계 안내 */}
-                    <div className="space-y-2 text-xs text-slate-600 mb-4">
-                      <p className="font-bold text-slate-700">📌 즉시 적용 혜택 단계:</p>
-                      <ul className="list-disc pl-5 space-y-1">
-                        {item.apply_steps.map((step, idx) => (
-                          <li key={idx}>{step}</li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    {/* 적립 포인트 및 팁 */}
-                    <div className="bg-slate-50 p-3 rounded-xl flex items-center justify-between text-xs">
-                      <span className="text-slate-500">{item.guide_text}</span>
-                      {item.reward_point > 0 && (
-                        <span className="font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-200">
-                          +{item.reward_point.toLocaleString()}P 적립
+              {/* 결과 카드 리스트 */}
+              <div className="space-y-4">
+                {visibleResults.map((item) => {
+                  const isFirst = item.rank === 1;
+                  return (
+                    <div
+                      key={item.rank}
+                      className={`p-6 rounded-2xl bg-white transition-all border ${
+                        isFirst
+                          ? 'border-amber-400 ring-2 ring-amber-400 shadow-xl relative'
+                          : 'border-slate-200 shadow-sm'
+                      }`}
+                    >
+                      {/* 1위 강조 배지 */}
+                      {isFirst && (
+                        <span className="absolute -top-3 right-6 bg-amber-500 text-white text-xs font-extrabold px-3 py-1 rounded-full shadow-md">
+                          👑 최저가 추천
                         </span>
                       )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
 
-            {/* 조건 재설정 버튼 */}
-            <button
-              type="button"
-              onClick={() => setResults(null)}
-              className="w-full py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-sm rounded-xl transition-all"
-            >
-              🔄 결제 조건 다시 설정하기
-            </button>
-          </section>
-        )}
+                      {/* 카드 헤더: 순위 및 플랫폼 */}
+                      <div className="flex items-center justify-between border-b pb-3 mb-3">
+                        <div className="flex items-center space-x-2">
+                          <span
+                            className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-sm ${
+                              isFirst ? 'bg-amber-500 text-white' : 'bg-slate-200 text-slate-600'
+                            }`}
+                          >
+                            {item.rank}
+                          </span>
+                          <h3 className="font-extrabold text-base text-slate-800">{item.platform}</h3>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-xs text-slate-400 line-through block">
+                            정가 {item.original_price.toLocaleString()}원
+                          </span>
+                          <span className="text-xl font-black text-amber-600">
+                            {item.final_price.toLocaleString()}원
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* 실용 혜택 단계 안내 */}
+                      <div className="space-y-2 text-xs text-slate-600 mb-4">
+                        <p className="font-bold text-slate-700">📌 즉시 적용 혜택 단계:</p>
+                        <ul className="list-disc pl-5 space-y-1">
+                          {item.apply_steps.map((step, idx) => (
+                            <li key={idx}>{step}</li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      {/* 적립 포인트 및 팁 */}
+                      <div className="bg-slate-50 p-3 rounded-xl flex items-center justify-between text-xs">
+                        <span className="text-slate-500">{item.guide_text}</span>
+                        {item.reward_point > 0 && (
+                          <span className="font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-200">
+                            +{item.reward_point.toLocaleString()}P 적립
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* 🔥 더보기 버튼 조각 (상위 3개 우선 노출 후 4~10위 펼치기) */}
+              {!showAll && results.length > 3 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAll(true)}
+                  className="w-full py-3 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 mt-2 transition-all"
+                >
+                  전체 결과 10개 더보기 (4~10위) ∨
+                </button>
+              )}
+
+              {/* 접기 버튼 (선택사항: 이미 다 펼쳤을 때 다시 접을 수 있도록 제공) */}
+              {showAll && results.length > 3 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAll(false)}
+                  className="w-full py-2.5 bg-slate-100 text-slate-500 font-semibold text-xs rounded-xl hover:bg-slate-200 transition-all"
+                >
+                  상위 3개만 보기 (4~10위 접기) ∧
+                </button>
+              )}
+
+              {/* 조건 재설정 버튼 */}
+              <button
+                type="button"
+                onClick={() => {
+                  setResults(null);
+                  setShowAll(false);
+                }}
+                className="w-full py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-sm rounded-xl transition-all"
+              >
+                🔄 결제 조건 다시 설정하기
+              </button>
+            </section>
+          );
+        })()}
 
         {/* [환산 기준 모달 팝업] */}
         {isModalOpen && (
@@ -662,7 +743,7 @@ export default function App() {
               <div className="text-xs text-slate-600 space-y-2 leading-relaxed">
                 <p>• <strong>즉시 결제 원칙</strong>: 출석체크, 누적 미션, 선착순 마감 가능성이 있는 조건은 모두 제외되어 있습니다.</p>
                 <p>• <strong>1P = 1원 환산</strong>: 적립되는 네이버페이/T멤버십/스토어 포인트는 현금과 동일한 1원 가치로 단순 산산됩니다.</p>
-                <p>• <strong>마켓 및 수단 조합</strong>: 사용자가 선택한 안드로이드 스토어와 결제 수단 카테고리 내에서만 최저가 경로를 탐색합니다.</p>
+                <p>• <strong>Top 10 경로 안내</strong>: 상위 3개 최적 경로를 우선 노출하며, '더보기' 클릭 시 4~10위 상세 경로까지 한눈에 비교 가능합니다.</p>
               </div>
               <button
                 type="button"
