@@ -32,12 +32,12 @@ import os
 import time
 import datetime
 from decimal import Decimal
+import pandas as pd
 
 from google.cloud import bigquery
 
 # v5의 계산 함수들을 그대로 가져와서 쓴다 (수정 없이 재사용).
-from GCP_Project.engine.calculator import recommend_best_routes as _recommend_best_routes_core
-
+from .calculator import recommend_best_routes as _recommend_best_routes_core
 
 # =============================================================================
 # [설정값] — DATA_USAGE_GUIDE.md 0번 항목의 실제 접속 정보를 기본값으로 사용
@@ -69,25 +69,37 @@ _cache = {
 
 def _clean_bq_value(value):
     """
-    NUMERIC 타입은 Decimal로 온다(가이드 '주의사항'에도 명시됨).
-    Decimal과 float를 섞어 연산하면 TypeError가 나므로 미리 float로 바꾼다.
-    pandas의 NaT/NaN(빈 값)도 파이썬 None으로 통일해서 v5의 None 체크와 맞춘다.
+    BigQuery/pandas 데이터를 파이썬 표준 타입으로 안전하게 정제합니다.
     """
+    # 1. 값 자체가 None인 경우
+    if value is None:
+        return None
+
+    # 2. BigQuery의 ARRAY 컬럼(denomination_list 등)이 numpy.ndarray 형태일 경우
+    #    hasattr(value, 'tolist')를 이용해 순수 파이썬 list로 즉시 변환
+    if hasattr(value, "tolist"):
+        return value.tolist()
+
+    # 3. tuple 등 순회형 데이터인 경우 list로 변환
+    if isinstance(value, (list, tuple)):
+        return list(value)
+
+    # 4. pandas/numpy의 단일 결측치(pd.NA, np.nan, NaT) 검사
+    try:
+        if pd.isna(value):
+            return None
+    except (ValueError, TypeError):
+        pass
+
+    # 5. Decimal -> float 변환
     if isinstance(value, Decimal):
         return float(value)
+
+    # 6. 날짜/시간 -> ISO 문자열 변환
     if isinstance(value, (datetime.date, datetime.datetime)):
         return value.isoformat()
-    # pandas가 빈 값을 NaN/NaT로 줄 때가 있다. float('nan')은 None이 아니라서
-    # v5의 `if cap is None:` 같은 체크를 그냥 통과 못하고 이상값 취급될 수 있다.
-    try:
-        import math
-        if isinstance(value, float) and math.isnan(value):
-            return None
-    except TypeError:
-        pass
+
     return value
-
-
 def _row_to_dict(row):
     """pandas DataFrame의 한 행(Series)을 정리된 딕셔너리로 바꾼다."""
     return {key: _clean_bq_value(value) for key, value in row.items()}

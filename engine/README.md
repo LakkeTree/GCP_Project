@@ -1,4 +1,4 @@
-# calc_engine
+# engine
 
 계산 엔진(팀원2 담당) 모듈입니다.
 
@@ -13,14 +13,14 @@
 ## 설치
 
 ```bash
-cd calc_engine
+cd engine
 pip install -r requirements.txt --break-system-packages
 ```
 
 ## 사용법 (팀원3 API 서버에서)
 
 ```python
-from calc_engine.loader import recommend_best_routes
+from engine.loader import recommend_best_routes
 
 result = recommend_best_routes(
     platform="GOOGLE_PLAY",
