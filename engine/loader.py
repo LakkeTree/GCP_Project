@@ -156,7 +156,7 @@ def load_data(force_refresh=False):
 
 def recommend_best_routes(platform, amount, held_methods,
                           game="COOKIERUN_KINGDOM", is_first_purchase=False, top_n=3,
-                          store_tier=None, force_refresh=False):
+                          store_tier=None, force_refresh=False, has_prev_spend=None):
     """
     API 서버 코드에서는 이렇게만 호출하면 된다:
         from bigquery_loader import recommend_best_routes
@@ -172,12 +172,14 @@ def recommend_best_routes(platform, amount, held_methods,
                         같아 SLA에 영향을 줄 수 있으니(§ BigQuery 가이드 참고),
                         운영자가 데이터 갱신 직후 한 번만 확인하고 싶을 때처럼
                         필요할 때만 명시적으로 켜는 걸 권장한다.
+      has_prev_spend - (신규) 전월실적 조건 충족 여부(True/False/None=모름).
+                        calculator.py의 filter_eligible_benefits()로 그대로 전달된다.
     """
     benefit_rows, platform_rows = load_data(force_refresh=force_refresh)
     return _recommend_best_routes_core(
         benefit_rows, platform_rows, platform, amount, held_methods,
         game=game, is_first_purchase=is_first_purchase, top_n=top_n,
-        store_tier=store_tier,
+        store_tier=store_tier, has_prev_spend=has_prev_spend,
     )
 
 
