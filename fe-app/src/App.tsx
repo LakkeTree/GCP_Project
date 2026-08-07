@@ -123,29 +123,21 @@ export const SUBSCRIPTION_OPTIONS = [
   'T멤버십 (원스토어 10% 할인/적립)',
 ];
 
+// 1. 특화 카드 드롭다운 옵션 (value를 DB 카드사 Enum 코드명으로 맞춤)
 export const SPECIAL_CARD_OPTIONS = [
   { label: '선택 안 함 (일반 신용/체크카드 / 기본 결제)', value: 'NONE' },
-  { label: '[신한] LineageM 신한카드 (인앱 10% 할인)', value: 'SHINHAN_LINEAGEM_CREDIT' },
-  { label: '[신한] LineageM 신한 체크카드 (인앱 5% 할인)', value: 'SHINHAN_LINEAGEM_CHECK' },
-  { label: '[삼성] 삼성 모바일 플러스 (갤스 5% 할인)', value: 'SAMSUNG_MOBILE_PLUS' },
-  { label: '[삼성] 삼성 iD SELECT ON (인앱 50% 할인)', value: 'SAMSUNG_ID_SELECT_ON' },
-  { label: '[삼성] 삼성 iD GLOBAL (해외/인앱 50% 할인)', value: 'SAMSUNG_ID_GLOBAL' },
-  { label: '[국민] KB국민 노리2 체크카드 (Play) (10% 할인)', value: 'KB_NORI2_PLAY' },
-  { label: '[농협] NH농협 zgm.play (10% 할인)', value: 'NH_ZGM_PLAY' },
-  { label: '[농협] NH농협 zgm.streaming (10% 할인)', value: 'NH_ZGM_STREAMING' },
-  { label: '[하나] 원스토어 1 하나카드 (원스토어 2% 할인)', value: 'HANA_ONESTORE_1' },
+  { label: '[신한] LineageM 신한카드 (인앱 10% 할인)', value: 'SHINHAN_CARD' },
+  { label: '[신한] LineageM 신한 체크카드 (인앱 5% 할인)', value: 'SHINHAN_CARD' },
+  { label: '[삼성] 삼성 모바일 플러스 (갤스 5% 할인)', value: 'SAMSUNG_CARD' },
+  { label: '[삼성] 삼성 iD SELECT ON (인앱 50% 할인)', value: 'SAMSUNG_CARD' },
+  { label: '[삼성] 삼성 iD GLOBAL (해외/인앱 50% 할인)', value: 'SAMSUNG_CARD' },
+  { label: '[국민] KB국민 노리2 체크카드 (Play) (10% 할인)', value: 'KB_KOOKMIN_CARD' },
+  { label: '[농협] NH농협 zgm.play (10% 할인)', value: 'NH_NONGHYUP_CARD' },
+  { label: '[농협] NH농협 zgm.streaming (10% 할인)', value: 'NH_NONGHYUP_CARD' },
+  { label: '[하나] 원스토어 1 하나카드 (원스토어 2% 할인)', value: 'HANA_CARD' },
 ];
 
-// ==========================================
-// 5. BigQuery DB 연동 전용 코드 매핑 테이블
-// ==========================================
-export const PLATFORM_CODE_MAP: Record<string, string> = {
-  '구글 플레이 스토어': 'GOOGLE_PLAY',
-  '원스토어': 'ONE_STORE',
-  '갤럭시 스토어': 'GALAXY_STORE',
-  '앱스토어': 'APP_STORE',
-};
-
+// 2. 백엔드 Enum 매핑표 (스토어 쿠폰 및 기타 수단 코드 보완)
 export const PAYMENT_METHOD_MAP: Record<string, string> = {
   'SKT': 'SKT',
   'KT': 'KT',
@@ -158,16 +150,39 @@ export const PAYMENT_METHOD_MAP: Record<string, string> = {
   '컬쳐랜드(우회/캐시)': 'CULTURELAND_CASH',
   '구글 핀번 기프트코드': 'GOOGLE_PLAY_GIFTCARD',
   '원스토어 핀번 기프트코드': 'ONESTORE_GIFTCARD',
-  '북앤라이프': 'CULTURELAND_PAYMENT',
+  '북앤라이프': 'BOOKNLIFE_VOUCHER',
+  '구글 플레이 스토어': 'GOOGLE_PLAY_STORE',
+  '갤럭시 스토어': 'GALAXY_STORE',
+  '원스토어': 'ONE_STORE',
+  '신한카드': 'SHINHAN_CARD',
+  '삼성카드': 'SAMSUNG_CARD',
+  'KB국민카드': 'KB_KOOKMIN_CARD',
+  'NH농협카드': 'NH_NONGHYUP_CARD',
+  '하나카드': 'HANA_CARD',
 };
 
+// 3. 백엔드 레이어 코드를 한글로 변환하는 매핑표 (PAYMENT_E_PAY 추가)
 const LAYER_NAME_MAP: Record<string, string> = {
   STORE_COUPON: '스토어 쿠폰',
   PAYMENT_PG: '간편결제/통신사',
+  PAYMENT_E_PAY: '간편결제/통신사', // 👈 추가된 부분
   CARD_ISSUER: '카드사 혜택',
   GIFT_CARD: '상품권 우회',
   ONLINE_CARD_ON_GIFTCARD: '상품권 카드결제 혜택',
+  STORE_BASE_REWARD: '스토어 기본 적립',
 };
+
+// ==========================================
+// 5. BigQuery DB 연동 전용 코드 매핑 테이블
+// ==========================================
+export const PLATFORM_CODE_MAP: Record<string, string> = {
+  '구글 플레이 스토어': 'GOOGLE_PLAY',
+  '원스토어': 'ONE_STORE',
+  '갤럭시 스토어': 'GALAXY_STORE',
+  '앱스토어': 'APP_STORE',
+};
+
+
 
 const REVERSE_PAYMENT_MAP: Record<string, string> = Object.fromEntries(
   Object.entries(PAYMENT_METHOD_MAP).map(([k, v]) => [v, k])
