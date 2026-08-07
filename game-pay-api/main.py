@@ -3,19 +3,16 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 
-# 상위 폴더(GCP_Project)를 sys.path에 추가하여 옆 동네인 'engine' 폴더를 모듈로 인식하게 함
 BASE_DIR = Path(__file__).resolve().parent.parent
 if str(BASE_DIR) not in sys.path:
     sys.path.append(str(BASE_DIR))
 
-# engine/loader.py에서 recommend_best_routes 함수 불러오기
 from engine.loader import recommend_best_routes
 
 app = FastAPI(title="Optimal Payment Route API")
 
-# 프론트엔드 연동용 CORS 설정
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -30,6 +27,9 @@ class RouteRequest(BaseModel):
     is_first_pay: bool = False
     payment_methods: List[str] = []
     game: str = "COOKIERUN_KINGDOM"
+    membership_tier: Optional[str] = "STANDARD"  # 👈 신규: 스토어 등급 (BRONZE, GOLD, PLATINUM 등)
+    has_subscription: Optional[bool] = False     # 👈 신규: 구독 서비스 보유 여부
+    has_prev_spend: Optional[bool] = False       # 👈 신규: 전월 실적 충족 여부
 
 @app.get("/")
 def health_check():
@@ -37,12 +37,19 @@ def health_check():
 
 @app.post("/routes")
 def get_optimal_routes(request: RouteRequest):
+    # 특화 카드 및 구독 수단 추가 처리
+    held_methods = list(request.payment_methods)
+
     result = recommend_best_routes(
         platform=request.platform,
         amount=request.amount,
-        held_methods=request.payment_methods,
+        held_methods=held_methods,
         game=request.game,
         is_first_purchase=request.is_first_pay,
-        top_n=3
+        top_n=10,                                  # 👈 10위까지 연산 출력
+        store_tier=request.membership_tier,       # 👈 스토어 등급 반영
+        force_refresh=True                         # 👈 DB 업데이트 즉시 반영을 위한 강제 캐시 갱신
     )
     return result
+
+
