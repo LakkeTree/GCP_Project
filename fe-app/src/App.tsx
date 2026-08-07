@@ -22,6 +22,7 @@ export interface RouteStep {
   giftcard_combo?: number[];
   item_or_event_name?: string;
   condition_raw_text?: string;
+  target_game?: string; // 👈 게임 전용 구분용 백엔드 필드
 }
 
 export interface RecommendedRoute {
@@ -50,6 +51,8 @@ export interface StepDetail {
   eventName: string;
   conditionText: string;
   comboText?: string;
+  targetGame: string;      // 👈 대상 게임 (예: COOKIERUN_KINGDOM 또는 ALL)
+  isGameSpecific: boolean;  // 👈 특정 게임 전용 이벤트 여부
 }
 
 export interface OptimizationResult {
@@ -215,6 +218,10 @@ const convertBackendRouteToUI = (
         comboStr = step.giftcard_combo.map((c) => `${c.toLocaleString()}원`).join('+');
       }
 
+      // 게임 전용 이벤트 판별 (target_game이 존재하고 ALL이 아닐 때)
+      const targetGame = step.target_game || 'ALL';
+      const isGameSpecific = targetGame !== 'ALL';
+
       return {
         layerName: layerKorean,
         providerName: providerKorean,
@@ -223,6 +230,8 @@ const convertBackendRouteToUI = (
         eventName: step.item_or_event_name || `${providerKorean} ${layerKorean}`,
         conditionText: step.condition_raw_text || '상세 조건은 해당 스토어/결제사 이벤트를 확인하세요.',
         comboText: comboStr,
+        targetGame: targetGame,
+        isGameSpecific: isGameSpecific,
       };
     });
 
@@ -350,7 +359,6 @@ export default function App() {
   const [results, setResults] = useState<OptimizationResult[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   
-  // 모달 상태 관리 (1. 기준 안내 모달, 2. 이벤트 상세 보기 모달)
   const [isCriteriaModalOpen, setIsCriteriaModalOpen] = useState<boolean>(false);
   const [selectedResultForDetail, setSelectedResultForDetail] = useState<OptimizationResult | null>(null);
 
@@ -764,7 +772,7 @@ export default function App() {
           </button>
         </form>
 
-        {/* [결과 출력 영역] - 개선된 카드 디자인 및 타임라인 UI */}
+        {/* [결과 출력 영역] - 게임 전용 구분 배지 추가 */}
         {loading && (
           <div className="bg-white p-8 rounded-2xl shadow-md border border-slate-100 text-center space-y-4">
             <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-amber-500 border-t-transparent"></div>
@@ -847,7 +855,7 @@ export default function App() {
                         </div>
                       </div>
 
-                      {/* 단계별 시각적 타임라인 UI */}
+                      {/* 단계별 시각적 타임라인 UI (게임 전용/공통 구분 배지 반영) */}
                       <div className="space-y-2 mb-3">
                         <span className="text-xs font-bold text-slate-600 block">📌 즉시 적용 혜택 단계:</span>
                         <div className="space-y-2">
@@ -856,10 +864,22 @@ export default function App() {
                               key={idx}
                               className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-xs"
                             >
-                              <div className="flex items-center space-x-2">
+                              <div className="flex items-center space-x-2 flex-wrap gap-1">
                                 <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 font-bold text-[10px]">
                                   {step.layerName}
                                 </span>
+                                
+                                {/* 👈 게임 전용 이벤트 vs 공통 혜택 구분 배지 */}
+                                {step.isGameSpecific ? (
+                                  <span className="px-2 py-0.5 rounded-md bg-purple-100 text-purple-800 font-bold text-[10px] flex items-center gap-0.5">
+                                    🎮 {step.targetGame === 'COOKIERUN_KINGDOM' ? '쿠키런 전용' : '게임 전용'}
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded-md bg-slate-200/80 text-slate-600 font-medium text-[10px]">
+                                    🌐 공통 혜택
+                                  </span>
+                                )}
+
                                 <span className="font-bold text-slate-800">
                                   {step.providerName}
                                 </span>
@@ -869,7 +889,7 @@ export default function App() {
                                   </span>
                                 )}
                               </div>
-                              <span className="font-bold text-amber-600">
+                              <span className="font-bold text-amber-600 whitespace-nowrap">
                                 -{step.amount.toLocaleString()}원 {step.type === 'REWARD' ? '적립' : '할인'}
                               </span>
                             </div>
@@ -922,7 +942,7 @@ export default function App() {
           </div>
         )}
 
-        {/* [모달 2] 경로 클릭 시 열리는 이벤트 상세 조건 모달 */}
+        {/* [모달 2] 경로 클릭 시 열리는 이벤트 상세 조건 모달 (게임 전용 여부 포함) */}
         {selectedResultForDetail && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
             <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl max-h-[85vh] overflow-y-auto">
@@ -962,11 +982,22 @@ export default function App() {
               <div className="space-y-3">
                 <h4 className="text-xs font-extrabold text-slate-700">🎁 구성 혜택 및 이벤트 상세 조건</h4>
                 {selectedResultForDetail.steps.map((step, idx) => (
-                  <div key={idx} className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
+                  <div key={idx} className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-extrabold text-slate-800">
-                        {idx + 1}. {step.eventName}
-                      </span>
+                      <div className="flex items-center space-x-1.5">
+                        {step.isGameSpecific ? (
+                          <span className="text-[10px] font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-md">
+                            🎮 {step.targetGame === 'COOKIERUN_KINGDOM' ? '쿠키런 전용' : '게임 전용'}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-semibold text-slate-500 bg-slate-200/70 px-2 py-0.5 rounded-md">
+                            🌐 공통 혜택
+                          </span>
+                        )}
+                        <span className="text-xs font-extrabold text-slate-800">
+                          {idx + 1}. {step.eventName}
+                        </span>
+                      </div>
                       <span className="text-xs font-bold text-amber-600">
                         -{step.amount.toLocaleString()}원 {step.type === 'REWARD' ? '적립' : '할인'}
                       </span>
