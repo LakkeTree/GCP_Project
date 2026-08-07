@@ -1,6 +1,6 @@
 """
 ===============================================================================
-BigQuery 데이터 로더 (v6) — v5 계산 엔진과 BigQuery를 연결하는 어댑터
+BigQuery 데이터 로더 (v9) — v5~v10 계산 엔진과 BigQuery를 연결하는 어댑터
 ===============================================================================
 
 [v6 최초 버전 대비 변경 사항 — DATA_USAGE_GUIDE.md 반영]
@@ -71,35 +71,30 @@ def _clean_bq_value(value):
     """
     BigQuery/pandas 데이터를 파이썬 표준 타입으로 안전하게 정제합니다.
     """
-    # 1. 값 자체가 None인 경우
     if value is None:
         return None
 
-    # 2. BigQuery의 ARRAY 컬럼(denomination_list 등)이 numpy.ndarray 형태일 경우
-    #    hasattr(value, 'tolist')를 이용해 순수 파이썬 list로 즉시 변환
     if hasattr(value, "tolist"):
         return value.tolist()
 
-    # 3. tuple 등 순회형 데이터인 경우 list로 변환
     if isinstance(value, (list, tuple)):
         return list(value)
 
-    # 4. pandas/numpy의 단일 결측치(pd.NA, np.nan, NaT) 검사
     try:
         if pd.isna(value):
             return None
     except (ValueError, TypeError):
         pass
 
-    # 5. Decimal -> float 변환
     if isinstance(value, Decimal):
         return float(value)
 
-    # 6. 날짜/시간 -> ISO 문자열 변환
     if isinstance(value, (datetime.date, datetime.datetime)):
         return value.isoformat()
 
     return value
+
+
 def _row_to_dict(row):
     """pandas DataFrame의 한 행(Series)을 정리된 딕셔너리로 바꾼다."""
     return {key: _clean_bq_value(value) for key, value in row.items()}
@@ -151,53 +146,31 @@ def load_data(force_refresh=False):
 
 
 # =============================================================================
-# [진입점] 팀원3(API 서버)이 실제로 호출할 함수
+# [진입점] 팀원3(API 서버)이 실제로 호출할 함수 (**kwargs 방어 코드)
 # =============================================================================
 
 def recommend_best_routes(platform, amount, held_methods,
-                          game="COOKIERUN_KINGDOM", is_first_purchase=False, top_n=3,
-                          store_tier=None, force_refresh=False):
+                          game="COOKIERUN_KINGDOM", is_first_purchase=False, top_n=10,
+                          store_tier=None, has_prev_spend=None, has_pre_applied=False,
+                          use_game_benefits=True, force_refresh=False, **kwargs):
     """
     API 서버 코드에서는 이렇게만 호출하면 된다:
         from bigquery_loader import recommend_best_routes
         result = recommend_best_routes("GOOGLE_PLAY", 149000, ["ZEROPIN", "KAKAO_PAY"])
-
-    ★ v6 추가된 파라미터:
-      store_tier     - 유저의 스토어 멤버십 등급(예: "다이아몬드"). calculator.py의
-                        get_store_base_reward()로 그대로 전달된다. 이전 버전은 이 값을
-                        받는 자리 자체가 없어서, 프론트엔드가 등급을 보내도 무시되고
-                        있었다(팀원 분석으로 발견).
-      force_refresh  - True면 캐시를 무시하고 BigQuery에서 즉시 다시 읽어온다.
-                        기본은 False. 매 요청마다 True로 두면 캐싱을 아예 안 하는 것과
-                        같아 SLA에 영향을 줄 수 있으니(§ BigQuery 가이드 참고),
-                        운영자가 데이터 갱신 직후 한 번만 확인하고 싶을 때처럼
-                        필요할 때만 명시적으로 켜는 걸 권장한다.
     """
     benefit_rows, platform_rows = load_data(force_refresh=force_refresh)
     return _recommend_best_routes_core(
-        benefit_rows, platform_rows, platform, amount, held_methods,
-        game=game, is_first_purchase=is_first_purchase, top_n=top_n,
+        benefit_rows=benefit_rows,
+        platform_rows=platform_rows,
+        platform=platform,
+        amount=amount,
+        held_methods=held_methods,
+        game=game,
+        is_first_purchase=is_first_purchase,
+        top_n=top_n,
         store_tier=store_tier,
+        has_prev_spend=has_prev_spend,
+        has_pre_applied=has_pre_applied,
+        use_game_benefits=use_game_benefits,
+        **kwargs
     )
-
-
-# =============================================================================
-# 실행 및 검증
-# =============================================================================
-
-if __name__ == "__main__":
-    print("=" * 70)
-    print("BigQuery 연동 계산 엔진 (v6) 연결 테스트")
-    print("=" * 70)
-    print(f"프로젝트: {PROJECT_ID}")
-    print(f"데이터셋: {DATASET_ID}")
-    print(f"리전: {LOCATION}")
-    print(f"테이블: {BENEFIT_TABLE}, {PLATFORM_TABLE}")
-    print()
-
-    result = recommend_best_routes(
-        platform="GOOGLE_PLAY", amount=149000,
-        held_methods=["ZEROPIN", "GMARKET", "KAKAO_PAY", "SAMSUNG_CARD"],
-    )
-    for rank, r in enumerate(result["routes"], 1):
-        print(f"{rank}위 {r['route_type']} net_cost={r['net_cost']:,}원")
