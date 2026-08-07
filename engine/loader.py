@@ -155,16 +155,29 @@ def load_data(force_refresh=False):
 # =============================================================================
 
 def recommend_best_routes(platform, amount, held_methods,
-                          game="COOKIERUN_KINGDOM", is_first_purchase=False, top_n=3):
+                          game="COOKIERUN_KINGDOM", is_first_purchase=False, top_n=3,
+                          store_tier=None, force_refresh=False):
     """
     API 서버 코드에서는 이렇게만 호출하면 된다:
         from bigquery_loader import recommend_best_routes
         result = recommend_best_routes("GOOGLE_PLAY", 149000, ["ZEROPIN", "KAKAO_PAY"])
+
+    ★ v6 추가된 파라미터:
+      store_tier     - 유저의 스토어 멤버십 등급(예: "다이아몬드"). calculator.py의
+                        get_store_base_reward()로 그대로 전달된다. 이전 버전은 이 값을
+                        받는 자리 자체가 없어서, 프론트엔드가 등급을 보내도 무시되고
+                        있었다(팀원 분석으로 발견).
+      force_refresh  - True면 캐시를 무시하고 BigQuery에서 즉시 다시 읽어온다.
+                        기본은 False. 매 요청마다 True로 두면 캐싱을 아예 안 하는 것과
+                        같아 SLA에 영향을 줄 수 있으니(§ BigQuery 가이드 참고),
+                        운영자가 데이터 갱신 직후 한 번만 확인하고 싶을 때처럼
+                        필요할 때만 명시적으로 켜는 걸 권장한다.
     """
-    benefit_rows, platform_rows = load_data()
+    benefit_rows, platform_rows = load_data(force_refresh=force_refresh)
     return _recommend_best_routes_core(
         benefit_rows, platform_rows, platform, amount, held_methods,
         game=game, is_first_purchase=is_first_purchase, top_n=top_n,
+        store_tier=store_tier,
     )
 
 

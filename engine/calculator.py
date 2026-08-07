@@ -42,10 +42,24 @@ import itertools
 # =============================================================================
 # 상수
 # =============================================================================
-PAYMENT_LAYER_ORDER = ["STORE_COUPON", "PAYMENT_PG", "CARD_ISSUER"]
+# v6: 데이터 재생성 후 간편결제/통신사 혜택의 stacking_layer 명칭이
+# "PAYMENT_PG" -> "PAYMENT_E_PAY" 로 바뀐 것이 확인됨(팀원 분석, 실제 조회로 검증됨).
+# 목록에 없는 계층은 자격 필터를 통과해도 조합 생성 단계에서 조용히 제외되므로,
+# 이름이 바뀔 때마다 여기 추가해줘야 한다. PAYMENT_PG는 혹시 남아있는 이전 데이터와의
+# 호환을 위해 지우지 않고 그대로 둔다(데이터에 없으면 그냥 빈 슬롯이 되어 무해하다).
+PAYMENT_LAYER_ORDER = ["STORE_COUPON", "PAYMENT_PG", "PAYMENT_E_PAY", "CARD_ISSUER"]
 CALCULABLE_TYPES = {"DISCOUNT", "REWARD", "CASHBACK", "FEE"}
 EXCLUDED_DISBURSEMENT = {"INFO_ONLY"}
-EXCLUDED_RESTRICTION = {"POINT_ONLY"}
+# ★ v6 수정: "POINT_ONLY"를 무조건 제외하던 규칙을 DISCOUNT 타입에만 한정한다.
+# 이유: payment_method_restriction="POINT_ONLY"가 두 가지 다른 뜻으로 쓰이고 있었다.
+#   1) DISCOUNT 타입일 때: "포인트로 결제해야 적용됨" -> 내 돈(포인트)으로 내는 것이라
+#      할인이 아니다. 예: 신한포인트 100% 즉시 차감. 이건 계속 제외해야 한다.
+#   2) REWARD/CASHBACK 타입일 때: "적립이 포인트 형태로 지급됨" -> 이건 지극히
+#      정상적인 적립이다(네이버페이 3% 적립, 페이코 기본 적립 등). 제외하면 안 된다.
+# 팀원 분석에서 이 규칙을 통째로 지우는 안(EXCLUDED_RESTRICTION = set())을 제안했지만,
+# 그러면 1)번 케이스(포인트 결제)가 다시 할인으로 잘못 계산되는 예전 버그가 되살아난다.
+# 그래서 "무조건 제외" 대신 "DISCOUNT 타입일 때만 제외"로 더 좁혀서 두 문제를 동시에 푼다.
+EXCLUDED_RESTRICTION_FOR_DISCOUNT_ONLY = {"POINT_ONLY"}
 
 # max_benefit_krw == 0 은 "한도 정보가 구조화되지 않음"을 뜻한다(정제 후에도 84건 그대로).
 # 진짜 무제한은 null(None)로 따로 표기되어 있으므로 둘을 구분해서 처리한다.
@@ -118,7 +132,10 @@ def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
             continue
         if b["is_probabilistic"]:            # 이제 문자열 비교가 아니라 진짜 bool이다
             continue
-        if b["payment_method_restriction"] in EXCLUDED_RESTRICTION:
+        # POINT_ONLY 제외는 DISCOUNT 타입일 때만 적용한다(위 상수 설명 참고).
+        # REWARD/CASHBACK인데 POINT_ONLY인 경우(=적립을 포인트로 받는 정상 케이스)는 통과시킨다.
+        if b["benefit_type"] == "DISCOUNT" and \
+           b["payment_method_restriction"] in EXCLUDED_RESTRICTION_FOR_DISCOUNT_ONLY:
             continue
         if b["target_platform"] != "ALL" and b["target_platform"] != platform:
             continue
@@ -147,6 +164,21 @@ def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
         # --- 신규 조건 1: 게임 일치 여부 (target_game) ---
         # 쿠키런 전용 혜택 10건을 다른 게임 계산에 섞지 않기 위해 필요하다.
         if b["target_game"] != "ALL" and b["target_game"] != game:
+            continue
+
+        # --- 신규 조건 1-2: 누적 실적 조건이 텍스트에만 있고 구조화 안 된 경우 제외 ---
+        # 예: BNF_0008 "월간 누적 700만원 이상, 삼성전자 포인트로" — min_prev_month_spend_krw
+        # 필드는 비어있는데(None) 조건 설명 텍스트에는 큰 금액 문턱이 적혀 있다.
+        # 이런 경우를 그냥 통과시키면(전월실적처럼 경고만 달고 포함) 문제가 더 크다:
+        # BNF_0008은 조건 미충족 시 아예 못 받는 100만원짜리 적립이라, 경고 배지 하나로는
+        # 부족하고 "최적 경로"를 통째로 왜곡한다(실제로 net_cost가 -976,300원까지 나왔다).
+        # min_prev_month_spend_krw가 구조화되어 있는 일반 카드 혜택(전월실적 30만원 등)은
+        # 계속 경고와 함께 포함하되, 이렇게 구조화가 안 된 채로 큰 문턱을 암시하는 경우만
+        # "검증 불가"로 보고 안전하게 제외한다.
+        UNSTRUCTURED_THRESHOLD_KEYWORDS = ("월간 누적", "연간 누적", "전월 누적")
+        text = b.get("condition_raw_text") or ""
+        if b["min_prev_month_spend_krw"] is None and \
+           any(kw in text for kw in UNSTRUCTURED_THRESHOLD_KEYWORDS):
             continue
 
         # --- 신규 조건 2: 플랫폼-결제수단 호환성 (platform_connection 연동) ---
@@ -337,7 +369,17 @@ def calculate_direct_payment_route(combo, base_amount):
             effect = round(min(effect, remaining))
             remaining -= effect
         elif btype in ("REWARD", "CASHBACK"):
-            effect = round(effect)
+            # ★ v7 수정: 결제 금액을 초과하는 적립을 방지하는 안전장치 추가.
+            # 실제 데이터(BNF_0008 삼성페이)에서 "월간 누적 700만원 이상"이라는
+            # 조건이 구조화된 필드(min_prev_month_spend_krw)에는 비어있고
+            # condition_raw_text에만 적혀 있어서, 그 조건을 못 읽고 100만원
+            # 적립을 30,000원짜리 단건 결제에 그대로 적용해 net_cost가
+            # -976,300원이 되는 오류가 실제로 발생했다.
+            # 근본 원인(조건 미구조화)은 데이터 쪽에서 고쳐야 하지만, 최소한
+            # "적립이 결제 금액보다 클 수는 없다"는 상식적인 상한은 코드에서
+            # 방어해야 한다. DISCOUNT에는 이미 있던 상한(remaining)을
+            # REWARD/CASHBACK에도 동일하게 적용한다.
+            effect = round(min(effect, remaining))
             reward_total += effect          # 결제액은 안 깎고 마지막에 차감
         elif btype == "FEE":
             effect = round(effect)
@@ -390,7 +432,11 @@ def get_store_base_reward(benefit_rows, platform, store_tier=None):
     """
     candidates = [
         r for r in benefit_rows
-        if r["category"] == "SUMMARY_STORE_TIER_REWARD_RATES"
+        # ★ v7 수정: 카테고리명이 "SUMMARY_STORE_TIER_REWARD_RATES" -> "REWARD_STORE"로
+        # 바뀐 것을 실제 BigQuery 데이터로 확인함(2026-08-07 업로드분 기준). 예전 이름을
+        # 계속 쓰면 이 함수가 항상 빈 리스트를 받아 스토어 기본 적립이 통째로 작동하지
+        # 않는 상태가 된다(실제로 이 버그가 있었음).
+        if r["category"] == "REWARD_STORE"
         and STORE_PROVIDER_TO_PLATFORM.get(r["provider_or_retailer"]) == platform
     ]
     if not candidates:
