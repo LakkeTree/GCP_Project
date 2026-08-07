@@ -51,7 +51,7 @@ EXCLUDED_RESTRICTION = {"POINT_ONLY"}
 # 진짜 무제한은 null(None)로 따로 표기되어 있으므로 둘을 구분해서 처리한다.
 FALLBACK_PERCENT_CAP_KRW = 10000
 
-# ★ 신규: 스토어 자체 쿠폰의 provider_or_retailer 값 -> 실제 플랫폼 코드 매핑.
+# 스토어 자체 쿠폰의 provider_or_retailer 값 -> 실제 플랫폼 코드 매핑.
 # 데이터 표기 방식이 통일되어 있지 않아(GOOGLE_PLAY_STORE처럼 "_STORE"가 붙는 경우와,
 # ONE_STORE/GALAXY_STORE처럼 이미 스토어 코드 자체가 플랫폼 코드인 경우가 섞여 있다)
 # 명시적 매핑표로 안전하게 비교한다. STORE_COUPON 계층에만 사용한다.
@@ -122,33 +122,23 @@ def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
             continue
         if b["target_platform"] != "ALL" and b["target_platform"] != platform:
             continue
-
-        # ★ 버그 수정: 보유 결제수단(held_methods) 체크는 STORE_COUPON 계층에는 적용하지 않는다.
-        #   원인: STORE_COUPON 계층 혜택(BNF_0017/0018/0021/0024/0105/0106 등)은
+        # 보유 결제수단(held_methods) 체크는 STORE_COUPON 계층에는 적용하지 않는다.
+        #   STORE_COUPON 계층 혜택(BNF_0017/0018/0021/0024/0105/0106 등)은
         #   provider_or_retailer 필드에 "결제수단"이 아니라 "스토어 이름"(ONE_STORE,
         #   GALAXY_STORE, GOOGLE_PLAY_STORE 등)이 들어있다. 이런 쿠폰은 유저가 그
         #   스토어에서 "결제수단으로 보유"하는 게 아니라, 해당 플랫폼에서 구매하면
-        #   누구나 자동으로 받는 쿠폰이다. 프론트엔드에서도 유저가 "ONE_STORE"를
-        #   보유 결제수단으로 체크할 방법 자체가 없으므로, 기존처럼 held_methods로
-        #   걸러내면 STORE_COUPON 계층 혜택이 구조적으로 절대 통과할 수 없었다.
-        #   (실제 배포 후 100,000원 예시에서 원스토어 20% 쿠폰이 통째로 빠지는
-        #    현상으로 발견됨. 같은 이유로 BNF_0106 원스토어 50% 첫결제 쿠폰도 함께 빠져있었음.)
-        #   대신 바로 위의 target_platform 체크가 "이 쿠폰이 지금 플랫폼에 맞는지"를
-        #   이미 검증해주므로, STORE_COUPON 계층에서는 아래 held_methods 체크를
-        #   건너뛰어도 안전하다.
+        #   누구나 자동으로 받는 쿠폰이다.
         if b["stacking_layer"] != "STORE_COUPON":
             if b["provider_or_retailer"] not in held_methods:
                 continue
         else:
-            # ★ 버그 수정 2: STORE_COUPON 계층은 target_platform 필드가 일부 행에서
-            #   부정확하다(예: BNF_0105/0106은 provider_or_retailer=ONE_STORE인데
-            #   target_platform=ALL로 잘못 표기되어 있어, 위 target_platform 체크만으로는
-            #   구글플레이 구매에도 원스토어 전용 쿠폰이 잘못 적용되는 현상이 실제로 발생함).
-            #   provider_or_retailer를 실제 플랫폼 코드로 변환해 다시 한 번 검증한다.
+            # STORE_COUPON 계층은 target_platform 필드가 일부 행에서 부정확하다
+            # (예: BNF_0105/0106은 provider_or_retailer=ONE_STORE인데
+            #  target_platform=ALL로 잘못 표기됨). provider_or_retailer를 실제
+            # 플랫폼 코드로 변환해 다시 한 번 검증한다.
             provider_platform = STORE_PROVIDER_TO_PLATFORM.get(b["provider_or_retailer"])
             if provider_platform is not None and provider_platform != platform:
                 continue
-
         if amount < b["min_spend_krw"]:      # 이제 int라 형변환 불필요
             continue
         if b["is_first_purchase"] and not is_first_purchase:
@@ -243,33 +233,30 @@ def find_min_overshoot_combo(denominations, target_amount):
     return None
 
 
-def find_best_online_card_benefit(all_benefits, held_methods, platform):
-    """
-    [단계 5-c] 상품권을 온라인에서 구매할 때 추가로 적용 가능한 카드/PG 혜택을 찾는다.
-
-    조건: channel_type == "ONLINE" AND category in (CARD, E_PAYMENT)
-    ★ category 조건이 필수다. 이게 없으면 상품권 판매처(GIFT_CARD)끼리 서로를
-      '카드 혜택'으로 잘못 매칭하는 버그가 발생한다(v4 테스트에서 실제 발견).
-
-    현재 데이터에는 해당 조합이 0건이라 항상 None을 반환한다.
-    데이터가 추가되면 코드 수정 없이 자동으로 동작한다.
-    """
-    candidates = [
-        b for b in all_benefits
-        if b["channel_type"] == "ONLINE"
-        and b["category"] in ("CARD", "E_PAYMENT")
-        and b["provider_or_retailer"] in held_methods
-        and (b["target_platform"] == "ALL" or b["target_platform"] == platform)
-    ]
-    if not candidates:
-        return None
-    return max(candidates, key=lambda b: b["benefit_value"])
+# ★ 2026-08-06: find_best_online_card_benefit() 함수 삭제됨.
+#
+# 삭제 이유: 이전에는 "상품권을 온라인에서 구매하면 그 결제에 쓴 카드/PG의 적립
+# 혜택도 추가로 받을 수 있다"는 가정으로 이 함수와 관련 로직([5-c] 단계)이
+# 존재했다. 하지만 실제로 확인한 결과 그런 사례가 데이터에 전혀 없고
+# (channel_type=ONLINE AND category in (CARD, E_PAYMENT) 조합 0건),
+# 실서비스 확인 결과로도 "상품권으로 결제하면 결제수단 적립은 받을 수 없다"는
+# 것이 확정되었다.
+#
+# 즉 규칙은 다음과 같이 확정된다:
+#   - 상품권 경로(GIFT_CARD): 상품권 자체 할인만 적용된다. 카드/PG 적립은 없다.
+#   - 직접결제 경로(DIRECT_PAYMENT): 스토어쿠폰 + PG + 카드사 적립·할인이 전부 적용된다.
+# 이 규칙은 build_giftcard_routes()의 [5-c] 단계 제거로 반영되어 있다.
 
 
 def build_giftcard_routes(giftcard_benefits, all_benefits, held_methods, platform, target_amount):
-    """상품권 제공처마다 독립적으로 경로를 하나씩 만든다."""
+    """
+    상품권 제공처마다 독립적으로 경로를 하나씩 만든다.
+
+    ★ 상품권 경로에는 카드/PG 적립·할인이 붙지 않는다(확정된 규칙).
+       상품권 자체 할인만 적용되며, 결제수단 적립을 받으려면 상품권을 거치지 않는
+       직접결제 경로(DIRECT_PAYMENT, build_direct_payment_routes 참고)를 이용해야 한다.
+    """
     routes = []
-    online_card = find_best_online_card_benefit(all_benefits, held_methods, platform)
 
     for benefit in giftcard_benefits:
         result = find_min_overshoot_combo(benefit["denomination_list"], target_amount)
@@ -295,24 +282,8 @@ def build_giftcard_routes(giftcard_benefits, all_benefits, held_methods, platfor
             "giftcard_face_total": face_total,
         }]
 
-        # [5-c] 현금 전용이 아니면 카드/PG 온라인 혜택 추가 적용
-        if benefit["payment_method_restriction"] != "CASH_ONLY" and online_card is not None:
-            if online_card["benefit_unit"] == "PERCENT":
-                card_effect = spent * online_card["benefit_value"] / 100
-            else:
-                card_effect = online_card["benefit_value"]
-            card_effect = round(apply_cap(card_effect, online_card))
-            card_effect = min(card_effect, spent)
-            spent -= card_effect
-            steps.append({
-                "benefit_id": online_card["benefit_id"],
-                "provider": online_card["provider_or_retailer"],
-                "layer": "ONLINE_CARD_ON_GIFTCARD",
-                "type": online_card["benefit_type"],
-                "applied_amount": card_effect,
-            })
-
-        # [5-d] 잔액, [5-e] 실질 비용
+        # [5-c] 잔액, [5-d] 실질 비용
+        # (구 5-c "카드/PG 온라인 혜택 추가 적용" 단계는 삭제됨 — 위 함수 삭제 주석 참고)
         leftover = face_total - target_amount
         net_cost = spent - leftover
 
@@ -395,11 +366,93 @@ def calculate_direct_payment_route(combo, base_amount):
 
 
 # =============================================================================
+# [신규] 스토어 자체 기본 적립 (SUMMARY_STORE_TIER_REWARD_RATES 반영)
+# =============================================================================
+
+def get_store_base_reward(benefit_rows, platform, store_tier=None):
+    """
+    SUMMARY_STORE_TIER_REWARD_RATES 카테고리에서 해당 플랫폼의 기본 적립 정보를 찾는다.
+
+    이 값은 결제수단과 무관하게(카카오페이로 내든 카드로 내든) 스토어 계정에
+    자동으로 붙는 적립이다. 따라서 filter_eligible_benefits()의 일반 필터링
+    (POINT_ONLY 제외, INFO_ONLY 제외 등)을 거치지 않고 별도 경로로 조회한다.
+    disbursement_type=INFO_ONLY라서 원래는 "참고정보"로 제외되는 카테고리인데,
+    이 값만큼은 실제로 매 결제마다 적용되는 진짜 적립이라 예외적으로 다룬다.
+
+    ★ target_platform 필드를 안 믿고 provider_or_retailer로 재확인한다.
+      BNF_0096(갤럭시스토어 적립)이 target_platform=ALL로 잘못 표기되어 있어,
+      그대로 믿으면 구글플레이/원스토어 결제에도 삼성 갤럭시스토어 적립이
+      섞여 들어가는 오류가 생긴다(스토어쿠폰과 동일한 데이터 오류 패턴).
+
+    store_tier: 유저가 자기 등급을 알고 있다면 등급명 문자열(예: "골드")을 넘긴다.
+                모르면(None, 기본값) 모두가 보장받는 가장 낮은 등급의 적립률을 쓴다.
+                실제로 못 받는 등급을 받은 것처럼 계산해 과대 추천하는 것을 막기 위함이다.
+    """
+    candidates = [
+        r for r in benefit_rows
+        if r["category"] == "SUMMARY_STORE_TIER_REWARD_RATES"
+        and STORE_PROVIDER_TO_PLATFORM.get(r["provider_or_retailer"]) == platform
+    ]
+    if not candidates:
+        return None
+
+    def extract_tier_name(text):
+        # condition_raw_text 예시: "Cond: 브론즈 / 1,000원당 1pt" -> "브론즈"
+        if "Cond:" not in text:
+            return ""
+        return text.split("Cond:", 1)[1].split("/", 1)[0].strip()
+
+    if store_tier:
+        matched = [r for r in candidates if extract_tier_name(r["condition_raw_text"]) == store_tier]
+        if matched:
+            return matched[0]
+        # 지정한 등급명을 못 찾으면(오타 등) 아래 기본값 로직으로 넘어간다.
+
+    # 기본값: 여러 등급 중 적립률이 가장 낮은(=누구나 보장받는) 등급을 쓴다.
+    return min(candidates, key=lambda r: r["benefit_value"])
+
+
+def apply_store_base_reward(route, store_reward_benefit):
+    """
+    직접결제 경로 하나에 스토어 기본 적립을 추가로 반영한다.
+    결제수단 적립(REWARD/CASHBACK)과 동일한 방식: 결제 금액은 안 깎고,
+    reward_total에 더한 뒤 net_cost에서만 차감한다.
+
+    ★ 상품권 경로(GIFT_CARD)에는 적용하지 않는다. 지난번 확정한 규칙
+      ("상품권 결제 시 결제수단 적립 없음")과 같은 맥락으로, 스토어 기본
+      적립도 "그 스토어에서 직접 결제할 때"를 전제로 한 값이기 때문이다.
+      (상품권으로 충전한 잔액을 쓰는 경우까지 적립되는지는 데이터에 명시가
+       없어 확정할 수 없으므로, 보수적으로 직접결제 경로에만 적용한다.)
+    """
+    if store_reward_benefit is None:
+        return route
+
+    base = route["final_paid_amount"]
+    if store_reward_benefit["benefit_unit"] == "PERCENT":
+        effect = base * store_reward_benefit["benefit_value"] / 100
+    else:
+        effect = store_reward_benefit["benefit_value"]
+    effect = round(apply_cap(effect, store_reward_benefit))
+
+    route["reward_total"] += effect
+    route["net_cost"] -= effect
+    route["steps"].append({
+        "benefit_id": store_reward_benefit["benefit_id"],
+        "provider": store_reward_benefit["provider_or_retailer"],
+        "layer": "STORE_BASE_REWARD",
+        "type": "REWARD",
+        "applied_amount": effect,
+    })
+    return route
+
+
+# =============================================================================
 # [진입점] API 서버(팀원3)가 호출할 단일 함수
 # =============================================================================
 
 def recommend_best_routes(benefit_rows, platform_rows, platform, amount, held_methods,
-                          game="COOKIERUN_KINGDOM", is_first_purchase=False, top_n=3):
+                          game="COOKIERUN_KINGDOM", is_first_purchase=False, top_n=3,
+                          store_tier=None):
     """
     파라미터:
       benefit_rows   - benefit_info.jsonl(또는 BigQuery benefit_info 테이블) 행 리스트
@@ -410,6 +463,9 @@ def recommend_best_routes(benefit_rows, platform_rows, platform, amount, held_me
       game           - 대상 게임 (기본: COOKIERUN_KINGDOM)
       is_first_purchase - 첫 결제 여부
       top_n          - 반환할 상위 경로 개수
+      store_tier     - (신규, 선택) 유저의 스토어 멤버십 등급명(예: "골드").
+                       현재는 구글플레이만 등급이 나뉘어 있다. 모르면 안 넘겨도
+                       되며, 이 경우 보장되는 최저 등급 적립률이 적용된다.
 
     반환값: {"routes": [...], "warnings": [...]} 형태의 딕셔너리 (그대로 JSON 변환 가능)
     """
@@ -433,8 +489,14 @@ def recommend_best_routes(benefit_rows, platform_rows, platform, amount, held_me
     routes = build_giftcard_routes(
         giftcard_benefits, benefit_rows, held_methods, platform, amount
     )
-    routes += [calculate_direct_payment_route(c, amount)
-               for c in generate_combinations(payment_benefits)]
+    direct_routes = [calculate_direct_payment_route(c, amount)
+                      for c in generate_combinations(payment_benefits)]
+
+    # [신규] 스토어 기본 적립을 직접결제 경로에만 반영
+    store_reward_benefit = get_store_base_reward(benefit_rows, platform, store_tier)
+    direct_routes = [apply_store_base_reward(r, store_reward_benefit) for r in direct_routes]
+
+    routes += direct_routes
 
     # [단계 7] 통합 정렬 + [단계 8] 상위 N개
     routes.sort(key=lambda r: r["net_cost"])
