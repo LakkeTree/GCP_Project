@@ -24,7 +24,7 @@ export interface RouteStep {
   giftcard_combo?: number[];
   item_or_event_name?: string;
   condition_raw_text?: string;
-  target_game?: string;
+  target_game?: string; // 게임 전용 구분용 백엔드 필드
 }
 
 export interface RecommendedRoute {
@@ -50,6 +50,7 @@ export interface StepDetail {
   providerName: string;
   type: string; // 'DISCOUNT', 'REWARD', 'CASHBACK', 'FEE'
   amount: number;
+  formattedAmountText: string; // 현금 환산가 vs 포인트 수량 구분 표기 텍스트
   eventName: string;
   conditionText: string;
   comboText?: string;
@@ -92,8 +93,8 @@ export interface FormData {
   androidStores: string[];
   amount: number | '';
   isFirstPayment: boolean;
-  hasPreApplied: boolean;     // 사전 응모 완료 여부 (기본값: false)
-  useGameBenefits: boolean;   // 게임 전용 혜택 포함 여부 (기본값: true)
+  hasPreApplied: boolean;     // [토글 1] 사전 응모 완료 여부 (기본값: false)
+  useGameBenefits: boolean;   // [토글 2] 게임 전용 혜택 포함 여부 (기본값: true)
 
   googlePlayTier: string;
   galaxyStoreTier: string;
@@ -147,7 +148,7 @@ export const SUBSCRIPTION_OPTIONS = [
   'T멤버십 (원스토어 10% 할인/적립)',
 ];
 
-// 👈 [수정] 모든 세부 카드 옵션에 고유 ID 식별자 부여 (드롭다운 리셋 오류 완벽 해결)
+// 세부 카드 고유 ID 부여 (드롭다운 자동 선택 리셋 버그 완전 방지)
 export const SPECIAL_CARD_OPTIONS = [
   { label: '선택 안 함 (일반 신용/체크카드 / 기본 결제)', value: 'NONE' },
   { label: '[신한] LineageM 신한카드 (인앱 10% 할인)', value: 'SHINHAN_CARD_LINEAGE' },
@@ -161,7 +162,7 @@ export const SPECIAL_CARD_OPTIONS = [
   { label: '[하나] 원스토어 1 하나카드 (원스토어 2% 할인)', value: 'HANA_CARD_ONESTORE' },
 ];
 
-// 👈 [추가] 고유 카드 ID -> 백엔드 연산용 카드사 코드 변환 어댑터
+// 고유 카드 ID -> 백엔드 연산용 카드사 코드 정밀 변환 매핑표
 export const CARD_CODE_MAP: Record<string, string> = {
   'SHINHAN_CARD_LINEAGE': 'SHINHAN_CARD',
   'SHINHAN_CARD_CHECK': 'SHINHAN_CARD',
@@ -222,7 +223,7 @@ const REVERSE_PAYMENT_MAP: Record<string, string> = Object.fromEntries(
 const BACKEND_API_URL = 'http://127.0.0.1:8000/routes';
 
 // ==========================================
-// 5. 백엔드 데이터 변환 어댑터
+// 5. 백엔드 데이터 변환 어댑터 (즉시 할인 / 적립 분리 & 포인트 가치 표기)
 // ==========================================
 const convertBackendRouteToUI = (
   routes: RecommendedRoute[],
@@ -246,11 +247,25 @@ const convertBackendRouteToUI = (
       const targetGame = step.target_game || 'ALL';
       const isGameSpecific = targetGame !== 'ALL';
 
+      // 혜택 종류 및 제공자에 따른 표기 문구 분기 처리 (현금 환산가 vs Play Points 수량 구분)
+      let formattedText = '';
+      if (step.type === 'DISCOUNT' || step.type === 'FEE') {
+        formattedText = `-${step.applied_amount.toLocaleString()}원 할인`;
+      } else if (step.provider === 'GOOGLE_PLAY') {
+        // 구글 Play 포인트: 현금 환산액을 10으로 나눠 실제 pt 수량 정밀 산출
+        const nativePt = Math.round(step.applied_amount / 10);
+        formattedText = `+${step.applied_amount.toLocaleString()}원 상당 (${nativePt} Play Points)`;
+      } else {
+        // 1:1 포인트 (네이버/페이코/카카오/삼성전자 포인트 등)
+        formattedText = `+${step.applied_amount.toLocaleString()}P 적립`;
+      }
+
       return {
         layerName: layerKorean,
         providerName: providerKorean,
         type: step.type,
         amount: step.applied_amount,
+        formattedAmountText: formattedText,
         eventName: step.item_or_event_name || `${providerKorean} ${layerKorean}`,
         conditionText: step.condition_raw_text || '상세 조건은 해당 스토어/결제사 이벤트를 확인하세요.',
         comboText: comboStr,
@@ -259,7 +274,7 @@ const convertBackendRouteToUI = (
       };
     });
 
-    // 혜택 타입(type) 기준으로 즉시 할인과 적립을 엄격하게 분리
+    // 혜택 타입(type) 기준으로 즉시 할인과 적립을 엄격하게 분리 (UI 중복 방지)
     const discountSteps = stepsDetailed.filter(
       (s) => s.type === 'DISCOUNT' || s.type === 'FEE'
     );
@@ -331,7 +346,7 @@ export const fetchLowestPriceRecommendations = async (
     });
   }
 
-  // 👈 [수정] 특화 카드 선택 시 고유 ID -> 백엔드 연산용 카드사 코드로 자동 변환
+  // 특화 카드 선택 시 고유 ID -> 백엔드 연산용 카드사 코드로 자동 변환
   if (formData.useSpecialOptions && formData.selectedSpecialCard !== 'NONE') {
     const cardCode = CARD_CODE_MAP[formData.selectedSpecialCard] || formData.selectedSpecialCard;
     selectedProviders.push(cardCode);
@@ -395,8 +410,8 @@ export default function App() {
     androidStores: ANDROID_STORE_OPTIONS,
     amount: 55000,
     isFirstPayment: false,
-    hasPreApplied: false,
-    useGameBenefits: true,
+    hasPreApplied: false,     // 사전 응모 완료 토글 (기본값: false)
+    useGameBenefits: true,    // 게임 전용 혜택 포함 토글 (기본값: true)
 
     googlePlayTier: 'GOLD',
     galaxyStoreTier: 'STANDARD',
@@ -477,7 +492,7 @@ export default function App() {
     <div className="min-h-screen bg-slate-50 text-slate-800 p-4 md:p-8 font-sans">
       <div className="max-w-3xl mx-auto space-y-6">
 
-        {/* 상단 배너 */}
+        {/* 상단 프로토타입 안내 배너 */}
         <header className="bg-gradient-to-r from-amber-500 to-orange-600 text-white p-6 rounded-2xl shadow-lg text-center">
           <span className="inline-block px-3 py-1 bg-white/20 rounded-full text-xs font-semibold mb-2 backdrop-blur-sm">
             🎯 실시간 즉시 결제 전용 최저가 추천
@@ -493,7 +508,7 @@ export default function App() {
         {/* 메인 입력 폼 */}
         <form onSubmit={handleSubmit} className="bg-white p-6 rounded-2xl shadow-md border border-slate-100 space-y-6">
 
-          {/* [영역 1] OS 및 스토어 선택 */}
+          {/* [영역 1] OS 선택 및 안드로이드 세부 스토어 선택 */}
           <div className="space-y-3">
             <label className="block text-sm font-bold text-slate-700">1. 스마트폰 OS 및 이용 스토어 선택</label>
             <div className="grid grid-cols-2 gap-3">
@@ -541,7 +556,7 @@ export default function App() {
             )}
           </div>
 
-          {/* 멤버십 등급 설정 */}
+          {/* [동적 노출 영역] 스토어 선택시에만 나타나는 멤버십 등급 드롭다운 */}
           {(isGoogleSelected || isGalaxySelected) && (
             <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3 transition-all">
               <h4 className="text-xs font-bold text-slate-700 flex items-center gap-1">
@@ -589,7 +604,7 @@ export default function App() {
             </div>
           )}
 
-          {/* [영역 2] 기본 결제 정보 & 토글 옵션 */}
+          {/* [영역 2] 기본 결제 정보 & 켜기/끄기 검색 옵션 토글 */}
           <div className="space-y-3">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -614,7 +629,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* 검색 옵션 토글 */}
+            {/* 검색 옵션 켜기/끄기 토글 영역 */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
               <div className="flex items-center space-x-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
                 <input
@@ -657,7 +672,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* [영역 3] 보유 메인 결제 수단 */}
+          {/* [영역 3] 메인 결제 수단 선택 */}
           <div className="space-y-5 pt-2">
             <h3 className="text-base font-bold text-slate-800 border-b pb-2">
               2. 보유 중인 메인 결제 수단 선택
@@ -772,7 +787,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* [영역 4] 구독 서비스 및 카드 선택 */}
+          {/* [영역 4] 구독 서비스 및 세부 카드 선택 */}
           <div className="pt-2 border-t space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold text-slate-800">
@@ -1013,7 +1028,7 @@ export default function App() {
                           <span className="text-xs font-bold text-slate-700 flex items-center justify-between">
                             <span>🎁 2. 결제 후 적립 혜택</span>
                             <span className="text-[11px] text-emerald-700 font-extrabold">
-                              총 +{item.reward_point.toLocaleString()}P 적립
+                              총 +{item.reward_point.toLocaleString()}원 적립
                             </span>
                           </span>
                           <div className="space-y-1.5">
@@ -1039,8 +1054,10 @@ export default function App() {
 
                                   <span className="font-bold text-slate-800">{step.providerName}</span>
                                 </div>
+
+                                {/* formattedAmountText 적용 (구글 Play Points는 '+715원 상당 (72 Play Points)' 표기) */}
                                 <span className="font-bold text-emerald-600 whitespace-nowrap">
-                                  +{step.amount.toLocaleString()}P 적립
+                                  {step.formattedAmountText}
                                 </span>
                               </div>
                             ))}
@@ -1125,7 +1142,7 @@ export default function App() {
                 </div>
                 <div className="flex justify-between items-center text-emerald-600 font-medium">
                   <span>(-) 결제 후 적립 포인트</span>
-                  <span>-{selectedResultForDetail.reward_point.toLocaleString()}P</span>
+                  <span>-{selectedResultForDetail.reward_point.toLocaleString()}원</span>
                 </div>
                 <div className="flex justify-between items-center text-amber-900 font-black border-t border-amber-300 pt-2 text-sm">
                   <span>🎉 최종 체감가</span>
@@ -1186,8 +1203,10 @@ export default function App() {
                           )}
                           <span className="text-xs font-extrabold text-slate-800">{step.eventName}</span>
                         </div>
+
+                        {/* formattedAmountText 적용 */}
                         <span className="text-xs font-bold text-emerald-600">
-                          +{step.amount.toLocaleString()}P 적립
+                          {step.formattedAmountText}
                         </span>
                       </div>
                       <p className="text-[11px] text-slate-600 leading-relaxed bg-white p-2.5 rounded-lg border border-slate-100">
