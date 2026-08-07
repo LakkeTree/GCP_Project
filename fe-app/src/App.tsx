@@ -20,6 +20,8 @@ export interface RouteStep {
   type: string;
   applied_amount: number;
   giftcard_combo?: number[];
+  item_or_event_name?: string;
+  condition_raw_text?: string;
 }
 
 export interface RecommendedRoute {
@@ -40,14 +42,26 @@ export interface BackendResponse {
 // ==========================================
 // 2. 프론트엔드 UI 카드 출력용 데이터 타입
 // ==========================================
+export interface StepDetail {
+  layerName: string;
+  providerName: string;
+  type: string;
+  amount: number;
+  eventName: string;
+  conditionText: string;
+  comboText?: string;
+}
+
 export interface OptimizationResult {
   rank: number;
+  title: string;
   platform: string;
   original_price: number;
   final_price: number;
   reward_point: number;
-  apply_steps: string[];
+  steps: StepDetail[];
   guide_text: string;
+  rawRoute: RecommendedRoute;
 }
 
 export interface ApiResponse {
@@ -68,11 +82,9 @@ export interface FormData {
   amount: number | '';
   isFirstPayment: boolean;
 
-  // 스토어별 멤버십 등급
   googlePlayTier: string;
   galaxyStoreTier: string;
 
-  // 메인 결제 수단 카테고리별 활성화 토글 및 선택 배열
   useCarriers: boolean;
   carriers: string[];
 
@@ -82,7 +94,6 @@ export interface FormData {
   useVoucherBypasses: boolean;
   voucherBypasses: string[];
 
-  // 영역 3 세부 옵션 활성화 토글 및 상세 조건
   useSpecialOptions: boolean;
   subscriptions: string[];
   hasPrevSpend: boolean;
@@ -91,7 +102,7 @@ export interface FormData {
 }
 
 // ==========================================
-// 4. 입력 UI 옵션 상수
+// 4. 입력 UI 옵션 상수 및 매핑표
 // ==========================================
 export const ANDROID_STORE_OPTIONS = ['구글 플레이 스토어', '원스토어', '갤럭시 스토어'];
 export const CARRIER_OPTIONS = ['SKT', 'KT', 'LGU+'];
@@ -113,8 +124,8 @@ export const GOOGLE_PLAY_TIERS = [
 
 export const GALAXY_STORE_TIERS = [
   { label: '기본 / 상시 (0.2% 적립)', value: 'STANDARD' },
-  { label: '프레스티지 (1.1% 적립 / 2년 내 1,000만원↑)', value: 'PRESTIGE' },
-  { label: '로열블루 (2.1% 적립 / 2년 내 2,000만원↑)', value: 'ROYAL_BLUE' },
+  { label: '프레스티지 (1.1% 적립)', value: 'PRESTIGE' },
+  { label: '로열블루 (2.1% 적립)', value: 'ROYAL_BLUE' },
 ];
 
 export const SUBSCRIPTION_OPTIONS = [
@@ -123,7 +134,6 @@ export const SUBSCRIPTION_OPTIONS = [
   'T멤버십 (원스토어 10% 할인/적립)',
 ];
 
-// 1. 특화 카드 드롭다운 옵션 (value를 DB 카드사 Enum 코드명으로 맞춤)
 export const SPECIAL_CARD_OPTIONS = [
   { label: '선택 안 함 (일반 신용/체크카드 / 기본 결제)', value: 'NONE' },
   { label: '[신한] LineageM 신한카드 (인앱 10% 할인)', value: 'SHINHAN_CARD' },
@@ -137,7 +147,13 @@ export const SPECIAL_CARD_OPTIONS = [
   { label: '[하나] 원스토어 1 하나카드 (원스토어 2% 할인)', value: 'HANA_CARD' },
 ];
 
-// 2. 백엔드 Enum 매핑표 (스토어 쿠폰 및 기타 수단 코드 보완)
+export const PLATFORM_CODE_MAP: Record<string, string> = {
+  '구글 플레이 스토어': 'GOOGLE_PLAY',
+  '원스토어': 'ONE_STORE',
+  '갤럭시 스토어': 'GALAXY_STORE',
+  '앱스토어': 'APP_STORE',
+};
+
 export const PAYMENT_METHOD_MAP: Record<string, string> = {
   'SKT': 'SKT',
   'KT': 'KT',
@@ -161,28 +177,15 @@ export const PAYMENT_METHOD_MAP: Record<string, string> = {
   '하나카드': 'HANA_CARD',
 };
 
-// 3. 백엔드 레이어 코드를 한글로 변환하는 매핑표 (PAYMENT_E_PAY 추가)
 const LAYER_NAME_MAP: Record<string, string> = {
   STORE_COUPON: '스토어 쿠폰',
   PAYMENT_PG: '간편결제/통신사',
-  PAYMENT_E_PAY: '간편결제/통신사', // 👈 추가된 부분
+  PAYMENT_E_PAY: '간편결제/통신사',
   CARD_ISSUER: '카드사 혜택',
   GIFT_CARD: '상품권 우회',
   ONLINE_CARD_ON_GIFTCARD: '상품권 카드결제 혜택',
   STORE_BASE_REWARD: '스토어 기본 적립',
 };
-
-// ==========================================
-// 5. BigQuery DB 연동 전용 코드 매핑 테이블
-// ==========================================
-export const PLATFORM_CODE_MAP: Record<string, string> = {
-  '구글 플레이 스토어': 'GOOGLE_PLAY',
-  '원스토어': 'ONE_STORE',
-  '갤럭시 스토어': 'GALAXY_STORE',
-  '앱스토어': 'APP_STORE',
-};
-
-
 
 const REVERSE_PAYMENT_MAP: Record<string, string> = Object.fromEntries(
   Object.entries(PAYMENT_METHOD_MAP).map(([k, v]) => [v, k])
@@ -190,85 +193,61 @@ const REVERSE_PAYMENT_MAP: Record<string, string> = Object.fromEntries(
 
 const BACKEND_API_URL = 'http://127.0.0.1:8000/routes';
 
-// 서버 오프라인 시 Fallback Mock 데이터
-const MOCK_API_RESPONSE: ApiResponse = {
-  status: 'SUCCESS',
-  data: [
-    {
-      rank: 1,
-      platform: '원스토어 경로',
-      original_price: 55000,
-      final_price: 46500,
-      reward_point: 1500,
-      apply_steps: [
-        '[상품권 우회] 컬쳐랜드(우회/캐시) (50,000원 권종) - 3,500원 할인',
-        '[간편결제/통신사] T멤버십 - 5,000원 차감 적립'
-      ],
-      guide_text: '출석 미션 없이 당장 7% 할인된 상품권으로 우회 결제 시 가장 저렴합니다.'
-    },
-    {
-      rank: 2,
-      platform: '갤럭시 스토어 경로',
-      original_price: 55000,
-      final_price: 50000,
-      reward_point: 500,
-      apply_steps: [
-        '[스토어 쿠폰] 갤럭시 스토어 첫 결제 - 5,000원 즉시 할인',
-        '[카드사 혜택] 삼성 모바일 플러스 - 500원 할인'
-      ],
-      guide_text: '첫 결제 쿠폰 적용 시 절차가 간편하며 추가 할인까지 챙길 수 있습니다.'
-    },
-    {
-      rank: 3,
-      platform: '구글 플레이 스토어 경로',
-      original_price: 55000,
-      final_price: 53350,
-      reward_point: 2200,
-      apply_steps: [
-        '[간편결제/통신사] 네이버페이 (네이버플러스 멤버십) - 2,200원 적립',
-        '[스토어 쿠폰] 구글 Play 포인트 (골드 등급) - 1.3% 적립'
-      ],
-      guide_text: '네이버플러스 멤버십 및 골드 등급 포인트 추가 적립 경로입니다.'
-    }
-  ]
-};
-
+// ==========================================
+// 5. 백엔드 데이터 변환 어댑터
+// ==========================================
 const convertBackendRouteToUI = (
   routes: RecommendedRoute[],
   originalPrice: number
 ): OptimizationResult[] => {
   return routes.map((route, idx) => {
-    const applySteps = route.steps.map((step) => {
+    const mainProviders: string[] = [];
+
+    const stepsDetailed: StepDetail[] = route.steps.map((step) => {
       const layerKorean = LAYER_NAME_MAP[step.layer] || step.layer;
       const providerKorean = REVERSE_PAYMENT_MAP[step.provider] || step.provider;
-      const amt = step.applied_amount.toLocaleString();
-
-      if (step.layer === 'GIFT_CARD' && step.giftcard_combo) {
-        const comboStr = step.giftcard_combo.map((c) => `${c.toLocaleString()}원`).join('+');
-        return `[${layerKorean}] ${providerKorean} (${comboStr} 권종) - ${amt}원 할인`;
+      if (providerKorean && !mainProviders.includes(providerKorean)) {
+        mainProviders.push(providerKorean);
       }
-      return `[${layerKorean}] ${providerKorean} - ${amt}원 ${step.type === 'REWARD' ? '적립' : '할인'}`;
+
+      let comboStr = '';
+      if (step.layer === 'GIFT_CARD' && step.giftcard_combo) {
+        comboStr = step.giftcard_combo.map((c) => `${c.toLocaleString()}원`).join('+');
+      }
+
+      return {
+        layerName: layerKorean,
+        providerName: providerKorean,
+        type: step.type,
+        amount: step.applied_amount,
+        eventName: step.item_or_event_name || `${providerKorean} ${layerKorean}`,
+        conditionText: step.condition_raw_text || '상세 조건은 해당 스토어/결제사 이벤트를 확인하세요.',
+        comboText: comboStr,
+      };
     });
 
+    const routeTitle = mainProviders.length > 0
+      ? `[${mainProviders.join(' + ')}] 최적 조합`
+      : `추천 결제 경로 #${idx + 1}`;
+
     let guideText = route.route_type === 'GIFT_CARD'
-      ? '상품권 사전 할인 구매 후 결제하는 우회 경로입니다.'
-      : '카드/간편결제 즉시 할인 및 적립 적용 경로입니다.';
+      ? '상품권 할인 충전 후 우회 결제하는 최고 할인 경로입니다.'
+      : '스토어 쿠폰, 통신사/간편결제 및 기본 적립이 조합된 경로입니다.';
 
     if (route.leftover_balance > 0) {
-      guideText += ` (결제 후 잔액 ${route.leftover_balance.toLocaleString()}원 남음)`;
+      guideText += ` (결제 후 상품권 잔액 ${route.leftover_balance.toLocaleString()}원 남음)`;
     }
-
-    const mainProvider = route.steps[0]?.provider || '일반 결제';
-    const mainProviderKorean = REVERSE_PAYMENT_MAP[mainProvider] || mainProvider;
 
     return {
       rank: idx + 1,
-      platform: `${mainProviderKorean} 경로`,
+      title: routeTitle,
+      platform: mainProviders[0] || '일반 결제',
       original_price: originalPrice,
       final_price: route.net_cost,
       reward_point: route.reward_total,
-      apply_steps: applySteps,
+      steps: stepsDetailed,
       guide_text: guideText,
+      rawRoute: route,
     };
   });
 };
@@ -287,7 +266,6 @@ export const fetchLowestPriceRecommendations = async (
   if (formData.useVoucherBypasses) {
     formData.voucherBypasses.forEach((v) => PAYMENT_METHOD_MAP[v] && selectedProviders.push(PAYMENT_METHOD_MAP[v]));
   }
-  
   if (formData.useSpecialOptions && formData.selectedSpecialCard !== 'NONE') {
     selectedProviders.push(formData.selectedSpecialCard);
   }
@@ -336,8 +314,8 @@ export const fetchLowestPriceRecommendations = async (
       data: convertedResults,
     };
   } catch (err) {
-    console.warn('⚠️ 백엔드 API 연결 중 오류 발생. Fallback Mock 데이터를 표시합니다.', err);
-    return MOCK_API_RESPONSE;
+    console.error('API Error:', err);
+    throw err;
   }
 };
 
@@ -361,7 +339,7 @@ export default function App() {
     useVoucherBypasses: true,
     voucherBypasses: VOUCHER_OPTIONS,
 
-    useSpecialOptions: false, // 👈 영역 3 접이식 기본값 (닫힘)
+    useSpecialOptions: false,
     subscriptions: ['네이버플러스 멤버십 (+4% 적립)', 'T멤버십 (원스토어 10% 할인/적립)'],
     hasPrevSpend: true,
     isPcVersion: false,
@@ -371,7 +349,10 @@ export default function App() {
   const [loading, setLoading] = useState<boolean>(false);
   const [results, setResults] = useState<OptimizationResult[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  
+  // 모달 상태 관리 (1. 기준 안내 모달, 2. 이벤트 상세 보기 모달)
+  const [isCriteriaModalOpen, setIsCriteriaModalOpen] = useState<boolean>(false);
+  const [selectedResultForDetail, setSelectedResultForDetail] = useState<OptimizationResult | null>(null);
 
   const handleToggleArrayItem = (field: keyof FormData, item: string) => {
     const currentArray = formData[field] as string[];
@@ -575,7 +556,7 @@ export default function App() {
             </label>
           </div>
 
-          {/* [영역 3] 메인 결제 수단 선택 (각 영역별 [✓ 사용] 토글 옵션바 추가) */}
+          {/* [영역 3] 메인 결제 수단 선택 */}
           <div className="space-y-5 pt-2">
             <h3 className="text-base font-bold text-slate-800 border-b pb-2">
               2. 보유 중인 메인 결제 수단 선택
@@ -617,7 +598,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* 사용 간편결제 (페이) */}
+            {/* 사용 간편결제 */}
             <div className="space-y-2">
               <div className="flex items-center space-x-2">
                 <span className="text-xs font-bold text-slate-700">💸 사용 간편결제 (페이)</span>
@@ -690,7 +671,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* [영역 4] 구독 서비스 및 세부 카드 선택 (접이식 토글 스위치 적용) */}
+          {/* [영역 4] 구독 서비스 및 세부 카드 선택 */}
           <div className="pt-2 border-t space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold text-slate-800">
@@ -707,10 +688,8 @@ export default function App() {
               </label>
             </div>
 
-            {/* 체크박스가 체크되었을 때만 펼쳐지는 세부 영역 */}
             {formData.useSpecialOptions && (
               <div className="space-y-4 p-4 bg-slate-50/80 rounded-xl border border-slate-200 transition-all animate-fadeIn">
-                {/* 구독 서비스 */}
                 <div className="space-y-2">
                   <span className="text-xs font-bold text-slate-700 block">⭐ 이용 중인 유료 구독 서비스</span>
                   <div className="flex flex-wrap gap-2">
@@ -734,7 +713,6 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* 세부 특화 카드 선택 (드롭다운 스크롤) */}
                 <div className="space-y-1">
                   <label className="block text-xs font-bold text-slate-700">
                     💳 보유 중인 인앱/게이밍 제휴 카드 선택 (스크롤 메뉴)
@@ -752,7 +730,6 @@ export default function App() {
                   </select>
                 </div>
 
-                {/* 전월 실적 및 PC버전 토글 */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
                   <label className="flex items-center space-x-2 p-2.5 bg-white rounded-lg cursor-pointer border border-slate-200 text-xs font-medium text-slate-700">
                     <input
@@ -778,7 +755,6 @@ export default function App() {
             )}
           </div>
 
-          {/* 제출 버튼 */}
           <button
             type="submit"
             disabled={loading}
@@ -788,7 +764,7 @@ export default function App() {
           </button>
         </form>
 
-        {/* [결과 출력 영역] */}
+        {/* [결과 출력 영역] - 개선된 카드 디자인 및 타임라인 UI */}
         {loading && (
           <div className="bg-white p-8 rounded-2xl shadow-md border border-slate-100 text-center space-y-4">
             <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-amber-500 border-t-transparent"></div>
@@ -829,7 +805,7 @@ export default function App() {
                 <h2 className="text-lg font-bold text-slate-900">추천 결제 경로 Top 10</h2>
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(true)}
+                  onClick={() => setIsCriteriaModalOpen(true)}
                   className="text-xs font-semibold text-slate-500 hover:text-amber-600 underline cursor-pointer"
                 >
                   [환산 기준 보기]
@@ -842,28 +818,24 @@ export default function App() {
                   return (
                     <div
                       key={item.rank}
-                      className={`p-6 rounded-2xl bg-white transition-all border ${
+                      onClick={() => setSelectedResultForDetail(item)}
+                      className={`p-5 rounded-2xl bg-white transition-all border cursor-pointer hover:shadow-lg ${
                         isFirst
-                          ? 'border-amber-400 ring-2 ring-amber-400 shadow-xl relative'
-                          : 'border-slate-200 shadow-sm'
+                          ? 'border-amber-400 ring-2 ring-amber-400/50 shadow-md relative'
+                          : 'border-slate-200 hover:border-amber-300'
                       }`}
                     >
-                      {isFirst && (
-                        <span className="absolute -top-3 right-6 bg-amber-500 text-white text-xs font-extrabold px-3 py-1 rounded-full shadow-md">
-                          👑 최저가 추천
-                        </span>
-                      )}
-
-                      <div className="flex items-center justify-between border-b pb-3 mb-3">
+                      {/* 배지 헤더 */}
+                      <div className="flex items-center justify-between mb-3 border-b pb-3">
                         <div className="flex items-center space-x-2">
                           <span
-                            className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-sm ${
-                              isFirst ? 'bg-amber-500 text-white' : 'bg-slate-200 text-slate-600'
+                            className={`w-7 h-7 rounded-full flex items-center justify-center font-extrabold text-xs ${
+                              isFirst ? 'bg-amber-500 text-white' : 'bg-slate-200 text-slate-700'
                             }`}
                           >
                             {item.rank}
                           </span>
-                          <h3 className="font-extrabold text-base text-slate-800">{item.platform}</h3>
+                          <h3 className="font-extrabold text-base text-slate-800">{item.title}</h3>
                         </div>
                         <div className="text-right">
                           <span className="text-xs text-slate-400 line-through block">
@@ -875,22 +847,49 @@ export default function App() {
                         </div>
                       </div>
 
-                      <div className="space-y-2 text-xs text-slate-600 mb-4">
-                        <p className="font-bold text-slate-700">📌 즉시 적용 혜택 단계:</p>
-                        <ul className="list-disc pl-5 space-y-1">
-                          {item.apply_steps.map((step, idx) => (
-                            <li key={idx}>{step}</li>
+                      {/* 단계별 시각적 타임라인 UI */}
+                      <div className="space-y-2 mb-3">
+                        <span className="text-xs font-bold text-slate-600 block">📌 즉시 적용 혜택 단계:</span>
+                        <div className="space-y-2">
+                          {item.steps.map((step, idx) => (
+                            <div
+                              key={idx}
+                              className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-xs"
+                            >
+                              <div className="flex items-center space-x-2">
+                                <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 font-bold text-[10px]">
+                                  {step.layerName}
+                                </span>
+                                <span className="font-bold text-slate-800">
+                                  {step.providerName}
+                                </span>
+                                {step.comboText && (
+                                  <span className="text-[11px] text-slate-500 font-medium">
+                                    ({step.comboText})
+                                  </span>
+                                )}
+                              </div>
+                              <span className="font-bold text-amber-600">
+                                -{step.amount.toLocaleString()}원 {step.type === 'REWARD' ? '적립' : '할인'}
+                              </span>
+                            </div>
                           ))}
-                        </ul>
+                        </div>
                       </div>
 
-                      <div className="bg-slate-50 p-3 rounded-xl flex items-center justify-between text-xs">
-                        <span className="text-slate-500">{item.guide_text}</span>
-                        {item.reward_point > 0 && (
-                          <span className="font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-200">
-                            +{item.reward_point.toLocaleString()}P 적립
+                      {/* 하단 요약 가이드 및 상세보기 힌트 */}
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                        <span className="text-slate-500 text-[11px]">{item.guide_text}</span>
+                        <div className="flex items-center space-x-2">
+                          {item.reward_point > 0 && (
+                            <span className="font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 text-[11px]">
+                              +{item.reward_point.toLocaleString()}P 적립
+                            </span>
+                          )}
+                          <span className="text-amber-600 font-bold text-[11px] hover:underline">
+                            🔍 이벤트 상세 보기 ›
                           </span>
-                        )}
+                        </div>
                       </div>
                     </div>
                   );
@@ -900,8 +899,8 @@ export default function App() {
           );
         })()}
 
-        {/* 환산 기준 모달 팝업 */}
-        {isModalOpen && (
+        {/* [모달 1] 실시간 최저가 연산 환산 기준 안내 */}
+        {isCriteriaModalOpen && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
               <h3 className="text-lg font-bold text-slate-800 border-b pb-2">
@@ -914,10 +913,77 @@ export default function App() {
               </div>
               <button
                 type="button"
-                onClick={() => setIsModalOpen(false)}
+                onClick={() => setIsCriteriaModalOpen(false)}
                 className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm rounded-xl transition-all cursor-pointer"
               >
                 확인 및 닫기
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* [모달 2] 경로 클릭 시 열리는 이벤트 상세 조건 모달 */}
+        {selectedResultForDetail && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
+            <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl max-h-[85vh] overflow-y-auto">
+              
+              <div className="flex items-center justify-between border-b pb-3">
+                <div>
+                  <span className="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                    {selectedResultForDetail.rank}위 최저가 경로 상세 정보
+                  </span>
+                  <h3 className="text-base font-extrabold text-slate-800 mt-1">
+                    {selectedResultForDetail.title}
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedResultForDetail(null)}
+                  className="text-slate-400 hover:text-slate-600 font-bold text-xl px-2 cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* 총 결제금액 요약 */}
+              <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 flex justify-between items-center">
+                <span className="text-xs font-bold text-amber-900">최종 체감 결제 금액</span>
+                <div className="text-right">
+                  <span className="text-xs text-slate-400 line-through block">
+                    {selectedResultForDetail.original_price.toLocaleString()}원
+                  </span>
+                  <span className="text-lg font-black text-amber-600">
+                    {selectedResultForDetail.final_price.toLocaleString()}원
+                  </span>
+                </div>
+              </div>
+
+              {/* 각 이벤트 단계별 상세 설명 카드 */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-extrabold text-slate-700">🎁 구성 혜택 및 이벤트 상세 조건</h4>
+                {selectedResultForDetail.steps.map((step, idx) => (
+                  <div key={idx} className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-extrabold text-slate-800">
+                        {idx + 1}. {step.eventName}
+                      </span>
+                      <span className="text-xs font-bold text-amber-600">
+                        -{step.amount.toLocaleString()}원 {step.type === 'REWARD' ? '적립' : '할인'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 leading-relaxed bg-white p-2.5 rounded-lg border border-slate-100">
+                      📝 <strong>상세 조건:</strong> {step.conditionText}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedResultForDetail(null)}
+                className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm rounded-xl transition-all cursor-pointer shadow-md"
+              >
+                닫기
               </button>
             </div>
           </div>
