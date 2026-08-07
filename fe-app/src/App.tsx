@@ -22,6 +22,7 @@ export interface RouteStep {
   giftcard_combo?: number[];
   item_or_event_name?: string;
   condition_raw_text?: string;
+  target_game?: string; // 게임 전용 구분용 백엔드 필드
 }
 
 export interface RecommendedRoute {
@@ -45,21 +46,29 @@ export interface BackendResponse {
 export interface StepDetail {
   layerName: string;
   providerName: string;
-  type: string;
+  type: string; // 'DISCOUNT', 'REWARD', 'FEE'
   amount: number;
   eventName: string;
   conditionText: string;
   comboText?: string;
+  targetGame: string;
+  isGameSpecific: boolean;
 }
 
 export interface OptimizationResult {
   rank: number;
   title: string;
   platform: string;
-  original_price: number;
-  final_price: number;
-  reward_point: number;
+  original_price: number;            // 정가
+  actual_payment_price: number;      // 실제 결제창 결제금액 (final_paid_amount)
+  immediate_discount_total: number;  // 즉시 할인 총액
+  final_price: number;                // 최종 체감가 (net_cost)
+  reward_point: number;               // 총 적립 포인트 (reward_total)
+  total_benefit_amount: number;      // 총합 혜택 금액 (즉시할인 + 적립)
+  discount_rate: number;             // 총합 할인율 (%)
   steps: StepDetail[];
+  discount_steps: StepDetail[];       // 즉시 할인 단계 전용
+  reward_steps: StepDetail[];         // 적립 혜택 단계 전용
   guide_text: string;
   rawRoute: RecommendedRoute;
 }
@@ -106,7 +115,7 @@ export interface FormData {
 // ==========================================
 export const ANDROID_STORE_OPTIONS = ['구글 플레이 스토어', '원스토어', '갤럭시 스토어'];
 export const CARRIER_OPTIONS = ['SKT', 'KT', 'LGU+'];
-export const PAY_OPTIONS = ['네이버페이', '카카오페이', '페이코', '토스페이', '삼성페이'];
+export const PAY_OPTIONS = ['네이버페이', '카카오페이', '페이코', '토스페이', '삼성페이', '애플페이'];
 export const VOUCHER_OPTIONS = [
   '컬쳐랜드(우회/캐시)',
   '구글 핀번 기프트코드',
@@ -163,6 +172,7 @@ export const PAYMENT_METHOD_MAP: Record<string, string> = {
   '페이코': 'PAYCO',
   '토스페이': 'TOSS_PAY',
   '삼성페이': 'SAMSUNG_PAY',
+  '애플페이': 'APPLE_PAY',
   '컬쳐랜드(우회/캐시)': 'CULTURELAND_CASH',
   '구글 핀번 기프트코드': 'GOOGLE_PLAY_GIFTCARD',
   '원스토어 핀번 기프트코드': 'ONESTORE_GIFTCARD',
@@ -194,7 +204,7 @@ const REVERSE_PAYMENT_MAP: Record<string, string> = Object.fromEntries(
 const BACKEND_API_URL = 'http://127.0.0.1:8000/routes';
 
 // ==========================================
-// 5. 백엔드 데이터 변환 어댑터
+// 5. 백엔드 데이터 변환 어댑터 (즉시 할인 / 적립 / 할인율 정밀 분리)
 // ==========================================
 const convertBackendRouteToUI = (
   routes: RecommendedRoute[],
@@ -215,6 +225,9 @@ const convertBackendRouteToUI = (
         comboStr = step.giftcard_combo.map((c) => `${c.toLocaleString()}원`).join('+');
       }
 
+      const targetGame = step.target_game || 'ALL';
+      const isGameSpecific = targetGame !== 'ALL';
+
       return {
         layerName: layerKorean,
         providerName: providerKorean,
@@ -223,8 +236,25 @@ const convertBackendRouteToUI = (
         eventName: step.item_or_event_name || `${providerKorean} ${layerKorean}`,
         conditionText: step.condition_raw_text || '상세 조건은 해당 스토어/결제사 이벤트를 확인하세요.',
         comboText: comboStr,
+        targetGame: targetGame,
+        isGameSpecific: isGameSpecific,
       };
     });
+
+    // 즉시 할인 단계 vs 결제 후 적립 단계 구분
+    const discountSteps = stepsDetailed.filter(
+      (s) => s.type === 'DISCOUNT' || s.type === 'FEE' || s.layerName === '상품권 우회'
+    );
+    const rewardSteps = stepsDetailed.filter(
+      (s) => s.type === 'REWARD' || s.type === 'CASHBACK' || s.layerName === '스토어 기본 적립'
+    );
+
+    const actualPaymentPrice = route.final_paid_amount;
+    const immediateDiscountTotal = Math.max(0, originalPrice - actualPaymentPrice);
+    const rewardPointTotal = route.reward_total;
+    const netCost = route.net_cost; // final_paid_amount - reward_total
+    const totalBenefitAmount = Math.max(0, originalPrice - netCost);
+    const discountRate = originalPrice > 0 ? Math.round((totalBenefitAmount / originalPrice) * 1000) / 10 : 0;
 
     const routeTitle = mainProviders.length > 0
       ? `[${mainProviders.join(' + ')}] 최적 조합`
@@ -243,9 +273,15 @@ const convertBackendRouteToUI = (
       title: routeTitle,
       platform: mainProviders[0] || '일반 결제',
       original_price: originalPrice,
-      final_price: route.net_cost,
-      reward_point: route.reward_total,
+      actual_payment_price: actualPaymentPrice,
+      immediate_discount_total: immediateDiscountTotal,
+      final_price: netCost,
+      reward_point: rewardPointTotal,
+      total_benefit_amount: totalBenefitAmount,
+      discount_rate: discountRate,
       steps: stepsDetailed,
+      discount_steps: discountSteps,
+      reward_steps: rewardSteps,
       guide_text: guideText,
       rawRoute: route,
     };
@@ -350,7 +386,6 @@ export default function App() {
   const [results, setResults] = useState<OptimizationResult[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   
-  // 모달 상태 관리 (1. 기준 안내 모달, 2. 이벤트 상세 보기 모달)
   const [isCriteriaModalOpen, setIsCriteriaModalOpen] = useState<boolean>(false);
   const [selectedResultForDetail, setSelectedResultForDetail] = useState<OptimizationResult | null>(null);
 
@@ -764,7 +799,7 @@ export default function App() {
           </button>
         </form>
 
-        {/* [결과 출력 영역] - 개선된 카드 디자인 및 타임라인 UI */}
+        {/* [결과 출력 영역] - 즉시 할인 / 적립 분리 및 할인율 배지 반영 */}
         {loading && (
           <div className="bg-white p-8 rounded-2xl shadow-md border border-slate-100 text-center space-y-4">
             <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-amber-500 border-t-transparent"></div>
@@ -825,71 +860,136 @@ export default function App() {
                           : 'border-slate-200 hover:border-amber-300'
                       }`}
                     >
-                      {/* 배지 헤더 */}
-                      <div className="flex items-center justify-between mb-3 border-b pb-3">
-                        <div className="flex items-center space-x-2">
-                          <span
-                            className={`w-7 h-7 rounded-full flex items-center justify-center font-extrabold text-xs ${
-                              isFirst ? 'bg-amber-500 text-white' : 'bg-slate-200 text-slate-700'
-                            }`}
-                          >
-                            {item.rank}
-                          </span>
-                          <h3 className="font-extrabold text-base text-slate-800">{item.title}</h3>
+                      {/* 헤더: 순위, 제목, 할인율 배지, 가격 요약 */}
+                      <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 border-b pb-3 gap-2">
+                        <div className="space-y-1">
+                          <div className="flex items-center space-x-2">
+                            <span
+                              className={`w-7 h-7 rounded-full flex items-center justify-center font-extrabold text-xs ${
+                                isFirst ? 'bg-amber-500 text-white' : 'bg-slate-200 text-slate-700'
+                              }`}
+                            >
+                              {item.rank}
+                            </span>
+                            <h3 className="font-extrabold text-base text-slate-800">{item.title}</h3>
+                          </div>
+                          
+                          {/* 👈 [추가] 최대 할인율 & 총 혜택 금액 강조 배지 */}
+                          <div className="flex items-center space-x-1.5 pt-0.5">
+                            <span className="px-2.5 py-0.5 rounded-full bg-red-500 text-white font-black text-xs shadow-sm">
+                              최대 {item.discount_rate}% 할인
+                            </span>
+                            <span className="px-2 py-0.5 rounded-md bg-orange-100 text-orange-800 font-bold text-[11px]">
+                              총 {item.total_benefit_amount.toLocaleString()}원 혜택
+                            </span>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <span className="text-xs text-slate-400 line-through block">
-                            정가 {item.original_price.toLocaleString()}원
-                          </span>
-                          <span className="text-xl font-black text-amber-600">
-                            {item.final_price.toLocaleString()}원
-                          </span>
+
+                        {/* 가격 요약: 결제창 금액 vs 최종 체감가 */}
+                        <div className="text-left md:text-right space-y-0.5">
+                          <div className="text-xs text-slate-400">
+                            정가 <span className="line-through">{item.original_price.toLocaleString()}원</span>
+                          </div>
+                          <div className="text-xs font-bold text-slate-700">
+                            결제창 금액: <span className="text-slate-900">{item.actual_payment_price.toLocaleString()}원</span>
+                          </div>
+                          <div className="text-lg md:text-xl font-black text-amber-600">
+                            최종 체감가: {item.final_price.toLocaleString()}원
+                          </div>
                         </div>
                       </div>
 
-                      {/* 단계별 시각적 타임라인 UI */}
-                      <div className="space-y-2 mb-3">
-                        <span className="text-xs font-bold text-slate-600 block">📌 즉시 적용 혜택 단계:</span>
-                        <div className="space-y-2">
-                          {item.steps.map((step, idx) => (
-                            <div
-                              key={idx}
-                              className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-xs"
-                            >
-                              <div className="flex items-center space-x-2">
-                                <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 font-bold text-[10px]">
-                                  {step.layerName}
-                                </span>
-                                <span className="font-bold text-slate-800">
-                                  {step.providerName}
-                                </span>
-                                {step.comboText && (
-                                  <span className="text-[11px] text-slate-500 font-medium">
-                                    ({step.comboText})
+                      {/* 💳 영역 1: 즉시 할인 단계 (결제 시 즉시 차감) */}
+                      {item.discount_steps.length > 0 && (
+                        <div className="space-y-2 mb-3">
+                          <span className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                            <span>💳 1. 결제 시 즉시 할인 단계</span>
+                            <span className="text-[11px] text-amber-700 font-extrabold">
+                              결제창 결제액: {item.actual_payment_price.toLocaleString()}원
+                            </span>
+                          </span>
+                          <div className="space-y-1.5">
+                            {item.discount_steps.map((step, idx) => (
+                              <div
+                                key={idx}
+                                className="flex items-center justify-between p-2.5 bg-amber-50/50 rounded-xl border border-amber-100 text-xs"
+                              >
+                                <div className="flex items-center space-x-2 flex-wrap gap-1">
+                                  <span className="px-2 py-0.5 rounded-md bg-amber-200 text-amber-900 font-bold text-[10px]">
+                                    {step.layerName}
                                   </span>
-                                )}
+                                  
+                                  {step.isGameSpecific ? (
+                                    <span className="px-2 py-0.5 rounded-md bg-purple-100 text-purple-800 font-bold text-[10px]">
+                                      🎮 {step.targetGame === 'COOKIERUN_KINGDOM' ? '쿠키런 전용' : '게임 전용'}
+                                    </span>
+                                  ) : (
+                                    <span className="px-2 py-0.5 rounded-md bg-slate-200/80 text-slate-600 font-medium text-[10px]">
+                                      🌐 공통 혜택
+                                    </span>
+                                  )}
+
+                                  <span className="font-bold text-slate-800">{step.providerName}</span>
+                                  {step.comboText && (
+                                    <span className="text-[11px] text-slate-500 font-medium">({step.comboText})</span>
+                                  )}
+                                </div>
+                                <span className="font-bold text-red-600 whitespace-nowrap">
+                                  -{step.amount.toLocaleString()}원 할인
+                                </span>
                               </div>
-                              <span className="font-bold text-amber-600">
-                                -{step.amount.toLocaleString()}원 {step.type === 'REWARD' ? '적립' : '할인'}
-                              </span>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
                         </div>
-                      </div>
+                      )}
+
+                      {/* 🎁 영역 2: 결제 후 적립 혜택 (포인트 적립) */}
+                      {item.reward_steps.length > 0 && (
+                        <div className="space-y-2 mb-3">
+                          <span className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                            <span>🎁 2. 결제 후 적립 혜택</span>
+                            <span className="text-[11px] text-emerald-700 font-extrabold">
+                              총 +{item.reward_point.toLocaleString()}P 적립
+                            </span>
+                          </span>
+                          <div className="space-y-1.5">
+                            {item.reward_steps.map((step, idx) => (
+                              <div
+                                key={idx}
+                                className="flex items-center justify-between p-2.5 bg-emerald-50/50 rounded-xl border border-emerald-100 text-xs"
+                              >
+                                <div className="flex items-center space-x-2 flex-wrap gap-1">
+                                  <span className="px-2 py-0.5 rounded-md bg-emerald-200 text-emerald-900 font-bold text-[10px]">
+                                    {step.layerName}
+                                  </span>
+
+                                  {step.isGameSpecific ? (
+                                    <span className="px-2 py-0.5 rounded-md bg-purple-100 text-purple-800 font-bold text-[10px]">
+                                      🎮 {step.targetGame === 'COOKIERUN_KINGDOM' ? '쿠키런 전용' : '게임 전용'}
+                                    </span>
+                                  ) : (
+                                    <span className="px-2 py-0.5 rounded-md bg-slate-200/80 text-slate-600 font-medium text-[10px]">
+                                      🌐 공통 혜택
+                                    </span>
+                                  )}
+
+                                  <span className="font-bold text-slate-800">{step.providerName}</span>
+                                </div>
+                                <span className="font-bold text-emerald-600 whitespace-nowrap">
+                                  +{step.amount.toLocaleString()}P 적립
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       {/* 하단 요약 가이드 및 상세보기 힌트 */}
                       <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
                         <span className="text-slate-500 text-[11px]">{item.guide_text}</span>
-                        <div className="flex items-center space-x-2">
-                          {item.reward_point > 0 && (
-                            <span className="font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 text-[11px]">
-                              +{item.reward_point.toLocaleString()}P 적립
-                            </span>
-                          )}
-                          <span className="text-amber-600 font-bold text-[11px] hover:underline">
-                            🔍 이벤트 상세 보기 ›
-                          </span>
-                        </div>
+                        <span className="text-amber-600 font-bold text-[11px] hover:underline">
+                          🔍 이벤트 상세 보기 ›
+                        </span>
                       </div>
                     </div>
                   );
@@ -922,7 +1022,7 @@ export default function App() {
           </div>
         )}
 
-        {/* [모달 2] 경로 클릭 시 열리는 이벤트 상세 조건 모달 */}
+        {/* [모달 2] 경로 클릭 시 열리는 이벤트 상세 조건 모달 (투명한 금액 계산서 표 반영) */}
         {selectedResultForDetail && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
             <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl max-h-[85vh] overflow-y-auto">
@@ -945,38 +1045,94 @@ export default function App() {
                 </button>
               </div>
 
-              {/* 총 결제금액 요약 */}
-              <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 flex justify-between items-center">
-                <span className="text-xs font-bold text-amber-900">최종 체감 결제 금액</span>
-                <div className="text-right">
-                  <span className="text-xs text-slate-400 line-through block">
-                    {selectedResultForDetail.original_price.toLocaleString()}원
-                  </span>
-                  <span className="text-lg font-black text-amber-600">
-                    {selectedResultForDetail.final_price.toLocaleString()}원
-                  </span>
+              {/* 투명한 금액 계산서 요약표 */}
+              <div className="bg-amber-50/80 p-4 rounded-xl border border-amber-200 space-y-2 text-xs">
+                <div className="flex justify-between items-center text-slate-600">
+                  <span>정가</span>
+                  <span>{selectedResultForDetail.original_price.toLocaleString()}원</span>
+                </div>
+                <div className="flex justify-between items-center text-red-600 font-medium">
+                  <span>(-) 즉시 할인 금액</span>
+                  <span>-{selectedResultForDetail.immediate_discount_total.toLocaleString()}원</span>
+                </div>
+                <div className="flex justify-between items-center text-slate-900 font-bold border-t border-amber-200/80 pt-1.5">
+                  <span>💳 실제 결제창 결제액</span>
+                  <span className="text-sm">{selectedResultForDetail.actual_payment_price.toLocaleString()}원</span>
+                </div>
+                <div className="flex justify-between items-center text-emerald-600 font-medium">
+                  <span>(-) 결제 후 적립 포인트</span>
+                  <span>-{selectedResultForDetail.reward_point.toLocaleString()}P</span>
+                </div>
+                <div className="flex justify-between items-center text-amber-900 font-black border-t border-amber-300 pt-2 text-sm">
+                  <span>🎉 최종 체감가</span>
+                  <span className="text-base text-amber-600">{selectedResultForDetail.final_price.toLocaleString()}원</span>
+                </div>
+                <div className="text-right text-[11px] text-orange-800 font-bold pt-1">
+                  (총 {selectedResultForDetail.total_benefit_amount.toLocaleString()}원 혜택 / {selectedResultForDetail.discount_rate}% 절감)
                 </div>
               </div>
 
-              {/* 각 이벤트 단계별 상세 설명 카드 */}
-              <div className="space-y-3">
-                <h4 className="text-xs font-extrabold text-slate-700">🎁 구성 혜택 및 이벤트 상세 조건</h4>
-                {selectedResultForDetail.steps.map((step, idx) => (
-                  <div key={idx} className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-extrabold text-slate-800">
-                        {idx + 1}. {step.eventName}
-                      </span>
-                      <span className="text-xs font-bold text-amber-600">
-                        -{step.amount.toLocaleString()}원 {step.type === 'REWARD' ? '적립' : '할인'}
-                      </span>
+              {/* 💳 즉시 할인 이벤트 목록 */}
+              {selectedResultForDetail.discount_steps.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-xs font-extrabold text-slate-700">💳 결제 시 즉시 할인 이벤트</h4>
+                  {selectedResultForDetail.discount_steps.map((step, idx) => (
+                    <div key={idx} className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-1.5">
+                          {step.isGameSpecific ? (
+                            <span className="text-[10px] font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-md">
+                              🎮 {step.targetGame === 'COOKIERUN_KINGDOM' ? '쿠키런 전용' : '게임 전용'}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-semibold text-slate-500 bg-slate-200/70 px-2 py-0.5 rounded-md">
+                              🌐 공통 혜택
+                            </span>
+                          )}
+                          <span className="text-xs font-extrabold text-slate-800">{step.eventName}</span>
+                        </div>
+                        <span className="text-xs font-bold text-red-600">
+                          -{step.amount.toLocaleString()}원 할인
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-600 leading-relaxed bg-white p-2.5 rounded-lg border border-slate-100">
+                        📝 <strong>상세 조건:</strong> {step.conditionText}
+                      </p>
                     </div>
-                    <p className="text-[11px] text-slate-600 leading-relaxed bg-white p-2.5 rounded-lg border border-slate-100">
-                      📝 <strong>상세 조건:</strong> {step.conditionText}
-                    </p>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
+
+              {/* 🎁 결제 후 적립 이벤트 목록 */}
+              {selectedResultForDetail.reward_steps.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-xs font-extrabold text-slate-700">🎁 결제 후 적립 이벤트</h4>
+                  {selectedResultForDetail.reward_steps.map((step, idx) => (
+                    <div key={idx} className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-1.5">
+                          {step.isGameSpecific ? (
+                            <span className="text-[10px] font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-md">
+                              🎮 {step.targetGame === 'COOKIERUN_KINGDOM' ? '쿠키런 전용' : '게임 전용'}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-semibold text-slate-500 bg-slate-200/70 px-2 py-0.5 rounded-md">
+                              🌐 공통 혜택
+                            </span>
+                          )}
+                          <span className="text-xs font-extrabold text-slate-800">{step.eventName}</span>
+                        </div>
+                        <span className="text-xs font-bold text-emerald-600">
+                          +{step.amount.toLocaleString()}P 적립
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-600 leading-relaxed bg-white p-2.5 rounded-lg border border-slate-100">
+                        📝 <strong>상세 조건:</strong> {step.conditionText}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               <button
                 type="button"
