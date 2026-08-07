@@ -232,47 +232,55 @@ const convertBackendRouteToUI = (
   return routes.map((route, idx) => {
     const mainProviders: string[] = [];
 
-    const stepsDetailed: StepDetail[] = route.steps.map((step) => {
-      const layerKorean = LAYER_NAME_MAP[step.layer] || step.layer;
-      const providerKorean = REVERSE_PAYMENT_MAP[step.provider] || step.provider;
-      if (providerKorean && !mainProviders.includes(providerKorean)) {
-        mainProviders.push(providerKorean);
-      }
+    // [App.tsx 내 convertBackendRouteToUI 함수 내부 수정]
+const stepsDetailed: StepDetail[] = route.steps.map((step) => {
+  const layerKorean = LAYER_NAME_MAP[step.layer] || step.layer;
+  const providerKorean = REVERSE_PAYMENT_MAP[step.provider] || step.provider;
+  if (providerKorean && !mainProviders.includes(providerKorean)) {
+    mainProviders.push(providerKorean);
+  }
 
-      let comboStr = '';
-      if (step.layer === 'GIFT_CARD' && step.giftcard_combo) {
-        comboStr = step.giftcard_combo.map((c) => `${c.toLocaleString()}원`).join('+');
-      }
+  let comboStr = '';
+  if (step.layer === 'GIFT_CARD' && step.giftcard_combo) {
+    comboStr = step.giftcard_combo.map((c) => `${c.toLocaleString()}원`).join('+');
+  }
 
-      const targetGame = step.target_game || 'ALL';
-      const isGameSpecific = targetGame !== 'ALL';
+  const targetGame = step.target_game || 'ALL';
+  const isGameSpecific = targetGame !== 'ALL';
 
-      // 혜택 종류 및 제공자에 따른 표기 문구 분기 처리 (현금 환산가 vs Play Points 수량 구분)
-      let formattedText = '';
-      if (step.type === 'DISCOUNT' || step.type === 'FEE') {
-        formattedText = `-${step.applied_amount.toLocaleString()}원 할인`;
-      } else if (step.provider === 'GOOGLE_PLAY') {
-        // 구글 Play 포인트: 현금 환산액을 10으로 나눠 실제 pt 수량 정밀 산출
-        const nativePt = Math.round(step.applied_amount / 10);
-        formattedText = `+${step.applied_amount.toLocaleString()}원 상당 (${nativePt} Play Points)`;
-      } else {
-        // 1:1 포인트 (네이버/페이코/카카오/삼성전자 포인트 등)
-        formattedText = `+${step.applied_amount.toLocaleString()}P 적립`;
-      }
+  // 현금 환산 가치(원) 및 구글 Play Points(pt) 구분 생성
+  let formattedText = '';
+  if (step.type === 'DISCOUNT' || step.type === 'FEE') {
+    formattedText = `-${step.applied_amount.toLocaleString()}원 할인`;
+  } else if (step.provider === 'GOOGLE_PLAY') {
+    const nativePt = Math.round(step.applied_amount / 10);
+    formattedText = `+${step.applied_amount.toLocaleString()}원 상당 (${nativePt} Play Points)`;
+  } else {
+    formattedText = `+${step.applied_amount.toLocaleString()}P 적립`;
+  }
 
-      return {
-        layerName: layerKorean,
-        providerName: providerKorean,
-        type: step.type,
-        amount: step.applied_amount,
-        formattedAmountText: formattedText,
-        eventName: step.item_or_event_name || `${providerKorean} ${layerKorean}`,
-        conditionText: step.condition_raw_text || '상세 조건은 해당 스토어/결제사 이벤트를 확인하세요.',
-        comboText: comboStr,
-        targetGame: targetGame,
-        isGameSpecific: isGameSpecific,
-      };
-    });
+  // 👈 [핵심 수정] 백엔드가 전달한 DB 상의 카드 상품명과 상세 조건을 최우선으로 매핑
+  const realEventName = step.item_or_event_name && step.item_or_event_name.trim() !== ''
+    ? step.item_or_event_name
+    : `${providerKorean} ${layerKorean}`;
+
+  const realConditionText = step.condition_raw_text && step.condition_raw_text.trim() !== ''
+    ? step.condition_raw_text
+    : '상세 조건은 해당 스토어/결제사 이벤트를 확인하세요.';
+
+  return {
+    layerName: layerKorean,
+    providerName: providerKorean,
+    type: step.type,
+    amount: step.applied_amount,
+    formattedAmountText: formattedText,
+    eventName: realEventName,       // 👈 카드 상품명 표기 (예: 삼성 iD GLOBAL, NH농협 zgm.streaming 등)
+    conditionText: realConditionText, // 👈 상세 전월 실적 및 한도 표기
+    comboText: comboStr,
+    targetGame: targetGame,
+    isGameSpecific: isGameSpecific,
+  };
+});
 
     // 혜택 타입(type) 기준으로 즉시 할인과 적립을 엄격하게 분리 (UI 중복 방지)
     const discountSteps = stepsDetailed.filter(
@@ -989,35 +997,33 @@ export default function App() {
                           </span>
                           <div className="space-y-1.5">
                             {item.discount_steps.map((step, idx) => (
-                              <div
-                                key={idx}
-                                className="flex items-center justify-between p-2.5 bg-amber-50/50 rounded-xl border border-amber-100 text-xs"
-                              >
+                              <div key={idx} className="flex items-center justify-between p-2.5 bg-amber-50/50 rounded-xl border border-amber-100 text-xs">
                                 <div className="flex items-center space-x-2 flex-wrap gap-1">
                                   <span className="px-2 py-0.5 rounded-md bg-amber-200 text-amber-900 font-bold text-[10px]">
                                     {step.layerName}
                                   </span>
                                   
-                                  {step.isGameSpecific ? (
-                                    <span className="px-2 py-0.5 rounded-md bg-purple-100 text-purple-800 font-bold text-[10px]">
-                                      🎮 {step.targetGame === 'COOKIERUN_KINGDOM' ? '쿠키런 전용' : '게임 전용'}
-                                    </span>
-                                  ) : (
-                                    <span className="px-2 py-0.5 rounded-md bg-slate-200/80 text-slate-600 font-medium text-[10px]">
-                                      🌐 공통 혜택
-                                    </span>
-                                  )}
+                                {step.isGameSpecific ? (
+                                        <span className="px-2 py-0.5 rounded-md bg-purple-100 text-purple-800 font-bold text-[10px]">
+                                          🎮 {step.targetGame === 'COOKIERUN_KINGDOM' ? '쿠키런 전용' : '게임 전용'}
+                                        </span>
+                                      ) : (
+                                        <span className="px-2 py-0.5 rounded-md bg-slate-200/80 text-slate-600 font-medium text-[10px]">
+                                          🌐 공통 혜택
+                                        </span>
+                                )}
 
-                                  <span className="font-bold text-slate-800">{step.providerName}</span>
-                                  {step.comboText && (
-                                    <span className="text-[11px] text-slate-500 font-medium">({step.comboText})</span>
-                                  )}
-                                </div>
-                                <span className="font-bold text-red-600 whitespace-nowrap">
-                                  -{step.amount.toLocaleString()}원 할인
-                                </span>
-                              </div>
-                            ))}
+                                {/* 👈 [수정] 대표 카드사 이름 대신 세부 카드 상품명(step.eventName) 표기 */}
+                                      <span className="font-bold text-slate-800">{step.eventName}</span>
+                                      {step.comboText && (
+                                        <span className="text-[11px] text-slate-500 font-medium">({step.comboText})</span>
+                                      )}
+                                    </div>
+                                    <span className="font-bold text-red-600 whitespace-nowrap">
+                                      -{step.amount.toLocaleString()}원 할인
+                                    </span>
+                                  </div>
+                                ))}
                           </div>
                         </div>
                       )}
