@@ -562,13 +562,17 @@ def get_store_base_reward(benefit_rows, platform, store_tier=None):
                 모르면(None, 기본값) 모두가 보장받는 가장 낮은 등급의 적립률을 쓴다.
                 실제로 못 받는 등급을 받은 것처럼 계산해 과대 추천하는 것을 막기 위함이다.
     """
+    # ★ v10 수정: 카테고리명이 데이터 재생성마다 계속 바뀌고 있다.
+    # SUMMARY_STORE_TIER_REWARD_RATES(최초) -> REWARD_STORE(v7) -> 다시
+    # SUMMARY_STORE_TIER_REWARD_RATES(이번 재생성분, 실제 CSV로 확인함)로
+    # 왔다갔다 하는 게 관찰되어, 매번 이름 하나만 믿고 고치면 또 깨진다.
+    # 그래서 지금까지 관찰된 이름을 전부 허용 목록에 넣어 어느 쪽이 와도
+    # 안전하게 작동하도록 만든다. 데이터팀에는 이름을 하나로 고정해달라고
+    # 별도 요청하되, 코드는 방어적으로 유지한다.
+    STORE_REWARD_CATEGORY_NAMES = {"SUMMARY_STORE_TIER_REWARD_RATES", "REWARD_STORE"}
     candidates = [
         r for r in benefit_rows
-        # ★ v7 수정: 카테고리명이 "SUMMARY_STORE_TIER_REWARD_RATES" -> "REWARD_STORE"로
-        # 바뀐 것을 실제 BigQuery 데이터로 확인함(2026-08-07 업로드분 기준). 예전 이름을
-        # 계속 쓰면 이 함수가 항상 빈 리스트를 받아 스토어 기본 적립이 통째로 작동하지
-        # 않는 상태가 된다(실제로 이 버그가 있었음).
-        if r["category"] == "REWARD_STORE"
+        if r["category"] in STORE_REWARD_CATEGORY_NAMES
         and STORE_PROVIDER_TO_PLATFORM.get(r["provider_or_retailer"]) == platform
     ]
     if not candidates:
