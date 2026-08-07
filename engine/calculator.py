@@ -112,10 +112,15 @@ def is_method_supported(compat_index, payment_method, platform):
 # =============================================================================
 
 def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
-                             held_methods, is_first_purchase):
+                             held_methods, is_first_purchase, has_prev_spend=None):
     """
     정제된 혜택 데이터에서 유저 조건에 맞는 것만 남긴다.
     v4의 8개 조건에 신규 컬럼 기반 조건 3개를 추가했다.
+
+    has_prev_spend: 전월실적 조건 충족 여부를 유저가 알려준 경우(3단계).
+      None  (기본값) - 모름/안 알려줌 -> 기존과 동일하게 "포함 + 경고" 처리
+      True  - 충족한다고 확인함 -> 경고 없이 정상 포함
+      False - 충족 안 한다고 확인함 -> 아예 제외(실제로 못 받는 혜택이므로)
 
     반환값: (통과한 혜택 리스트, 주의가 필요한 혜택 정보 리스트)
       두 번째 값은 "적용은 되지만 유저가 직접 확인해야 하는 조건"을 담는다.
@@ -181,6 +186,12 @@ def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
            any(kw in text for kw in UNSTRUCTURED_THRESHOLD_KEYWORDS):
             continue
 
+        # --- 신규 조건 1-3: 전월실적 조건 - 유저가 알려준 경우 정확하게 처리 ---
+        # has_prev_spend=False로 명시했다면, 실제로 못 받는 혜택이니 아예 제외한다.
+        # (경고만 달고 포함하면 "최적 경로"에 실제로는 못 받는 혜택이 섞여 나온다)
+        if b["min_prev_month_spend_krw"] and has_prev_spend is False:
+            continue
+
         # --- 신규 조건 2: 플랫폼-결제수단 호환성 (platform_connection 연동) ---
         # 이 플랫폼에서 아예 쓸 수 없는 결제수단이면 추천해봤자 결제가 불가능하다.
         if not is_method_supported(compat_index, b["provider_or_retailer"], platform):
@@ -190,7 +201,9 @@ def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
         # 비회원 서비스라 전월 실적이나 사전 응모 여부를 시스템이 알 수 없다.
         # 그렇다고 제외하면 카드 혜택 대부분이 사라지므로, 적용은 하되 경고를 남긴다.
         notes = []
-        if b["min_prev_month_spend_krw"]:
+        # has_prev_spend=True로 확인된 경우엔 이미 충족을 아는 것이므로 경고를 안 붙인다.
+        # (None인 경우, 즉 안 알려준 경우에만 "확인해보세요" 경고를 남긴다)
+        if b["min_prev_month_spend_krw"] and has_prev_spend is not True:
             notes.append(f"전월실적 {b['min_prev_month_spend_krw']:,}원 이상 필요")
         if b["requires_pre_app"]:
             notes.append("사전 응모 필요")
@@ -238,9 +251,17 @@ def find_min_overshoot_combo(denominations, target_amount):
     동전 교환 문제: 주어진 권종으로 target_amount 이상을 최소 초과로 만든다.
     denomination_list가 이미 정수 배열로 정제되어 있어 파싱 없이 바로 쓸 수 있다.
     반환값: (총 액면가, 사용 권종 리스트) 또는 불가능 시 None
+
+    ★ 방어 코드: 프론트엔드 분석에서 denomination_list가 문자열("5000;10000")
+    형태로 들어올 수 있다는 우려가 제기되어, 실수로 문자열이 들어와도 TypeError로
+    죽지 않고 안전하게 빈 결과를 반환하도록 타입 체크를 추가했다. 실제 현재
+    BigQuery 데이터는 이미 배열로 잘 들어오고 있지만(직접 확인함), 다른 소스나
+    향후 파이프라인 변경으로 문자열이 섞여 들어올 가능성에 대비한 안전장치다.
     """
     if not denominations or target_amount <= 0:
         return None
+    if not isinstance(denominations, (list, tuple)):
+        return None  # 문자열 등 배열이 아닌 값이 들어온 경우 안전하게 포기
 
     UNIT = 1000
     if any(d % UNIT != 0 for d in denominations):
@@ -336,6 +357,98 @@ def build_giftcard_routes(giftcard_benefits, all_benefits, held_methods, platfor
 # =============================================================================
 # [단계 6] 경로 B: 직접결제 경로
 # =============================================================================
+
+# =============================================================================
+# [신규] 문화상품권 등 "자유 충전형" 상품권 경로 (VOUCHER_PURCHASE 카테고리)
+# =============================================================================
+
+def build_voucher_charge_routes(voucher_benefits, platform, target_amount):
+    """
+    컬쳐랜드/북앤라이프 문화상품권 경로. GIFT_CARD와 구조가 다르다:
+
+      GIFT_CARD (build_giftcard_routes)
+        - denomination_list에 정해진 권종이 있다 -> "동전 교환 문제"를 풀어야 함
+        - 구매한 상품권을 바로 그 플랫폼에서 쓴다 (전환 단계 없음)
+
+      VOUCHER_PURCHASE (이 함수)
+        - denomination_list가 비어있다 = 정해진 권종이 없다 = 필요한 금액만큼
+          정확히 충전 가능하다 (동전 교환 문제 자체가 없음, 잔액 항상 0)
+        - 충전만으로 안 끝나고, 그 캐시를 플랫폼 결제수단으로 바꾸는 "전환" 단계가
+          추가로 있고, 전환 시 수수료가 붙는다. 전환 수수료는 플랫폼마다 다르다.
+
+      두 단계를 구분하는 기준은 payment_route_type 필드다(구조화되어 있어 안전하다):
+        GIFTCODE_CHARGE     -> ①단계: 상품권을 사서 캐시로 충전 (할인 있음)
+        INDIRECT_CONVERSION -> ②단계: 그 캐시를 플랫폼 결제수단으로 전환 (수수료)
+
+    계산 원리:
+      최종적으로 target_amount만큼 플랫폼 통화가 필요하다.
+      전환 수수료가 fee%라면, 전환 전 캐시는 target_amount / (1 - fee) 만큼 있어야
+      전환 후 정확히 target_amount가 남는다. 그 캐시를 charge_discount%만큼
+      할인받아 충전하므로, 실제로 내는 돈은 그 캐시 금액의 (1 - discount)이다.
+    """
+    charge_rows = [
+        b for b in voucher_benefits
+        if b["payment_route_type"] == "GIFTCODE_CHARGE" and b["benefit_type"] == "DISCOUNT"
+    ]
+    conversion_rows = [
+        b for b in voucher_benefits
+        if b["payment_route_type"] == "INDIRECT_CONVERSION" and b["benefit_type"] == "FEE"
+    ]
+
+    routes = []
+    for charge in charge_rows:
+        # 상품권 이름(XXX_VOUCHER)에서 캐시 이름(XXX_CASH)을 추정한다.
+        # 예: CULTURELAND_VOUCHER -> CULTURELAND_CASH
+        cash_provider = charge["provider_or_retailer"].replace("_VOUCHER", "_CASH")
+
+        # 이 캐시를 지금 고른 플랫폼으로 전환하는 수수료 행을 찾는다.
+        # target_platform이 구조화되어 있어 정확히 매칭 가능하다(텍스트 파싱 불필요).
+        matched_fee = next(
+            (f for f in conversion_rows
+             if f["provider_or_retailer"] == cash_provider and f["target_platform"] == platform),
+            None
+        )
+        if matched_fee is None:
+            # 이 상품권으로는 지금 플랫폼 결제를 만들 방법이 데이터에 없다
+            # (예: 북앤라이프는 현재 어떤 플랫폼으로도 전환 경로가 없음 -> 자동으로 제외됨)
+            continue
+
+        fee_rate = matched_fee["benefit_value"] / 100
+        discount_rate = charge["benefit_value"] / 100
+        if fee_rate >= 1:
+            continue  # 수수료 100% 이상은 비정상 데이터이므로 방어적으로 제외
+
+        cash_needed = target_amount / (1 - fee_rate)
+        paid = round(cash_needed * (1 - discount_rate))
+        charge_discount_amount = round(cash_needed - paid)
+        fee_amount = round(cash_needed - target_amount)
+
+        routes.append({
+            "route_type": "GIFT_CARD",
+            "base_amount": target_amount,
+            "steps": [
+                {
+                    "benefit_id": charge["benefit_id"], "provider": charge["provider_or_retailer"],
+                    "layer": "GIFT_CARD", "type": "DISCOUNT",
+                    "applied_amount": charge_discount_amount,
+                    "giftcard_combo": [round(cash_needed)],   # 고정권종이 아니므로 충전액 자체를 표시
+                    "giftcard_face_total": round(cash_needed),
+                },
+                {
+                    "benefit_id": matched_fee["benefit_id"], "provider": matched_fee["provider_or_retailer"],
+                    "layer": "VOUCHER_CONVERSION_FEE", "type": "FEE",
+                    "applied_amount": fee_amount,
+                },
+            ],
+            "final_paid_amount": paid,
+            "reward_total": 0,
+            "fee_total": fee_amount,
+            "leftover_balance": 0,   # 자유 충전이라 잔액이 남지 않는다
+            "net_cost": paid,
+        })
+
+    return routes
+
 
 def generate_combinations(benefits):
     """계층별로 '적용/미적용' 모든 경우의 수를 만든다."""
@@ -498,7 +611,7 @@ def apply_store_base_reward(route, store_reward_benefit):
 
 def recommend_best_routes(benefit_rows, platform_rows, platform, amount, held_methods,
                           game="COOKIERUN_KINGDOM", is_first_purchase=False, top_n=3,
-                          store_tier=None):
+                          store_tier=None, has_prev_spend=None):
     """
     파라미터:
       benefit_rows   - benefit_info.jsonl(또는 BigQuery benefit_info 테이블) 행 리스트
@@ -509,9 +622,11 @@ def recommend_best_routes(benefit_rows, platform_rows, platform, amount, held_me
       game           - 대상 게임 (기본: COOKIERUN_KINGDOM)
       is_first_purchase - 첫 결제 여부
       top_n          - 반환할 상위 경로 개수
-      store_tier     - (신규, 선택) 유저의 스토어 멤버십 등급명(예: "골드").
+      store_tier     - (선택) 유저의 스토어 멤버십 등급명(예: "골드").
                        현재는 구글플레이만 등급이 나뉘어 있다. 모르면 안 넘겨도
                        되며, 이 경우 보장되는 최저 등급 적립률이 적용된다.
+      has_prev_spend - (신규, 선택) 전월실적 조건 충족 여부. None=모름(기존과 동일하게
+                       경고와 함께 포함), True=충족(경고 없이 포함), False=미충족(제외).
 
     반환값: {"routes": [...], "warnings": [...]} 형태의 딕셔너리 (그대로 JSON 변환 가능)
     """
@@ -519,22 +634,28 @@ def recommend_best_routes(benefit_rows, platform_rows, platform, amount, held_me
 
     # [단계 3] 자격 필터링 (정제 데이터라 별도 정규화 단계가 필요 없다)
     eligible, warnings = filter_eligible_benefits(
-        benefit_rows, compat_index, platform, game, amount, held_methods, is_first_purchase
+        benefit_rows, compat_index, platform, game, amount, held_methods, is_first_purchase,
+        has_prev_spend=has_prev_spend,
     )
 
-    # [단계 4] 두 그룹으로 분리
+    # [단계 4] 세 그룹으로 분리
     # ★ stacking_layer가 아니라 category로 판정한다.
     #    정제 후에도 GIFT_CARD 9건이 CARD_ISSUER로 잘못 표기된 상태이기 때문이다.
+    # ★ v8 신규: VOUCHER_PURCHASE(문화상품권 등 자유충전형)를 별도 그룹으로 분리.
+    #    예전엔 이 카테고리 자체를 걸러내는 조건이 없어서, 어느 그룹에도 안 들어가고
+    #    조용히 통째로 계산에서 빠지고 있었다(프론트엔드 팀원이 발견한 버그).
     giftcard_benefits = [b for b in eligible if b["category"] == "GIFT_CARD"]
+    voucher_benefits = [b for b in eligible if b["category"] == "VOUCHER_PURCHASE"]
     payment_benefits = [
         b for b in eligible
-        if b["category"] != "GIFT_CARD" and b["stacking_layer"] in PAYMENT_LAYER_ORDER
+        if b["category"] not in ("GIFT_CARD", "VOUCHER_PURCHASE") and b["stacking_layer"] in PAYMENT_LAYER_ORDER
     ]
 
-    # [단계 5] 경로 A + [단계 6] 경로 B
+    # [단계 5] 경로 A(고정권종 상품권) + 경로 A'(자유충전형 상품권) + [단계 6] 경로 B
     routes = build_giftcard_routes(
         giftcard_benefits, benefit_rows, held_methods, platform, amount
     )
+    routes += build_voucher_charge_routes(voucher_benefits, platform, amount)
     direct_routes = [calculate_direct_payment_route(c, amount)
                       for c in generate_combinations(payment_benefits)]
 
