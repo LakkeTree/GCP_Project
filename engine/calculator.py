@@ -50,16 +50,20 @@ import itertools
 PAYMENT_LAYER_ORDER = ["STORE_COUPON", "PAYMENT_PG", "PAYMENT_E_PAY", "CARD_ISSUER"]
 CALCULABLE_TYPES = {"DISCOUNT", "REWARD", "CASHBACK", "FEE"}
 EXCLUDED_DISBURSEMENT = {"INFO_ONLY"}
-# ★ v6 수정: "POINT_ONLY"를 무조건 제외하던 규칙을 DISCOUNT 타입에만 한정한다.
-# 이유: payment_method_restriction="POINT_ONLY"가 두 가지 다른 뜻으로 쓰이고 있었다.
-#   1) DISCOUNT 타입일 때: "포인트로 결제해야 적용됨" -> 내 돈(포인트)으로 내는 것이라
-#      할인이 아니다. 예: 신한포인트 100% 즉시 차감. 이건 계속 제외해야 한다.
-#   2) REWARD/CASHBACK 타입일 때: "적립이 포인트 형태로 지급됨" -> 이건 지극히
-#      정상적인 적립이다(네이버페이 3% 적립, 페이코 기본 적립 등). 제외하면 안 된다.
-# 팀원 분석에서 이 규칙을 통째로 지우는 안(EXCLUDED_RESTRICTION = set())을 제안했지만,
-# 그러면 1)번 케이스(포인트 결제)가 다시 할인으로 잘못 계산되는 예전 버그가 되살아난다.
-# 그래서 "무조건 제외" 대신 "DISCOUNT 타입일 때만 제외"로 더 좁혀서 두 문제를 동시에 푼다.
-EXCLUDED_RESTRICTION_FOR_DISCOUNT_ONLY = {"POINT_ONLY"}
+# ★ v9 수정: "DISCOUNT + POINT_ONLY 제외" 규칙 자체를 폐기하고, 더 정확한 기준으로 교체.
+# 배경: v6에서 이 규칙을 "DISCOUNT 타입일 때만 POINT_ONLY 제외"로 좁혔었는데, 실제
+# 서비스 테스트에서 삼성페이 첫결제 혜택(BNF_0006, 5,000원 정액, POINT_ONLY)까지
+# 같이 제외되는 게 발견됐다. BNF_0006과 예전에 문제였던 BNF_0025(신한포인트
+# 100% 즉시차감)는 필드 구조가 거의 동일해서(둘 다 DISCOUNT+POINT_ONLY+
+# INSTANT_DISCOUNT) POINT_ONLY만으로는 구분이 안 됐다.
+#
+# 실제 데이터를 전수 조사해보니 진짜 구분 기준은 따로 있었다: "DISCOUNT면서
+# PERCENT 단위인데 값이 100% 이상"인 행은 BNF_0025 단 1건뿐이었다. 100% 이상
+# "할인"은 수학적으로 불가능한 개념이라(그러면 결제금액이 0원 이하), 실제로는
+# "이미 보유한 포인트로 전액 결제"를 의미할 수밖에 없다. 반면 BNF_0006처럼
+# 정액(KRW)이거나 100% 미만인 DISCOUNT는 전부 정상적인 할인·혜택이다.
+# 그래서 POINT_ONLY 문자열 검사 대신, 값 자체로 판정하는 게 훨씬 정확하다.
+UNREALISTIC_DISCOUNT_PERCENT_THRESHOLD = 100
 
 # max_benefit_krw == 0 은 "한도 정보가 구조화되지 않음"을 뜻한다(정제 후에도 84건 그대로).
 # 진짜 무제한은 null(None)로 따로 표기되어 있으므로 둘을 구분해서 처리한다.
@@ -137,10 +141,13 @@ def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
             continue
         if b["is_probabilistic"]:            # 이제 문자열 비교가 아니라 진짜 bool이다
             continue
-        # POINT_ONLY 제외는 DISCOUNT 타입일 때만 적용한다(위 상수 설명 참고).
-        # REWARD/CASHBACK인데 POINT_ONLY인 경우(=적립을 포인트로 받는 정상 케이스)는 통과시킨다.
-        if b["benefit_type"] == "DISCOUNT" and \
-           b["payment_method_restriction"] in EXCLUDED_RESTRICTION_FOR_DISCOUNT_ONLY:
+        # ★ v9: "포인트로 결제"(=실제로는 할인이 아님)를 걸러내는 기준을
+        # 값 자체로 판정한다. DISCOUNT+PERCENT인데 100% 이상이면, 수학적으로
+        # "이미 보유한 포인트/잔액으로 전액 결제"를 뜻할 수밖에 없으므로 제외한다.
+        # POINT_ONLY 문자열 기준(v6)은 정상 혜택(삼성페이 첫결제 등)까지 같이
+        # 걸러내는 부작용이 있어 폐기했다.
+        if b["benefit_type"] == "DISCOUNT" and b["benefit_unit"] == "PERCENT" and \
+           b["benefit_value"] >= UNREALISTIC_DISCOUNT_PERCENT_THRESHOLD:
             continue
         if b["target_platform"] != "ALL" and b["target_platform"] != platform:
             continue
@@ -345,6 +352,8 @@ def build_giftcard_routes(giftcard_benefits, all_benefits, held_methods, platfor
             "base_amount": target_amount,
             "steps": steps,
             "final_paid_amount": spent,
+            "payment_method_reward_total": 0,
+            "store_reward_total": 0,
             "reward_total": 0,
             "fee_total": 0,
             "leftover_balance": leftover,
@@ -441,6 +450,8 @@ def build_voucher_charge_routes(voucher_benefits, platform, target_amount):
                 },
             ],
             "final_paid_amount": paid,
+            "payment_method_reward_total": 0,
+            "store_reward_total": 0,
             "reward_total": 0,
             "fee_total": fee_amount,
             "leftover_balance": 0,   # 자유 충전이라 잔액이 남지 않는다
@@ -513,7 +524,15 @@ def calculate_direct_payment_route(combo, base_amount):
         "base_amount": base_amount,
         "steps": steps,
         "final_paid_amount": final_paid,
-        "reward_total": reward_total,
+        # ★ v9 신규: 적립을 "결제수단 적립"과 "스토어 적립"으로 분리해서 반환한다.
+        # 기존 reward_total 하나만 있으면 프론트엔드가 "이 적립이 카드/PG 적립인지,
+        # 구글플레이 등급 적립인지" 구분할 방법이 steps 배열을 직접 뒤지는 것뿐이었다.
+        # 이 함수(직접결제 경로) 시점에는 아직 스토어 적립이 안 붙었으므로
+        # payment_method_reward_total = reward_total, store_reward_total = 0으로 시작하고,
+        # apply_store_base_reward()에서 store_reward_total만 별도로 채운다.
+        "payment_method_reward_total": reward_total,
+        "store_reward_total": 0,
+        "reward_total": reward_total,   # = payment_method_reward_total + store_reward_total (하위호환용 합계)
         "fee_total": fee_total,
         "leftover_balance": 0,
         "net_cost": final_paid - reward_total,
@@ -593,7 +612,8 @@ def apply_store_base_reward(route, store_reward_benefit):
         effect = store_reward_benefit["benefit_value"]
     effect = round(apply_cap(effect, store_reward_benefit))
 
-    route["reward_total"] += effect
+    route["store_reward_total"] += effect   # ★ v9: 스토어 적립은 이 필드에만 더한다
+    route["reward_total"] += effect          # 합계(하위호환용)에도 반영
     route["net_cost"] -= effect
     route["steps"].append({
         "benefit_id": store_reward_benefit["benefit_id"],
