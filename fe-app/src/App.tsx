@@ -340,10 +340,21 @@ export const fetchLowestPriceRecommendations = async (
   if (formData.usePays) {
     formData.pays.forEach((p) => PAYMENT_METHOD_MAP[p] && selectedProviders.push(PAYMENT_METHOD_MAP[p]));
   }
-  if (formData.useVoucherBypasses) {
+if (formData.useVoucherBypasses) {
     formData.voucherBypasses.forEach((v) => {
       if (v === '구글 핀번 기프트코드') {
-        selectedProviders.push('GOOGLE_PLAY_GIFTCARD', 'ZEROPIN', 'GMARKET', '11STREET', 'SSG_COM', 'GOOGLE_PLAY_NAVER_STORE');
+        // 👈 [수정] 편의점 제휴처(CU_CONVENIENCE_STORE 등) 코드를 포함시킵니다.
+        selectedProviders.push(
+          'GOOGLE_PLAY_GIFTCARD',
+          'ZEROPIN',
+          'GMARKET',
+          '11STREET',
+          'SSG_COM',
+          'GOOGLE_PLAY_NAVER_STORE',
+          'CU_CONVENIENCE_STORE', // 👈 추가!
+          'GS25_CONVENIENCE_STORE', // (필요시 추가)
+          'SEVEN_ELEVEN'           // (필요시 추가)
+        );
       } else if (v === '컬쳐랜드(우회/캐시)') {
         selectedProviders.push('CULTURELAND_CASH', 'CULTURELAND_VOUCHER');
       } else if (v === '북앤라이프') {
