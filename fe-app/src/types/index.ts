@@ -101,3 +101,25 @@ export interface FormData {
   isPcVersion: boolean;
   selectedSpecialCard: string;
 }
+
+// 사용자 및 인증 관련 타입
+export interface User {
+  email: string;
+  name?: string;
+}
+
+// 랭킹 아이템 타입
+export interface RankItem {
+  id: number;
+  rank: number;
+  title: string;
+  subText?: string;
+  badgeText?: string;
+  changeStatus?: 'UP' | 'DOWN' | 'SAME' | 'NEW'; // 순위 변동 상태 (옵션)
+}
+
+export interface GamerRankData {
+  topPaymentMethods: RankItem[];
+  topGames: RankItem[];
+  topPlatforms: RankItem[];
+}
