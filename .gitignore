@@ -234,4 +234,4 @@ dist-ssr/
 .idea/
 
 node_modules/
-fe-app/node_modules/
+fe-app/node_modules/ No newline at end of file
