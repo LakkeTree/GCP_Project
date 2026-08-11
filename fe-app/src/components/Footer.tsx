@@ -86,7 +86,7 @@ export default function Footer() {
             <a href="#partnership" className="hover:text-cyan-400 transition-colors">제휴/광고 문의</a>
           </div>
         </div>
-
+ 
         <p className="text-center text-[10px] text-slate-500 pt-4 border-t border-slate-800/60">
           © 2026 호갱탈출 Project. All rights reserved.
         </p>

@@ -9,14 +9,14 @@ export default function GameRankPage() {
         {/* [좌측 10열] 메인 결제 순위 대시보드 */}
         <div className="lg:col-span-10 space-y-4">
           <div>
-            <h2 className="text-2xl font-black text-slate-900">📊 GamerRank 실시간 결제 순위</h2>
+            <h2 className="text-2xl font-black text-slate-900">📊 GamerRank 실시간 순위 대시보드</h2>
             <p className="text-xs text-slate-500">
-              스토어별 최적 결제 경로 순위입니다. (기본 TOP 5 표시 / 아래로 드래그 시 TOP 10 노출)
+              스토어 크롤링 결제 순위 및 호갱탈출 유저 7일간 실시간 검색 순위입니다.
             </p>
           </div>
 
-          {/* 통합 랭킹 보드 호출 (TOP 10 + 세로 스크롤 노출) */}
-          <GameRankBoard limit={10} autoRotate={false} compact={false} showScrollNotice={true} />
+          {/* 통합 랭킹 보드 호출 (TOP 10 표출) */}
+          <GameRankBoard limit={10} autoRotate={false} compact={false} />
         </div>
 
         {/* [우측 2열] 스티키 광고 배너 */}

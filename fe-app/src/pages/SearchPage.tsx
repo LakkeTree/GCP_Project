@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-// 타입은 'import type'으로 명시
+// 타입은 'import type'으로 명시 
 import type { OsType } from '../constants/searchOptions';
 // 일반 상수는 'import'로 분리
 import {

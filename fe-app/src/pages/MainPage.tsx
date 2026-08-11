@@ -12,7 +12,7 @@ export default function MainPage() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
 
-  // 3.5초 마다 다음 카드로 자동 순환 (마우스 호버 시 일시 정지)
+  // 3.5초마다 다음 카드로 자동 순환 (마우스 호버 시 백그라운드 정지)
   useEffect(() => {
     if (isPaused) return;
     const interval = setInterval(() => {
@@ -21,45 +21,15 @@ export default function MainPage() {
     return () => clearInterval(interval);
   }, [isPaused, events.length]);
 
-  const handlePrev = () => {
-    setActiveIndex((prev) => (prev - 1 + events.length) % events.length);
-  };
-
-  const handleNext = () => {
-    setActiveIndex((prev) => (prev + 1) % events.length);
-  };
-
   return (
     <div className="max-w-[1400px] mx-auto p-4 md:p-6 space-y-10">
       
-      {/* 상단 오늘의 이벤트 - 순환 확대 캐러셀 */}
+      {/* 상단 오늘의 이벤트 (우측 안내 문구 및 버튼 삭제) */}
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-extrabold text-slate-800 flex items-center gap-2">
             <span>🔥</span> 오늘의 이벤트
           </h2>
-
-          <div className="flex items-center space-x-2">
-            <span className="text-xs text-slate-400 font-bold hidden sm:inline">
-              자동 순환 중 (마우스 올리면 일시 정지)
-            </span>
-            <button
-              type="button"
-              onClick={handlePrev}
-              className="w-8 h-8 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-600 hover:bg-slate-100 transition-all shadow-sm cursor-pointer"
-              aria-label="이전 이벤트"
-            >
-              ◀
-            </button>
-            <button
-              type="button"
-              onClick={handleNext}
-              className="w-8 h-8 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-600 hover:bg-slate-100 transition-all shadow-sm cursor-pointer"
-              aria-label="다음 이벤트"
-            >
-              ▶
-            </button>
-          </div>
         </div>
 
         {/* 이벤트 카드 슬라이드 & 확대 영역 */}

@@ -146,7 +146,7 @@ export const getGameIcon = (title: string): string => {
   if (title.includes('니케')) return '🔫';
   return '🎮';
 };
-
+ 
 export const getGameStores = (title: string): string[] => {
   if (title.includes('리니지M') || title.includes('FC')) return ['구글', '앱스토어'];
   if (title.includes('오딘')) return ['구글', '원스', '앱스토어'];

@@ -141,3 +141,5 @@ export default function SupportedPaymentPage() {
     </div>
   );
 }
+
+// finish
