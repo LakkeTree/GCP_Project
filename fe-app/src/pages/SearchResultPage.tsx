@@ -6,8 +6,6 @@ import {
   CARRIER_OPTIONS,
   PAY_OPTIONS,
   VOUCHER_OPTIONS,
-  GOOGLE_PLAY_TIERS,
-  GALAXY_STORE_TIERS,
   SPECIAL_CARD_OPTIONS,
   CARD_CODE_MAP,
   PLATFORM_CODE_MAP,
@@ -113,13 +111,11 @@ export default function SearchResultPage() {
   const [osType, setOsType] = useState<OsType>(initialOs);
   const [androidStores, setAndroidStores] = useState<string[]>(initialStores);
 
-  const [googlePlayTier, setGooglePlayTier] = useState(initialGoogleTier);
-  const [galaxyStoreTier, setGalaxyStoreTier] = useState(initialGalaxyTier);
-  const [isPcVersion, setIsPcVersion] = useState(initialIsPcVersion);
+  const [googlePlayTier] = useState(initialGoogleTier);
+  const [galaxyStoreTier] = useState(initialGalaxyTier);
+  const [isPcVersion] = useState(initialIsPcVersion);
 
   const [useTMembership, setUseTMembership] = useState(true);
-  const [useNaverMembership, setUseNaverMembership] = useState(true);
-  const [useTossPrime, setUseTossPrime] = useState(true);
 
   const [useCarriers, setUseCarriers] = useState(initialCarriers.length > 0);
   const [carriers, setCarriers] = useState<string[]>(initialCarriers);
@@ -128,7 +124,7 @@ export default function SearchResultPage() {
   const [pays, setPays] = useState<string[]>(initialPays);
 
   const [useVoucherBypasses, setUseVoucherBypasses] = useState(initialVouchers.length > 0);
-  const [vouchers, setVouchers] = useState<string[]>(initialVouchers);
+  const [vouchers] = useState<string[]>(initialVouchers);
 
   const [useSpecialOptions, setUseSpecialOptions] = useState(initialSpecialCard !== 'NONE');
   const [selectedSpecialCard, setSelectedSpecialCard] = useState(initialSpecialCard);
@@ -438,12 +434,7 @@ export default function SearchResultPage() {
     fetchBackendData();
   };
 
-  const isGoogleSelected = osType === 'ANDROID' && androidStores.includes('구글 플레이 스토어');
-  const isGalaxySelected = osType === 'ANDROID' && androidStores.includes('갤럭시 스토어');
-  const isOneStoreSelected = osType === 'ANDROID' && androidStores.includes('원스토어');
-
-  const isNaverPaySelected = usePays && pays.includes('네이버페이');
-  const isTossPaySelected = usePays && pays.includes('토스페이');
+const isOneStoreSelected = osType === 'ANDROID' && androidStores.includes('원스토어');
 
   return (
     <div className="max-w-[1400px] mx-auto px-4 py-6 space-y-6">
@@ -1074,6 +1065,51 @@ export default function SearchResultPage() {
                   })}
                 </div>
               </div>
+            </div>
+
+
+            {/* 💳 제휴 카드 선택 (옵션) */}
+            <div className="space-y-2 pt-3 border-t border-slate-100">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-slate-900 block">제휴 카드 선택 (옵션)</span>
+                <label className="flex items-center space-x-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={useSpecialOptions}
+                    onChange={(e) => setUseSpecialOptions(e.target.checked)}
+                    className="w-3.5 h-3.5 text-cyan-600 rounded border-slate-300 shrink-0"
+                  />
+                  <span className="text-[11px] font-bold text-cyan-700">옵션 {useSpecialOptions ? '열림' : '닫힘'}</span>
+                </label>
+              </div>
+
+              {useSpecialOptions && (
+                <div className="space-y-2 pt-1 animate-fadeIn">
+                  <select
+                    value={selectedSpecialCard}
+                    onChange={(e) => setSelectedSpecialCard(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 bg-slate-50 font-bold text-slate-900 focus:outline-none focus:bg-white transition-all min-h-[40px]"
+                  >
+                    {SPECIAL_CARD_OPTIONS.map((card: { label: string; value: string }) => (
+                      <option key={card.value} value={card.value}>
+                        {card.label}
+                      </option>
+                    ))}
+                  </select>
+
+                  {selectedSpecialCard !== 'NONE' && (
+                    <label className="flex items-center space-x-2.5 p-2 bg-slate-50 rounded-xl border border-slate-200 cursor-pointer min-h-[40px]">
+                      <input
+                        type="checkbox"
+                        checked={hasPrevSpend}
+                        onChange={(e) => setHasPrevSpend(e.target.checked)}
+                        className="w-4 h-4 text-cyan-600 rounded border-slate-300 shrink-0"
+                      />
+                      <span className="text-xs font-bold text-slate-800">카드 전월 실적 충족 (20만~50만원)</span>
+                    </label>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* 기타 혜택 터치 영역 확대 */}

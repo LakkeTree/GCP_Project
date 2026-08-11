@@ -324,29 +324,11 @@ export default function SearchPage() {
         {/* [중앙 6열] 필터 옵션들 */}
         <div className="lg:col-span-6 space-y-5">
           <header className="space-y-1.5">
-            <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
               <span className="px-2.5 py-1 bg-cyan-100 text-cyan-800 font-extrabold text-xs rounded border border-cyan-200">
                 2단계 필터
               </span>
-
-              <div className="flex items-center space-x-2">
-                <button
-                  type="button"
-                  onClick={handleSelectAllPaymentMethods}
-                  className="px-3 py-1 bg-cyan-500 hover:bg-cyan-600 text-white font-extrabold text-xs rounded-lg transition-all shadow-sm cursor-pointer"
-                >
-                  모든 결제수단 선택
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDeselectAllPaymentMethods}
-                  className="px-3 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-extrabold text-xs rounded-lg transition-all shadow-sm cursor-pointer"
-                >
-                  모든 선택 취소
-                </button>
-              </div>
             </div>
-
             <h2 className="text-xl font-black text-slate-900">결제 조건 필터링</h2>
             <p className="text-xs text-slate-500">
               보유 중인 스토어, 결제수단, 구독 서비스 조건을 체크해 최저가를 계산하세요.
@@ -554,10 +536,30 @@ export default function SearchPage() {
 
           {/* 2-3. 보유 결제 수단 필터 */}
           <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
-            <h3 className="text-xs font-black text-slate-800 border-b border-slate-100 pb-2.5 flex items-center justify-between">
-              <span>보유 결제 수단 필터</span>
-              <span className="text-[10px] text-cyan-600 font-extrabold">* 최소 1개 필수</span>
-            </h3>
+            <div className="border-b border-slate-100 pb-2.5 flex items-center justify-between flex-wrap gap-2">
+              <h3 className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                <span>보유 결제 수단 필터</span>
+                <span className="text-[10px] text-cyan-600 font-extrabold">* 최소 1개 필수</span>
+              </h3>
+
+              {/* 가림 현상 완벽 해결: 버튼을 결제 수단 상자 우측 상단으로 이동 */}
+              <div className="flex items-center space-x-1.5">
+                <button
+                  type="button"
+                  onClick={handleSelectAllPaymentMethods}
+                  className="px-2.5 py-1 bg-cyan-500 hover:bg-cyan-600 text-white font-extrabold text-[11px] rounded-lg transition-all shadow-2xs cursor-pointer"
+                >
+                  모든 결제수단 선택
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeselectAllPaymentMethods}
+                  className="px-2.5 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-extrabold text-[11px] rounded-lg transition-all shadow-2xs cursor-pointer"
+                >
+                  모든 선택 취소
+                </button>
+              </div>
+            </div>
 
             <div className="space-y-4">
               {/* 통신사 */}
