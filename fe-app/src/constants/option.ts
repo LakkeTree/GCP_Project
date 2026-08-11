@@ -7,7 +7,7 @@ export const VOUCHER_OPTIONS = [
   '원스토어 핀번 기프트코드',
   '북앤라이프'
 ];
-
+ 
 export const GOOGLE_PLAY_TIERS = [
   { label: '브론즈 (기본 1.0% 적립)', value: 'BRONZE' },
   { label: '실버 (1.1% 적립)', value: 'SILVER' },
@@ -98,4 +98,4 @@ export const REVERSE_PAYMENT_MAP: Record<string, string> = Object.fromEntries(
   Object.entries(PAYMENT_METHOD_MAP).map(([k, v]) => [v, k])
 );
 
-export const BACKEND_API_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/routes';
+export const BACKEND_API_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'http://127.0.0.1:8000/routes';

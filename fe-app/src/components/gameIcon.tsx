@@ -9,7 +9,7 @@ interface GameIconProps {
 export default function GameIcon({ title, sizeClass = 'w-10 h-10' }: GameIconProps) {
   const [imgError, setImgError] = useState(false);
   const game = GAME_ASSETS[title];
-
+ 
   // 이미지가 등록되어 있고 로드 에러가 없을 때 <img> 렌더링
   if (game?.imageUrl && !imgError) {
     return (

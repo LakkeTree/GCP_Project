@@ -1,31 +1,48 @@
 import React, { useState, useEffect } from 'react';
-// 타입(type)은 'import type'으로 명시하여 런타임 모듈 번들링 에러 방지
-import type { StoreCategory } from '../constants/gameRankData'; // 👈 import type 으로 수정
+import type { StoreCategory, RankCategoryData } from '../constants/gameRankData';
 import {
   STORE_TAB_OPTIONS,
-  TOP_10_RANK_DATA,
+  FALLBACK_RANK_DATA,
+  fetchRankData,
 } from '../constants/gameRankData';
+import { getGameIcon } from '../constants/searchOptions';
 
 interface GameRankBoardProps {
   limit?: number;
   autoRotate?: boolean;
   compact?: boolean;
-  showScrollNotice?: boolean;
 }
 
 export default function GameRankBoard({
   limit = 10,
   autoRotate = false,
   compact = false,
-  showScrollNotice = false,
 }: GameRankBoardProps) {
-  // ... (이하 기존 GameRankBoard 로직 100% 동일)
-  const [activeTab, setActiveTab] = useState<StoreCategory>('ALL');
+  const [activeTab, setActiveTab] = useState<StoreCategory>('HOGAENG');
+  const [rankData, setRankData] = useState<RankCategoryData>(FALLBACK_RANK_DATA['HOGAENG']);
+  const [loading, setLoading] = useState<boolean>(false);
 
-  // 5초 자동 탭 순환 (autoRotate가 true일 때만 작동)
+  // activeTab 변경 시 DB 데이터 실시간 수집
+  useEffect(() => {
+    let isMounted = true;
+    setLoading(true);
+
+    fetchRankData(activeTab).then((data) => {
+      if (isMounted) {
+        setRankData(data);
+        setLoading(false);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeTab]);
+
+  // 5초 자동 탭 순환
   useEffect(() => {
     if (!autoRotate) return;
-    const categories: StoreCategory[] = ['ALL', 'GOOGLE', 'ONESTORE', 'GALAXY', 'APPLE'];
+    const categories: StoreCategory[] = ['HOGAENG', 'GOOGLE', 'ONESTORE', 'GALAXY', 'APPLE'];
     const interval = setInterval(() => {
       setActiveTab((prevTab) => {
         const currentIndex = categories.indexOf(prevTab);
@@ -35,12 +52,11 @@ export default function GameRankBoard({
     return () => clearInterval(interval);
   }, [autoRotate]);
 
-  const currentRank = TOP_10_RANK_DATA[activeTab];
-  const displayedList = currentRank.list.slice(0, limit);
+  const displayedList = (rankData?.list || []).slice(0, limit);
 
   return (
     <div className="space-y-4">
-      {/* 스토어 선택 탭 */}
+      {/* 탭 버튼 영역 */}
       <div
         className={`flex space-x-1.5 p-1.5 rounded-xl border overflow-x-auto no-scrollbar ${
           compact ? 'bg-slate-100 border-slate-200' : 'bg-slate-900 border-slate-800'
@@ -66,18 +82,18 @@ export default function GameRankBoard({
 
       {/* 메인 순위 카드 패널 */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-md p-5 md:p-6 space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
           <h3 className="text-base font-black text-slate-900">
-            {currentRank.title} TOP {limit}
+            {rankData?.title || '순위 대시보드'} TOP {limit}
           </h3>
-          {showScrollNotice && (
-            <span className="text-xs font-bold text-cyan-700 bg-cyan-50 border border-cyan-200 px-3 py-1 rounded-full">
-              Scroll for 6~10th ↓
+          {loading && (
+            <span className="text-[11px] font-bold text-cyan-600 animate-pulse">
+              DB 동기화 중...
             </span>
           )}
         </div>
 
-        {/* 결과 리스트 (limit 및 scroll 설정 반영) */}
+        {/* 결과 리스트 */}
         <div
           className={`space-y-2.5 ${
             limit > 5 ? 'max-h-[410px] overflow-y-auto pr-2 custom-scrollbar' : ''
@@ -88,33 +104,53 @@ export default function GameRankBoard({
             const isRank2 = item.rank === 2;
             const isRank3 = item.rank === 3;
 
+            let rankBadgeStyle = 'bg-slate-700 text-white';
+            let cardBgStyle = 'bg-slate-50/80 border-slate-200/80 hover:bg-slate-100';
+
+            if (isRank1) {
+              rankBadgeStyle = 'bg-amber-500 text-white';
+              cardBgStyle = 'bg-amber-50/70 border-amber-300 ring-1 ring-amber-400/30';
+            } else if (isRank2) {
+              rankBadgeStyle = 'bg-slate-600 text-white';
+              cardBgStyle = 'bg-slate-100/80 border-slate-300 ring-1 ring-slate-300';
+            } else if (isRank3) {
+              rankBadgeStyle = 'bg-amber-700 text-white';
+              cardBgStyle = 'bg-amber-100/40 border-amber-600/30 ring-1 ring-amber-600/20';
+            }
+
+            let rankChangeBadgeStyle = 'bg-slate-100 text-slate-500 border-slate-200';
+            if (item.rankChange === 'UP') {
+              rankChangeBadgeStyle = 'bg-red-50 text-red-600 border-red-200 font-extrabold';
+            } else if (item.rankChange === 'DOWN') {
+              rankChangeBadgeStyle = 'bg-blue-50 text-blue-600 border-blue-200 font-extrabold';
+            } else if (item.rankChange === 'NEW') {
+              rankChangeBadgeStyle = 'bg-emerald-50 text-emerald-600 border-emerald-200 font-extrabold';
+            }
+
             return (
               <div
                 key={item.rank}
-                className={`p-3.5 md:p-4 rounded-lg border flex items-center justify-between transition-all hover:shadow-md cursor-pointer ${
-                  isRank1
-                    ? 'bg-amber-50/70 border-amber-300'
-                    : isRank2
-                    ? 'bg-cyan-50/70 border-cyan-300'
-                    : isRank3
-                    ? 'bg-purple-50/70 border-purple-300'
-                    : 'bg-slate-50/80 border-slate-200/80 hover:bg-slate-100'
-                }`}
+                className={`p-3.5 md:p-4 rounded-xl border flex items-center justify-between transition-all hover:shadow-md cursor-pointer ${cardBgStyle}`}
               >
-                <div className="flex items-center space-x-3.5">
+                <div className="flex items-center space-x-3 md:space-x-4">
                   <span
-                    className={`w-7 h-7 md:w-8 md:h-8 rounded-lg font-black text-xs md:text-sm flex items-center justify-center shrink-0 shadow-sm ${
-                      isRank1
-                        ? 'bg-amber-500 text-white'
-                        : isRank2
-                        ? 'bg-cyan-500 text-white'
-                        : isRank3
-                        ? 'bg-purple-500 text-white'
-                        : 'bg-slate-200 text-slate-700'
-                    }`}
+                    className={`w-12 py-1 rounded-md text-xs md:text-sm font-black shadow-sm flex items-center justify-center shrink-0 text-center ${rankBadgeStyle}`}
                   >
-                    {item.rank}
+                    {item.rank}등
                   </span>
+
+                  {/* DB에 저장된 커스텀 이미지 URL이 있으면 우선 표시, 없으면 헬퍼 이모티콘 표출 */}
+                  {item.icon ? (
+                    <img
+                      src={item.icon}
+                      alt={item.name}
+                      className="w-8 h-8 md:w-9 md:h-9 rounded-lg object-cover border border-slate-200 shrink-0"
+                    />
+                  ) : (
+                    <span className="text-2xl md:text-3xl shrink-0 leading-none">
+                      {getGameIcon(item.name)}
+                    </span>
+                  )}
 
                   <div className="space-y-0.5">
                     <div className="flex items-center space-x-2">
@@ -127,9 +163,9 @@ export default function GameRankBoard({
                             isRank1
                               ? 'bg-amber-200 text-amber-900'
                               : isRank2
-                              ? 'bg-cyan-200 text-cyan-900'
+                              ? 'bg-slate-300 text-slate-800'
                               : isRank3
-                              ? 'bg-purple-200 text-purple-900'
+                              ? 'bg-amber-200/80 text-amber-950'
                               : 'bg-slate-200 text-slate-700'
                           }`}
                         >
@@ -143,29 +179,15 @@ export default function GameRankBoard({
                   </div>
                 </div>
 
-                {!compact && (
-                  <div className="text-right shrink-0 pl-3">
-                    <span className="inline-block px-3 py-1 bg-red-500 text-white font-black text-xs rounded-lg shadow-sm">
-                      {item.discountRate}
-                    </span>
-                    <p className="text-[10px] text-slate-400 font-bold mt-1">
-                      누적 {item.searchCount}
-                    </p>
-                  </div>
-                )}
+                <div className="shrink-0 pl-3">
+                  <span className={`inline-block px-3 py-1 rounded-lg border text-xs text-center min-w-[50px] shadow-2xs ${rankChangeBadgeStyle}`}>
+                    {item.rankChangeText}
+                  </span>
+                </div>
               </div>
             );
           })}
         </div>
-
-        {showScrollNotice && (
-          <div className="text-center pt-2 border-t border-slate-100">
-            <p className="text-xs text-slate-400 font-bold flex items-center justify-center gap-1.5">
-              <span>👇</span>
-              <span>아래로 스크롤하시면 6~10위 상세 혜택을 보실 수 있습니다.</span>
-            </p>
-          </div>
-        )}
       </div>
     </div>
   );

@@ -11,7 +11,7 @@ export interface PayMeta {
   logoUrl?: string;
   emojiFallback: string;
 }
-
+ 
 // 1. 게임 이미지 및 정보 매핑
 export const GAME_ASSETS: Record<string, GameMeta> = {
   '쿠키런: 킹덤': {
