@@ -89,13 +89,13 @@ class RouteRequest(BaseModel):
     @field_validator("payment_methods")
     @classmethod
     def validate_payment_methods(cls, v: List[str]) -> List[str]:
+        if not v:
+            return []
         sanitized_methods = []
         for method in v:
             clean_method = method.strip().upper()
-            # 화이트리스트 목록에 포함된 안전한 결제수단만 통과
             if clean_method in VALID_PAYMENT_METHODS:
                 sanitized_methods.append(clean_method)
-            # 악의적이거나 알 수 없는 수단(예: 'HACKED_CARD')은 자동으로 필터링하여 버림
         return sanitized_methods
 
 # -----------------------------------------------------------------------------

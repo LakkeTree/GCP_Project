@@ -1,3 +1,11 @@
+# Web Framework & ASGI Server
 fastapi
-uvicorn
+uvicorn[standard]
+gunicorn
 pydantic
+
+# Data Processing & BigQuery
+google-cloud-bigquery
+pandas
+db-dtypes
+pyarrow
