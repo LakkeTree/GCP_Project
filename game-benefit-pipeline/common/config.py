@@ -79,13 +79,19 @@ class Settings:
     max_input_chars: int
     gemini_max_output_tokens: int
 
-    # --- BigQuery ---
+    # --- BigQuery (seed_bigquery.py, test_bigquery.py, expire_benefits.py 같은
+    #     수동 스크립트가 아직 사용합니다. 크롤러의 자동 저장 경로에서는 더 이상
+    #     쓰이지 않습니다 — 크롤러는 이제 common/gcs_client.py로 GCS에 CSV를 올립니다) ---
     gcp_project_id: str
     bq_dataset: str
     bq_table: str
     bq_platform_table: str
     bq_location: str
     google_application_credentials: str
+
+    # --- GCS (크롤러가 CSV를 올리는 곳) ---
+    gcs_bucket_name: str
+    gcs_incoming_prefix: str
 
     # --- 크롤러 공통 ---
     crawl_delay_sec: float
@@ -164,6 +170,9 @@ def get_settings() -> Settings:
         bq_dataset=_get_str("BQ_DATASET", "benefit"),
         bq_table=_get_str("BQ_TABLE", "benefit_info"),
         bq_platform_table=_get_str("BQ_PLATFORM_TABLE", "platform_connection"),
+        # GCS: 버킷 이름 기본값은 실제 만들어져 있는 버킷 이름으로 맞춰뒀습니다.
+        gcs_bucket_name=_get_str("GCS_BUCKET_NAME", "positive-tuner-504502-m5-benefit-csv"),
+        gcs_incoming_prefix=_get_str("GCS_INCOMING_PREFIX", "incoming/"),
         bq_location=_get_str("BQ_LOCATION", "asia-northeast3"),
         google_application_credentials=_get_str("GOOGLE_APPLICATION_CREDENTIALS"),
         # 크롤러

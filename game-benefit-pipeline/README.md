@@ -248,3 +248,16 @@ game-benefit-pipeline/
 ├── requirements.txt
 └── README.md
 '''
+
+### 사용법
+'''
+전체 크롤러 실행 → GCS incoming/ 에 실제 업로드
+python -m scripts.run_all
+
+GCS에 안 올리고 결과만 미리 확인
+python -m scripts.run_all --dry-run
+
+로컬에도 눈으로 확인할 CSV를 남기고 싶으면 (GCS 업로드와 별개)
+python -m scripts.run_all --local-csv
+'''
+

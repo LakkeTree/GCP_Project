@@ -5,13 +5,20 @@ crawlers/base.py
 모든 크롤러가 물려받는 '틀'입니다.
 
 [초보자 설명: 왜 이런 걸 만드나?]
-원스토어, 갤럭시스토어, 구글플레이, 앱스토어 크롤러를 각각 만들면
-'페이지 가져오기 -> AI 정제 -> 중복 제거 -> BigQuery 저장' 과정이 4번 중복됩니다.
-나중에 저장 방식을 바꾸려면 4군데를 다 고쳐야 하죠.
+원스토어, 갤럭시스토어, 구글플레이 크롤러를 각각 만들면
+'페이지 가져오기 -> AI 정제 -> 중복 제거 -> CSV 생성 -> GCS 업로드' 과정이
+크롤러마다 중복됩니다. 나중에 저장 방식을 바꾸려면 크롤러 파일을 전부 고쳐야 하죠.
 
 그래서 공통 과정은 여기(BaseCrawler)에 한 번만 적어 두고,
 각 스토어 크롤러는 서로 다른 부분인 "어떤 URL에서 어떻게 텍스트를 뽑을지"만
 구현하게 합니다. 이걸 '템플릿 메서드 패턴'이라고 부릅니다.
+
+[v2 변경사항 — 팀 결정 반영]
+예전에는 이 클래스가 정제된 데이터를 BigQuery에 직접 저장했습니다.
+팀 논의 결과 이 방식을 버리고, 대신 CSV로 만들어서 GCS 버킷의 incoming/
+폴더에 올리는 방식으로 바꿨습니다. BigQuery 적재는 이제 이 파이프라인이
+아니라 별도 절차(GCS incoming -> processed 이동 등)에서 처리됩니다.
+그래서 common.bq_client 의존성을 이 파일에서 완전히 제거했습니다.
 
 [새 크롤러 만드는 법]
     class MyStoreCrawler(BaseCrawler):
@@ -30,8 +37,9 @@ from typing import Iterator, Optional
 from zoneinfo import ZoneInfo
 
 from common.ai_client import GeminiClient
-from common.bq_client import BigQueryClient
+from common.csv_export import build_csv_string
 from common.dedupe import deduplicate, to_benefit_info
+from common.gcs_client import GcsClient
 from common.http_client import HttpClient
 from common.logger import get_logger
 from common.schema import BenefitInfo
@@ -64,7 +72,7 @@ class BaseCrawler(ABC):
     def __init__(
         self,
         ai: Optional[GeminiClient] = None,
-        bq: Optional[BigQueryClient] = None,
+        gcs: Optional[GcsClient] = None,
         http: Optional[HttpClient] = None,
     ):
         """
@@ -74,7 +82,7 @@ class BaseCrawler(ABC):
         """
         self.http = http or HttpClient()
         self._ai = ai            # 실제로 쓸 때 만들도록 미뤄 둡니다(지연 초기화).
-        self._bq = bq
+        self._gcs = gcs
 
     # ------------------------------------------------------------------
     # 지연 초기화용 property
@@ -87,11 +95,11 @@ class BaseCrawler(ABC):
         return self._ai
 
     @property
-    def bq(self) -> BigQueryClient:
-        """BigQuery 클라이언트. 처음 쓰는 순간에 만들어집니다."""
-        if self._bq is None:
-            self._bq = BigQueryClient()
-        return self._bq
+    def gcs(self) -> GcsClient:
+        """GCS 클라이언트. 처음 쓰는 순간에 만들어집니다."""
+        if self._gcs is None:
+            self._gcs = GcsClient()
+        return self._gcs
 
     # ------------------------------------------------------------------
     # 자식 클래스가 반드시 구현해야 하는 부분
@@ -112,18 +120,25 @@ class BaseCrawler(ABC):
     # ------------------------------------------------------------------
     # 공통 실행 흐름 (자식은 이걸 고칠 필요가 없습니다)
     # ------------------------------------------------------------------
-    def run(self, save_to_bq: bool = True) -> list[BenefitInfo]:
+    def run(
+        self,
+        upload_to_gcs: bool = True,
+        csv_path: Optional[str] = None,
+    ) -> list[BenefitInfo]:
         """
         크롤링 전체 과정을 실행합니다.
           1. 페이지 수집
           2. Gemini로 정제
           3. ID/해시 부여
           4. 중복 제거
-          5. BigQuery 업서트
+          5. GCS 업로드 그리고/또는 로컬 CSV 저장
 
         Args:
-            save_to_bq: False로 두면 BigQuery에 저장하지 않고 결과만 돌려줍니다.
-                        (파서를 새로 만들 때 이걸 False로 두고 확인하면 편합니다)
+            upload_to_gcs: False로 두면 GCS에 올리지 않고 결과만 돌려줍니다.
+                          (파서를 새로 만들 때 이걸 False로 두고 확인하면 편합니다)
+            csv_path: 경로를 주면 그 위치에 로컬 CSV 파일로도 저장합니다.
+                      GCS 업로드와는 독립적입니다 — 로컬에서 눈으로 확인하고
+                      싶을 때, GCS는 안 건드리고 이 값만 줘도 됩니다.
         """
         today = datetime.now(KST).strftime("%Y-%m-%d")
         log.info("=" * 60)
@@ -167,12 +182,33 @@ class BaseCrawler(ABC):
         log.info("[%s] 페이지 %d개에서 혜택 %d건을 수집했습니다.",
                  self.source_name, page_count, len(results))
 
-        # --- 5단계: BigQuery 저장 ---
-        if save_to_bq and results:
-            summary = self.bq.upsert_benefits(results)
-            log.info("[%s] 저장 결과: %s", self.source_name, summary)
-        elif not save_to_bq:
-            log.info("[%s] save_to_bq=False 이므로 저장을 건너뜁니다.", self.source_name)
+        # --- 5단계: GCS 업로드 ---
+        # ⚠️ 파일명이 자유롭지 않습니다. GCS 버킷의 incoming/을 감시하는
+        # Cloud Function(handle-csv-upload, 조원 gcpgbsa15님 작성)이 파일명을
+        # 정확히 "Total_Benefit_Info_DB.csv"로만 인식하고, 그 외 이름은
+        # 내용을 보지도 않고 quarantine/로 격리합니다(main.py의 TARGETS 딕셔너리
+        # 참고). 그래서 원래 쓰던 "{크롤러이름}_{시각}.csv" 형태를 버리고
+        # 이 고정 이름을 씁니다.
+        # 여러 크롤러가 같은 이름으로 순서대로 올려도 안전합니다 — 그 Cloud
+        # Function이 파일명이 아니라 CSV 안의 source_file 컬럼 값 기준으로
+        # "그 소스의 기존 행만 지우고 새로 추가"하기 때문에, 크롤러끼리 서로
+        # 덮어쓰지 않습니다. (scripts/run_all.py가 크롤러를 동시에 안 돌리고
+        # 하나씩 순서대로 실행하는 것도 이 안전성을 보장하는 데 도움이 됩니다)
+        GCS_TARGET_FILENAME = "Total_Benefit_Info_DB.csv"
+
+        if upload_to_gcs and results:
+            csv_content = build_csv_string(results)
+            gs_uri = self.gcs.upload_csv_content(csv_content, GCS_TARGET_FILENAME)
+            log.info("[%s] GCS 업로드 완료: %s", self.source_name, gs_uri)
+        elif not upload_to_gcs:
+            log.info("[%s] upload_to_gcs=False 이므로 GCS 업로드를 건너뜁니다.", self.source_name)
+        elif not results:
+            log.info("[%s] 추출된 혜택이 없어 GCS 업로드를 건너뜁니다.", self.source_name)
+
+        # --- 5-2단계: 로컬 CSV 저장 (선택) ---
+        if csv_path:
+            from common.csv_export import export_benefits_csv  # 순환 import 방지를 위해 지연 임포트
+            export_benefits_csv(results, csv_path)
 
         return results
 

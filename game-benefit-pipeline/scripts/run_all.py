@@ -14,11 +14,17 @@ crawlers/one_store.py, crawlers/google_play.py 처럼 파일이 늘어날 때마
 새 크롤러 파일을 crawlers/ 안에 추가하기만 하면, 이 스크립트를 고칠 필요 없이
 다음 실행부터 자동으로 같이 돌아갑니다.
 
+[v2 변경사항 — 팀 결정 반영]
+크롤러가 더 이상 BigQuery에 직접 저장하지 않습니다. 대신 CSV를 만들어서
+GCS 버킷의 incoming/ 폴더에 올립니다. 그래서 이 스크립트의 "저장 대상"도
+BigQuery -> GCS로 바뀌었습니다. --dry-run 의 의미도 "BigQuery에 안 씀"에서
+"GCS에 안 올림"으로 바뀐 것뿐, 사용법 자체는 거의 같습니다.
+
 [사용법]
-    # 전체 크롤러를 BigQuery에 실제로 저장하며 실행
+    # 전체 크롤러를 실행해서 GCS incoming/ 폴더에 실제로 업로드
     python -m scripts.run_all
 
-    # BigQuery에 저장하지 않고 결과만 확인 (안전하게 미리 점검할 때)
+    # GCS에 올리지 않고 결과만 확인 (안전하게 미리 점검할 때)
     python -m scripts.run_all --dry-run
 
     # 특정 크롤러만 실행 (쉼표로 여러 개 지정 가능)
@@ -27,6 +33,10 @@ crawlers/one_store.py, crawlers/google_play.py 처럼 파일이 늘어날 때마
 
     # 어떤 크롤러들이 인식되는지만 보고 싶을 때 (아무것도 실행 안 함)
     python -m scripts.run_all --list
+
+    # 로컬에도 CSV 파일로 남기고 싶을 때 (GCS 업로드와는 별개, 눈으로 확인용)
+    python -m scripts.run_all --local-csv
+    python -m scripts.run_all --local-csv --dry-run   # GCS는 건너뛰고 로컬 CSV만
 
 [동작 원칙]
     크롤러 하나가 에러로 죽어도 나머지 크롤러는 계속 실행됩니다.
@@ -43,10 +53,13 @@ import pkgutil
 import sys
 import traceback
 from dataclasses import dataclass, field
+from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 import crawlers
 from crawlers.base import BaseCrawler
+from common.config import PROJECT_ROOT
 from common.logger import get_logger
 
 log = get_logger("run_all")
@@ -100,7 +113,11 @@ def discover_crawlers() -> list[type[BaseCrawler]]:
     return found
 
 
-def run_one_crawler(crawler_cls: type[BaseCrawler], save_to_bq: bool) -> CrawlerRunResult:
+def run_one_crawler(
+    crawler_cls: type[BaseCrawler],
+    upload_to_gcs: bool,
+    csv_path: Optional[str] = None,
+) -> CrawlerRunResult:
     """크롤러 하나를 안전하게 실행합니다. 실패해도 예외를 밖으로 던지지 않습니다."""
     result = CrawlerRunResult(
         name=getattr(crawler_cls, "source_name", crawler_cls.__name__),
@@ -110,7 +127,7 @@ def run_one_crawler(crawler_cls: type[BaseCrawler], save_to_bq: bool) -> Crawler
     crawler = None
     try:
         crawler = crawler_cls()
-        benefits = crawler.run(save_to_bq=save_to_bq)
+        benefits = crawler.run(upload_to_gcs=upload_to_gcs, csv_path=csv_path)
         result.success = True
         result.benefit_count = len(benefits)
 
@@ -126,17 +143,17 @@ def run_one_crawler(crawler_cls: type[BaseCrawler], save_to_bq: bool) -> Crawler
     return result
 
 
-def print_summary(results: list[CrawlerRunResult], save_to_bq: bool) -> None:
+def print_summary(results: list[CrawlerRunResult], upload_to_gcs: bool) -> None:
     """전체 실행 결과를 표 형태로 보기 좋게 출력합니다."""
     print()
     print("=" * 70)
     print("  전체 크롤링 결과 요약")
     print("=" * 70)
 
-    if save_to_bq:
-        print("  (BigQuery에 실제로 저장했습니다)")
+    if upload_to_gcs:
+        print("  (GCS incoming/ 폴더에 실제로 업로드했습니다)")
     else:
-        print("  (--dry-run 모드: BigQuery에 저장하지 않았습니다)")
+        print("  (--dry-run 모드: GCS에 업로드하지 않았습니다)")
     print()
 
     name_width = max((len(r.name) for r in results), default=10) + 2
@@ -158,7 +175,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="crawlers/ 폴더의 모든 크롤러를 자동으로 실행합니다.")
     parser.add_argument(
         "--dry-run", action="store_true",
-        help="BigQuery에 저장하지 않고 추출 결과만 확인합니다.",
+        help="GCS에 업로드하지 않고 추출 결과만 확인합니다.",
     )
     parser.add_argument(
         "--only", default=None,
@@ -167,6 +184,12 @@ def main() -> int:
     parser.add_argument(
         "--list", action="store_true",
         help="인식된 크롤러 목록만 보여주고 실행하지 않습니다.",
+    )
+    parser.add_argument(
+        "--local-csv", action="store_true",
+        help="결과를 로컬 CSV 파일로도 저장합니다 (data/output/ 아래, 크롤러별로 파일 하나씩). "
+             "GCS 업로드 여부와는 무관합니다 — 둘 다 원하면 --local-csv만, GCS는 "
+             "건너뛰고 로컬 CSV만 원하면 --local-csv --dry-run을 같이 쓰세요.",
     )
     args = parser.parse_args()
 
@@ -201,16 +224,33 @@ def main() -> int:
             print("   정확한 이름은 위 '(source_name=...)' 목록을 참고하세요.")
             return 1
 
-    save_to_bq = not args.dry_run
+    upload_to_gcs = not args.dry_run
+
+    # --local-csv 옵션이 있으면 실행 시각을 폴더명에 넣어서, 여러 번 돌려도 서로
+    # 덮어쓰지 않고 각 실행 기록이 남게 합니다.
+    csv_run_dir: Optional[Path] = None
+    if args.local_csv:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        csv_run_dir = PROJECT_ROOT / "data" / "output" / f"run_{timestamp}"
+        print(f"\n📄 로컬 CSV 저장 활성화: {csv_run_dir}/ 아래에 크롤러별 파일로 저장됩니다.")
 
     # --- 순서대로 하나씩 실행 (하나가 실패해도 다음으로 넘어감) ---
     results: list[CrawlerRunResult] = []
     for i, cls in enumerate(crawler_classes, start=1):
         print(f"\n[{i}/{len(crawler_classes)}] {cls.__name__} 실행 중...")
-        result = run_one_crawler(cls, save_to_bq=save_to_bq)
+
+        csv_path = None
+        if csv_run_dir:
+            source_name = getattr(cls, "source_name", cls.__name__)
+            csv_path = str(csv_run_dir / f"{source_name}.csv")
+
+        result = run_one_crawler(cls, upload_to_gcs=upload_to_gcs, csv_path=csv_path)
         results.append(result)
 
-    print_summary(results, save_to_bq=save_to_bq)
+    print_summary(results, upload_to_gcs=upload_to_gcs)
+
+    if csv_run_dir:
+        print(f"\n📄 로컬 CSV 파일 위치: {csv_run_dir}")
 
     # 하나라도 실패한 크롤러가 있으면 종료 코드 1을 돌려줍니다.
     # (나중에 Cloud Scheduler 같은 자동화 도구가 실패를 감지할 수 있게 하기 위함)

@@ -8,10 +8,17 @@
 google-genai>=1.0.0
 
 # --- Google BigQuery ---
+# ⚠️ 크롤러 자동 저장에는 더 이상 안 쓰입니다(팀 결정으로 GCS로 교체됨).
+# seed_bigquery.py / test_bigquery.py / expire_benefits.py 같은 수동 스크립트가
+# 여전히 사용하므로 남겨둡니다.
 google-cloud-bigquery>=3.25.0
 # BigQuery에 pandas DataFrame을 넣거나 뺄 때 필요 (선택이지만 있으면 편함)
 db-dtypes>=1.2.0
 pandas>=2.2.0
+
+# --- Google Cloud Storage ---
+# 크롤러가 CSV를 만들어 GCS incoming/ 폴더에 올릴 때 씁니다 (common/gcs_client.py).
+google-cloud-storage>=2.16.0
 
 # --- 설정 관리 ---
 # .env 파일에서 환경변수를 읽어옵니다.
@@ -30,6 +37,8 @@ lxml>=5.2.0
 tenacity>=8.3.0
 
 # --- (선택) JS 렌더링이 필요한 사이트용 브라우저 자동화 ---
+# common/browser.py 와 crawlers/google_play.py 가 이걸 씁니다
+# (구글플레이 혜택 페이지가 SPA라 requests만으로는 못 읽습니다).
 # 설치 후 반드시 아래 명령도 한 번 실행해야 합니다:
 #   playwright install chromium
 playwright>=1.44.0

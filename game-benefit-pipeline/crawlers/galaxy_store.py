@@ -185,7 +185,7 @@ if __name__ == "__main__":
         for c in candidates:
             print(f"  - {c.title}")
 
-        results = crawler.run(save_to_bq=False)
+        results = crawler.run(upload_to_gcs=False)
         print(f"\n2단계: 최종 추출된 혜택 {len(results)}건\n")
         for item in results:
             print(f"- {item.item_or_event_name} | {item.target_game} | "

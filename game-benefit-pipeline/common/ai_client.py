@@ -226,6 +226,10 @@ class GeminiClient:
                 ),
             )
         except Exception as e:
+            # ⚠️ 진단 목적: 어느 라이브러리 파일의 몇 번째 줄에서 실제로 터졌는지
+            # 전체 traceback을 로그에 남깁니다. str(e) 한 줄만으로는 원인을
+            # 못 찾아서(2차례 추측이 빗나감) 이걸 반드시 봐야 합니다.
+            log.error("Gemini 호출 중 예외 발생 (전체 traceback):", exc_info=True)
             raise GeminiExtractionError(f"Gemini 호출 실패: {e}") from e
 
         text = (response.text or "").strip()
