@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import ScrollToTop from './components/ScrollToTop';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import MainPage from './pages/MainPage';
@@ -11,6 +12,7 @@ import SearchResultPage from './pages/SearchResultPage';
 export default function App() {
   return (
     <BrowserRouter>
+    <ScrollToTop /> {/* 2. BrowserRouter 바로 아래에 추가 */}
       <div className="min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col justify-between">
         <div>
           <Header />

@@ -180,16 +180,15 @@ export default function SearchPage() {
   const isTossPaySelected = usePays && pays.includes('토스페이');
 
   return (
-    <div className="max-w-[1400px] mx-auto px-4 py-6 space-y-6">
+    <form onSubmit={handleSearch} className="max-w-[1400px] mx-auto px-4 py-6 space-y-6">
       
       {/* 3열 고정 레이아웃 */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
         
         {/* [좌측 4열] 스티키 제어 카드 */}
         <aside className="lg:col-span-4 h-full">
-          <form
-            onSubmit={handleSearch}
-            className="sticky top-28 bg-white rounded-xl border-2 border-cyan-500 p-5 shadow-lg space-y-6 ring-4 ring-cyan-500/10 min-h-[640px] flex flex-col justify-between"
+          <div
+            className="sticky top-28 bg-white rounded-xl border-2 border-cyan-500 p-5 shadow-lg space-y-6 ring-4 ring-cyan-500/10 shadow-cyan-500/5"
           >
             <div className="space-y-6">
               <div className="border-b border-slate-100 pb-3.5 flex items-center justify-between">
@@ -285,7 +284,7 @@ export default function SearchPage() {
                 <span>최저가 연산하기</span>
               </button>
             </div>
-          </form>
+          </div>
         </aside>
 
         {/* [중앙 6열] 필터 옵션들 */}
@@ -296,8 +295,7 @@ export default function SearchPage() {
                 2단계 필터
               </span>
 
-              <div className="flex items-center space-x-2">
-                {/* 버튼 명칭 변경: 모든 결제수단 선택 */}
+                <div className="flex items-center space-x-2">
                 <button
                   type="button"
                   onClick={handleSelectAllPaymentMethods}
@@ -305,16 +303,6 @@ export default function SearchPage() {
                 >
                   모든 결제수단 선택
                 </button>
-
-                {isLoggedIn && (
-                  <button
-                    type="button"
-                    onClick={handleSaveFilterSettings}
-                    className="px-3 py-1 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-lg transition-all shadow-sm cursor-pointer"
-                  >
-                    필터 세팅 저장
-                  </button>
-                )}
               </div>
             </div>
 
@@ -748,18 +736,29 @@ export default function SearchPage() {
             )}
           </div>
 
-          {/* 로그인 회원 전용 필터 세팅 저장 버튼 */}
-          {isLoggedIn && (
-            <div className="pt-2">
+          {/* 하단 세팅 저장 & 최저가 연산하기 메인 버튼 영역 */}
+          <div className="pt-4 space-y-3 border-t border-slate-200">
+            {/* 1. 내 결제 필터 세팅 저장하기 */}
+            {isLoggedIn && (
               <button
                 type="button"
                 onClick={handleSaveFilterSettings}
-                className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-black text-xs rounded-xl transition-all shadow-md cursor-pointer flex items-center justify-center gap-2"
+                className="w-full py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-extrabold text-xs md:text-sm rounded-xl border border-slate-300 transition-all cursor-pointer flex items-center justify-center gap-2 shadow-2xs"
               >
-                <span>내 결제 필터 세팅 저장하기 (로그인 회원 전용)</span>
+                <span>💾</span>
+                <span>내 결제 필터 세팅 저장하기</span>
               </button>
-            </div>
-          )}
+            )}
+
+            {/* 2. 최저가 연산하기 (메인 제출 버튼) */}
+            <button
+              type="submit"
+              className="w-full py-4 bg-cyan-500 hover:bg-cyan-600 active:scale-[0.99] text-white font-black text-base md:text-lg rounded-2xl shadow-lg shadow-cyan-500/25 transition-all cursor-pointer flex items-center justify-center gap-2"
+            >
+              <span>⚡</span>
+              <span>최저가 연산하기</span>
+            </button>
+          </div>
 
         </div>
 
@@ -796,6 +795,6 @@ export default function SearchPage() {
 
       </div>
 
-    </div>
+    </form>
   );
 }
