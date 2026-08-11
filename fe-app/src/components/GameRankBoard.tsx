@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import type { StoreCategory, RankCategoryData } from '../constants/gameRankData';
 import {
   STORE_TAB_OPTIONS,

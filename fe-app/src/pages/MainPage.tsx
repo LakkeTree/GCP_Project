@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import GameRankBoard from '../components/GameRankBoard';
 
 export default function MainPage() {

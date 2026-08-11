@@ -1,4 +1,3 @@
-import React from 'react';
 import GameRankBoard from '../components/GameRankBoard';
 
 export default function GameRankPage() {

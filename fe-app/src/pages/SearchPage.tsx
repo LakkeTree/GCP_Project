@@ -11,7 +11,6 @@ import {
   GOOGLE_PLAY_TIERS,
   GALAXY_STORE_TIERS,
   SPECIAL_CARD_OPTIONS,
-  POPULAR_GAMES,
 } from '../constants/searchOptions';
 
 export default function SearchPage() {
