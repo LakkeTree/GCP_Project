@@ -98,4 +98,4 @@ export const REVERSE_PAYMENT_MAP: Record<string, string> = Object.fromEntries(
   Object.entries(PAYMENT_METHOD_MAP).map(([k, v]) => [v, k])
 );
 
-export const BACKEND_API_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/routes';
+export const BACKEND_API_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'http://127.0.0.1:8000/routes';
