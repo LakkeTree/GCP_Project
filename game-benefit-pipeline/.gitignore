@@ -1,0 +1,15 @@
+# 비밀 정보 - 절대 커밋 금지
+.env
+*.json.key
+service-account*.json
+
+# 파이썬
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# 출력물
+*.log
+data/output/
