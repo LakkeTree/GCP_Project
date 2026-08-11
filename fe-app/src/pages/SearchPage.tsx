@@ -66,13 +66,36 @@ export default function SearchPage() {
     { name: 'FC 모바일' },
   ];
 
+  // OS 변경 처리 (선택한 모든 스토어/결제수단/옵션 초기화 + 화면 최상단 스크롤)
   const handleOsChange = (targetOs: OsType) => {
     setOsType(targetOs);
-    if (targetOs === 'IOS') {
-      setAndroidStores([]);
-      setIsPcVersion(false);
-      setUseTMembership(false);
-    }
+
+    // 1. 모든 스토어 및 결제 수단 선택 초기화
+    setAndroidStores([]);
+    setUseGameBenefits(false);
+    setHasPreApplied(false);
+    setIsFirstPayment(false);
+
+    setUseCarriers(false);
+    setCarriers([]);
+
+    setUsePays(false);
+    setPays([]);
+
+    setUseVoucherBypasses(false);
+    setVoucherBypasses([]);
+
+    // 2. 구독 멤버십 및 카드 옵션 초기화
+    setUseTMembership(false);
+    setUseNaverMembership(false);
+    setUseTossPrime(false);
+
+    setSelectedSpecialCard('NONE');
+    setHasPrevSpend(false);
+    setIsPcVersion(false);
+
+    // 3. 페이지 최상단으로 부드럽게 스크롤 이동
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleToggleArrayItem = (
@@ -83,27 +106,47 @@ export default function SearchPage() {
   };
 
   // 모든 결제수단 선택 일괄 적용 (유료 플러스/멤버십/프라임은 제외)
+// 모든 결제수단 선택 일괄 적용 (스토어, 통신사, 페이, 문화상품권 전체 활성화)
   const handleSelectAllPaymentMethods = () => {
-    if (osType === 'IOS') {
-      setAndroidStores([]);
-    } else {
+    // 1. 안드로이드 스토어 전체 선택
+    if (osType === 'ANDROID') {
       setAndroidStores([...ANDROID_STORE_OPTIONS]);
     }
 
+    // 2. 통신사 할인 전체 켜기 & 모든 통신사(SKT, KT, LGU+) 선택
+    setUseCarriers(true);
+    setCarriers([...CARRIER_OPTIONS]);
+
+    // 3. 간편결제 전체 켜기 & 모든 페이 선택
+    setUsePays(true);
+    setPays([...PAY_OPTIONS]);
+
+    // 4. 문화상품권 우회 전체 켜기 & 모든 상품권 선택
+    setUseVoucherBypasses(true);
+    setVoucherBypasses([...VOUCHER_OPTIONS]);
+
+    // 5. 보너스 혜택 옵션 활성화
     setUseGameBenefits(true);
-    setHasPreApplied(false);
+    setHasPreApplied(true);
     setIsFirstPayment(true);
+  };
+
+  // 모든 결제수단 선택 일괄 취소 (에러 해결 함수)
+  const handleDeselectAllPaymentMethods = () => {
+    setAndroidStores([]);
+    setUseGameBenefits(false);
+    setHasPreApplied(false);
+    setIsFirstPayment(false);
 
     setUseCarriers(false);
     setCarriers([]);
 
-    setUsePays(true);
-    setPays([...PAY_OPTIONS]);
+    setUsePays(false);
+    setPays([]);
 
-    setUseVoucherBypasses(true);
-    setVoucherBypasses([...VOUCHER_OPTIONS]);
+    setUseVoucherBypasses(false);
+    setVoucherBypasses([]);
 
-    // 유료 플러스 및 멤버십 구독 옵션은 미포함(false) 설정
     setUseTMembership(false);
     setUseNaverMembership(false);
     setUseTossPrime(false);
@@ -275,15 +318,6 @@ export default function SearchPage() {
               </div>
             </div>
 
-            {/* 최저가 연산 버튼 */}
-            <div className="pt-6 mt-auto">
-              <button
-                type="submit"
-                className="w-full py-4 bg-cyan-500 hover:bg-cyan-600 text-white font-black text-sm rounded-xl transition-all shadow-md shadow-cyan-500/20 cursor-pointer flex items-center justify-center gap-2"
-              >
-                <span>최저가 연산하기</span>
-              </button>
-            </div>
           </div>
         </aside>
 
@@ -295,13 +329,20 @@ export default function SearchPage() {
                 2단계 필터
               </span>
 
-                <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2">
                 <button
                   type="button"
                   onClick={handleSelectAllPaymentMethods}
                   className="px-3 py-1 bg-cyan-500 hover:bg-cyan-600 text-white font-extrabold text-xs rounded-lg transition-all shadow-sm cursor-pointer"
                 >
                   모든 결제수단 선택
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeselectAllPaymentMethods}
+                  className="px-3 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-extrabold text-xs rounded-lg transition-all shadow-sm cursor-pointer"
+                >
+                  모든 선택 취소
                 </button>
               </div>
             </div>

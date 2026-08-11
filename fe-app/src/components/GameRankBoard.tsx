@@ -66,7 +66,11 @@ export default function GameRankBoard({
           <button
             key={tab.id}
             type="button"
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => {
+              setActiveTab(tab.id);
+              // 스토어 탭 변경 시 화면 최상단으로 부드럽게 이동
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
             className={`flex-1 py-2 px-3 rounded-lg text-xs font-black transition-all cursor-pointer whitespace-nowrap text-center ${
               activeTab === tab.id
                 ? 'bg-cyan-500 text-white shadow-md shadow-cyan-500/20'
@@ -93,12 +97,8 @@ export default function GameRankBoard({
           )}
         </div>
 
-        {/* 결과 리스트 */}
-        <div
-          className={`space-y-2.5 ${
-            limit > 5 ? 'max-h-[410px] overflow-y-auto pr-2 custom-scrollbar' : ''
-          }`}
-        >
+        {/* 결과 리스트 (내부 스크롤 제거, 1~10위 전체 시원하게 노출) */}
+        <div className="space-y-2.5">
           {displayedList.map((item) => {
             const isRank1 = item.rank === 1;
             const isRank2 = item.rank === 2;
