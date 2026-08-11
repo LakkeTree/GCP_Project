@@ -1,25 +1,9 @@
 """
-datas/ 폴더의 통합 CSV 2개를 BigQuery 적재용 JSONL로 정제한다.
+CSV 행(dict) → BigQuery 적재용 dict로 정제하는 공용 로직.
 
-입력:
-  datas/Total_Platform_Connection_DB.csv
-  datas/Total_Benefit_Info_DB.csv
-출력:
-  bigquery/cleaned/platform_connection.jsonl
-  bigquery/cleaned/benefit_info.jsonl
-
-사용법:
-  python bigquery/scripts/clean_csv_for_bq.py
+파일 입출력을 하지 않는 순수 함수만 모아둔다. 로컬 CLI(local_csv_to_jsonl.py)와
+Cloud Run Function(GCS에서 받은 CSV를 메모리에서 바로 정제) 양쪽에서 재사용한다.
 """
-
-import csv
-import json
-import sys
-from pathlib import Path
-
-ROOT = Path(__file__).resolve().parents[2]
-DATAS_DIR = ROOT / "datas"
-OUT_DIR = ROOT / "bigquery" / "cleaned"
 
 # 원본 CSV에서 "빈 값"으로 취급할 문자열 모음 ("", "NULL", "nan" 등이 섞여 있음)
 NULL_TOKENS = {"", "null", "nan", "none"}
@@ -82,17 +66,8 @@ def to_denomination_list(value: str, row_ctx: str):
     return out
 
 
-def clean_platform_connection():
-    """Total_Platform_Connection_DB.csv를 읽어 정제한 뒤 JSONL로 저장한다."""
-    src = DATAS_DIR / "Total_Platform_Connection_DB.csv"
-    dst = OUT_DIR / "platform_connection.jsonl"
-    print(f"[platform_connection] 읽는 중: {src.name}")
-
-    with src.open(encoding="utf-8-sig", newline="") as f:
-        reader = csv.DictReader(f)
-        rows = list(reader)
-
-    print(f"[platform_connection] {len(rows)}행 정제 중...")
+def clean_platform_connection_rows(rows: list) -> list:
+    """csv.DictReader가 만든 platform_connection 원본 행 리스트를 정제해 반환한다."""
     cleaned = []
     for i, row in enumerate(rows, start=2):  # 헤더 포함 실제 파일 라인번호 (에러 메시지용)
         ctx = f"platform_connection L{i}"
@@ -102,27 +77,11 @@ def clean_platform_connection():
             "is_supported": to_bool(row["is_supported"], ctx),
             "note": to_str_or_none(row["note"]),
         })
-
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    with dst.open("w", encoding="utf-8") as f:
-        for r in cleaned:
-            f.write(json.dumps(r, ensure_ascii=False) + "\n")
-
-    print(f"[platform_connection] 완료 → {dst.relative_to(ROOT)} ({len(cleaned)}행)")
     return cleaned
 
 
-def clean_benefit_info():
-    """Total_Benefit_Info_DB.csv를 읽어 정제한 뒤 JSONL로 저장한다. (핵심 정제 로직)"""
-    src = DATAS_DIR / "Total_Benefit_Info_DB.csv"
-    dst = OUT_DIR / "benefit_info.jsonl"
-    print(f"[benefit_info] 읽는 중: {src.name}")
-
-    with src.open(encoding="utf-8-sig", newline="") as f:
-        reader = csv.DictReader(f)
-        rows = list(reader)
-
-    print(f"[benefit_info] {len(rows)}행 정제 중...")
+def clean_benefit_info_rows(rows: list) -> list:
+    """csv.DictReader가 만든 benefit_info 원본 행 리스트를 정제해 반환한다. (핵심 정제 로직)"""
     cleaned = []
     seen_ids = set()  # benefit_id 중복 검증용
     for i, row in enumerate(rows, start=2):
@@ -166,42 +125,4 @@ def clean_benefit_info():
             "source_url": to_str_or_none(row["source_url"]),
             "condition_raw_text": row["condition_raw_text"].strip(),
         })
-
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    with dst.open("w", encoding="utf-8") as f:
-        for r in cleaned:
-            f.write(json.dumps(r, ensure_ascii=False) + "\n")
-
-    print(f"[benefit_info] 완료 → {dst.relative_to(ROOT)} ({len(cleaned)}행)")
     return cleaned
-
-
-def summarize(name: str, rows: list, nullable_fields: list):
-    """정제 결과에서 NULLABLE 컬럼별 NULL(빈 배열 포함) 개수를 출력해 검증한다."""
-    print(f"\n[{name}] 검증 요약 (총 {len(rows)}행)")
-    for field in nullable_fields:
-        null_count = sum(1 for r in rows if r.get(field) in (None, []))
-        print(f"  - {field}: NULL/빈배열 {null_count}행")
-
-
-def main():
-    """정제 전체 과정을 순서대로 실행하는 진입점."""
-    print("=== BigQuery 적재용 CSV 정제 시작 ===\n")
-    try:
-        pc_rows = clean_platform_connection()
-        bi_rows = clean_benefit_info()
-    except ValueError as e:
-        print(f"\n[오류] 정제 실패: {e}", file=sys.stderr)
-        sys.exit(1)
-
-    summarize("platform_connection", pc_rows, ["note"])
-    summarize(
-        "benefit_info",
-        bi_rows,
-        ["max_benefit_krw", "min_prev_month_spend_krw", "start_date", "end_date", "source_url", "denomination_list"],
-    )
-    print("\n=== 정제 완료 ===")
-
-
-if __name__ == "__main__":
-    main()
