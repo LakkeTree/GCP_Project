@@ -37,6 +37,21 @@ class RouteRequest(BaseModel):
 def health_check():
     return {"status": "ok", "message": "API Server with BigQuery Data Engine is running"}
 
+# 랭킹 데이터 요청을 처리하는 GET /ranks 엔드포인트 추가
+@app.get("/ranks")
+def get_game_ranks(category: str = "ALL"):
+    return {
+        "status": "ok",
+        "category": category,
+        "data": [
+            {"rank": 1, "title": "쿠키런: 킹덤", "badge": "매출 1위", "tip": "원스 수요일 30% 캐시백"},
+            {"rank": 2, "title": "승리의 여신: 니케", "badge": "인기", "tip": "T멤버십 10% 차감 할인"},
+            {"rank": 3, "title": "메이플스토리M", "badge": "상승", "tip": "원스 쿠폰 20% 즉시 적용"},
+            {"rank": 4, "title": "오딘: 발할라 라이징", "badge": "유지", "tip": "매일 첫 결제 10% 할인"},
+            {"rank": 5, "title": "기적의 검", "badge": "유지", "tip": "원스 전용 포인트 적립"}
+        ]
+    }
+
 @app.post("/routes")
 def get_optimal_routes(request: RouteRequest):
     held_methods = list(request.payment_methods)
