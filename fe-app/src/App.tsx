@@ -8,6 +8,7 @@ import SupportedGamesPage from './pages/SupportedGamesPage';
 import SupportedPaymentPage from './pages/SupportedPaymentPage';
 import SearchPage from './pages/SearchPage';
 import SearchResultPage from './pages/SearchResultPage';
+import MyProfilePage from './pages/MyProfilePage'; // 👈 1. 프로필 페이지 임포트
 
 export default function App() {
   return (
@@ -24,6 +25,7 @@ export default function App() {
               <Route path="/supported-payment" element={<SupportedPaymentPage />} />
               <Route path="/search" element={<SearchPage />} /> {/* 👈 검색/입력 페이지 */}
               <Route path="/search-result" element={<SearchResultPage />} /> {/* 👈 결과 페이지 */}
+              <Route path="/profile" element={<MyProfilePage />} /> {/* 👈 프로필 페이지 */}
             </Routes>
           </main>
         </div>
