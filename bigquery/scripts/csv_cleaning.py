@@ -24,6 +24,11 @@ def to_bool(value: str, row_ctx: str) -> bool:
     raise ValueError(f"[{row_ctx}] boolean 값이 아님: {value!r}")
 
 
+def to_bool_or_none(value: str, row_ctx: str):
+    """빈 값이면 None, 아니면 to_bool로 변환한다. (is_active처럼 없을 수도 있는 컬럼용)"""
+    return None if is_null(value) else to_bool(value, row_ctx)
+
+
 def to_int_or_none(value: str, row_ctx: str):
     """빈 값이면 None, 아니면 정수로 변환한다. (min/max 금액, 전월실적 컬럼용)"""
     if is_null(value):
@@ -124,5 +129,11 @@ def clean_benefit_info_rows(rows: list) -> list:
             "end_date": to_date_or_none(row["end_date"]),
             "source_url": to_str_or_none(row["source_url"]),
             "condition_raw_text": row["condition_raw_text"].strip(),
+            # 팀원 크롤링 CSV 전용 컬럼. 우리 CSV에는 없는 컬럼이라 row.get()으로 조회해서
+            # 없으면 빈 문자열 취급 → 아래 함수들이 NULL로 변환한다.
+            "content_hash": to_str_or_none(row.get("content_hash", "")),
+            "crawled_at": to_str_or_none(row.get("crawled_at", "")),
+            "updated_at": to_str_or_none(row.get("updated_at", "")),
+            "is_active": to_bool_or_none(row.get("is_active", ""), ctx),
         })
     return cleaned

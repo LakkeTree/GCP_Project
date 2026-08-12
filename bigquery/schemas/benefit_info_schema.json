@@ -29,5 +29,9 @@
   { "name": "start_date", "type": "DATE", "mode": "NULLABLE", "description": "혜택 적용 시작일 (상시 혜택은 NULL)" },
   { "name": "end_date", "type": "DATE", "mode": "NULLABLE", "description": "혜택 적용 종료일 (상시 혜택은 NULL)" },
   { "name": "source_url", "type": "STRING", "mode": "NULLABLE", "description": "혜택 상세/출처 URL" },
-  { "name": "condition_raw_text", "type": "STRING", "mode": "REQUIRED", "description": "원본 조건 설명 원문 텍스트" }
+  { "name": "condition_raw_text", "type": "STRING", "mode": "REQUIRED", "description": "원본 조건 설명 원문 텍스트" },
+  { "name": "content_hash", "type": "STRING", "mode": "NULLABLE", "description": "크롤링 원본 콘텐츠 해시 (팀원 크롤링 CSV 전용, 우리 CSV는 NULL)" },
+  { "name": "crawled_at", "type": "TIMESTAMP", "mode": "NULLABLE", "description": "크롤링 시각 (팀원 크롤링 CSV 전용, 우리 CSV는 NULL)" },
+  { "name": "updated_at", "type": "TIMESTAMP", "mode": "NULLABLE", "description": "크롤링 데이터 갱신 시각 (팀원 크롤링 CSV 전용, 우리 CSV는 NULL)" },
+  { "name": "is_active", "type": "BOOLEAN", "mode": "NULLABLE", "description": "크롤링 데이터 활성 여부 (팀원 크롤링 CSV 전용, 우리 CSV는 NULL)" }
 ]
