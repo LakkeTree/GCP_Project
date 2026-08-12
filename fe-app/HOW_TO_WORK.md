@@ -10,3 +10,8 @@
 1. 우선 gcloud auth application-default login를 통하여 g-cloud 로그인을 해야만함
 2. cd game-pay-api/ ← 이것을 입력하면 백엔드 파일 열기가능
 3. python -m uvicorn main:app --reload --port 8000 를 통하여 실행
+
+
+++ 업데이트를 하였으니 
+- cd fe-app
+- npm install 이것을 우선적으로 하기
