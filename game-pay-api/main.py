@@ -24,10 +24,15 @@ app = FastAPI(
     version="2.0.0"
 )
 
+origins = [
+    "http://localhost:5173",   # Vite, Vue 기본 포트,
+    "http://127.0.0.1:5173",
+]
+
 # 로컬 개발 환경을 위한 CORS 허용 (추후 실제 배포 시에는 특정 웹 도메인만 허용하도록 변경)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

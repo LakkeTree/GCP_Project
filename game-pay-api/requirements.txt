@@ -3,6 +3,13 @@ fastapi
 uvicorn[standard]
 gunicorn
 pydantic
+pydantic[email]
+
+# Environment & OAuth Security
+python-dotenv
+google-auth
+requests
+python-jose[cryptography]
 
 # Data Processing & BigQuery
 google-cloud-bigquery

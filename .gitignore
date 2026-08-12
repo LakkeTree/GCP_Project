@@ -220,3 +220,13 @@ __marimo__/
 
 node_modules/
 fe-app/node_modules/
+
+.env
+.env.*
+*.env
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.vscode/
+.idea/
