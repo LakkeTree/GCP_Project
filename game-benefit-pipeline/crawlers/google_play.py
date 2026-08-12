@@ -79,6 +79,7 @@ class GooglePlayCrawler(BaseCrawler):
                 wait_selector=self.WAIT_SELECTOR,
                 wait_ms=5000,
                 scroll_to_bottom=False,  # 배너는 스크롤 없이 최상단에 바로 보입니다.
+                dismiss_button_texts=["전체 동의", "모두 동의", "Accept all"],
             )
 
         if not html:

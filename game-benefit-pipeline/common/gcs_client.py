@@ -76,6 +76,31 @@ class GcsClient:
         log.info("업로드 완료: %s", gs_uri)
         return gs_uri
 
+    def download_text(self, filename: str, prefix: Optional[str] = None) -> Optional[str]:
+        """
+        버킷에 이미 같은 이름의 파일이 있으면 그 내용을 문자열로 가져옵니다.
+        없으면 None을 돌려줍니다(에러가 아닙니다 — "처음 올리는 파일"이라는 뜻).
+
+        [초보자 설명: 왜 필요한가?]
+        크롤러 여러 개가 같은 파일명(Total_Benefit_Info_DB.csv)으로 올리는데,
+        그 사이에 처리기(handle-csv-upload)가 파일을 옮겨가지 않으면 나중에
+        올린 게 앞의 것을 덮어써서 데이터가 사라집니다. 그래서 새로 올리기
+        전에 "혹시 이미 있는 내용이 있나?"를 먼저 확인해서, 있으면 합쳐서
+        올리기 위해 이 함수를 씁니다.
+        """
+        folder = prefix if prefix is not None else self.settings.gcs_incoming_prefix
+        if folder and not folder.endswith("/"):
+            folder += "/"
+
+        blob_name = f"{folder}{filename}"
+        blob = self.bucket.blob(blob_name)
+
+        if not blob.exists():
+            return None
+
+        log.info("기존 파일 발견, 내려받는 중: gs://%s/%s", self.settings.gcs_bucket_name, blob_name)
+        return blob.download_as_text(encoding="utf-8-sig")
+
     def upload_csv_content(self, content: str, filename: str, prefix: Optional[str] = None) -> str:
         """
         로컬 파일을 거치지 않고, 메모리에 있는 CSV 문자열을 바로 업로드합니다.

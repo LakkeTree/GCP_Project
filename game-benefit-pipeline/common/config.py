@@ -172,7 +172,7 @@ def get_settings() -> Settings:
         bq_platform_table=_get_str("BQ_PLATFORM_TABLE", "platform_connection"),
         # GCS: 버킷 이름 기본값은 실제 만들어져 있는 버킷 이름으로 맞춰뒀습니다.
         gcs_bucket_name=_get_str("GCS_BUCKET_NAME", "positive-tuner-504502-m5-benefit-csv"),
-        gcs_incoming_prefix=_get_str("GCS_INCOMING_PREFIX", "incoming/"),
+        gcs_incoming_prefix=_get_str("GCS_INCOMING_PREFIX", "temp/"),
         bq_location=_get_str("BQ_LOCATION", "asia-northeast3"),
         google_application_credentials=_get_str("GOOGLE_APPLICATION_CREDENTIALS"),
         # 크롤러

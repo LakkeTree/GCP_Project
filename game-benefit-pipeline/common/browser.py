@@ -75,6 +75,7 @@ class BrowserClient:
         wait_selector: Optional[str] = None,
         wait_ms: int = 3000,
         scroll_to_bottom: bool = False,
+        dismiss_button_texts: Optional[list[str]] = None,
     ) -> Optional[str]:
         """
         페이지를 열고 자바스크립트가 다 실행될 때까지 기다린 뒤, 완성된 HTML을 돌려줍니다.
@@ -89,6 +90,13 @@ class BrowserClient:
             scroll_to_bottom: True면 페이지 끝까지 스크롤합니다. "스크롤해야 더
                              불러오는" 무한 스크롤 목록(예: 혜택 카드가 스크롤할
                              때마다 추가로 로딩되는 경우)에 필요합니다.
+            dismiss_button_texts: ["전체 동의", "모두 동의"] 처럼, 페이지에 뜨는
+                             쿠키 동의/팝업 버튼의 문구 목록을 주면 자동으로
+                             찾아서 클릭합니다. (구글 계열 사이트에서 흔히
+                             나오는 쿠키 동의 화면이 실제 콘텐츠를 가로막는
+                             문제를 해결하기 위함입니다) 버튼이 없으면 그냥
+                             건너뛰므로, "혹시 나올 수도 있는" 상황에 안전하게
+                             넣어둘 수 있습니다.
 
         Returns:
             완성된 HTML 문자열. 실패하면 None.
@@ -114,6 +122,9 @@ class BrowserClient:
             # (자바스크립트가 API를 호출해서 데이터를 받아오는 경우까지 기다려 줍니다)
             page.goto(url, wait_until="networkidle", timeout=self.settings.http_timeout_sec * 1000)
 
+            if dismiss_button_texts:
+                self._dismiss_popup(page, dismiss_button_texts)
+
             if wait_selector:
                 log.debug("선택자 대기 중: %s", wait_selector)
                 page.wait_for_selector(wait_selector, timeout=self.settings.http_timeout_sec * 1000)
@@ -131,6 +142,26 @@ class BrowserClient:
 
         finally:
             page.close()
+
+    @staticmethod
+    def _dismiss_popup(page, button_texts: list[str]) -> None:
+        """
+        쿠키 동의 등으로 뜨는 팝업의 버튼을 찾아서 클릭합니다.
+        버튼이 안 보이면(짧은 시간 안에 못 찾으면) 조용히 넘어갑니다 —
+        팝업이 원래 없는 페이지에서도 안전하게 쓸 수 있게 하기 위함입니다.
+        """
+        for text in button_texts:
+            try:
+                # get_by_text: 화면에 보이는 글자로 요소를 찾습니다.
+                # exact=False로 두면 "전체 동의" 버튼 안에 다른 글자가
+                # 섞여 있어도(예: 아이콘 뒤에 붙은 텍스트) 찾아낼 수 있습니다.
+                button = page.get_by_text(text, exact=False).first
+                button.click(timeout=3000)
+                log.info("팝업 버튼 클릭됨: '%s'", text)
+                page.wait_for_timeout(1000)  # 클릭 후 화면이 안정될 시간을 줍니다.
+                return  # 하나 클릭했으면 충분하니 나머지 후보는 안 봐도 됩니다.
+            except Exception:
+                continue  # 이 문구의 버튼은 없었던 것 — 다음 후보를 시도합니다.
 
     @staticmethod
     def _scroll_to_bottom(page, max_scrolls: int = 10, pause_ms: int = 800) -> None:

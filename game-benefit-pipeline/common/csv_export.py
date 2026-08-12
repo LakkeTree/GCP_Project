@@ -55,6 +55,52 @@ def _build_csv_rows(items: list[BenefitInfo]) -> tuple[list[str], list[dict]]:
     return fieldnames, rows
 
 
+def merge_csv_strings(existing_csv: str, new_csv: str) -> str:
+    """
+    기존 CSV 내용과 새로 만든 CSV 내용을 합쳐서 하나의 CSV 문자열로 돌려줍니다.
+
+    [초보자 설명: 병합 규칙]
+    같은 benefit_id가 양쪽에 다 있으면, '새 것'(new_csv)의 값으로 덮어씁니다.
+    다른 크롤러가 만든 행이라 보통 겹칠 일이 없지만, 혹시 같은 크롤러를
+    두 번 돌려서 겹치더라도 최신 내용이 남도록 이렇게 정했습니다.
+
+    Args:
+        existing_csv: 버킷에 이미 있던 CSV 내용 (download_text() 결과)
+        new_csv: 이번에 새로 만든 CSV 내용 (build_csv_string() 결과)
+
+    Returns:
+        합쳐진 CSV 문자열. 컬럼 순서는 새 CSV(new_csv) 기준을 따릅니다.
+    """
+    import io
+
+    new_reader = list(csv.DictReader(io.StringIO(new_csv)))
+    if not existing_csv or not existing_csv.strip():
+        return new_csv  # 기존 파일이 없거나 비어 있으면 새 내용 그대로 씁니다.
+
+    existing_reader = list(csv.DictReader(io.StringIO(existing_csv)))
+
+    # benefit_id를 키로 병합합니다. 같은 키면 새 것(new_csv)이 이깁니다.
+    merged: dict[str, dict] = {}
+    for row in existing_reader:
+        merged[row.get("benefit_id", "")] = row
+    for row in new_reader:
+        merged[row.get("benefit_id", "")] = row
+
+    fieldnames = list(new_reader[0].keys()) if new_reader else list(existing_reader[0].keys())
+
+    buffer = io.StringIO()
+    writer = csv.DictWriter(buffer, fieldnames=fieldnames)
+    writer.writeheader()
+    for row in merged.values():
+        # 기존 CSV에 새 컬럼이 없을 수 있으니(스키마가 나중에 늘어난 경우 등),
+        # 빠진 값은 빈 칸으로 채워서 열 개수를 맞춥니다.
+        writer.writerow({k: row.get(k, "") for k in fieldnames})
+
+    log.info("CSV 병합: 기존 %d건 + 신규 %d건 -> 합계 %d건",
+              len(existing_reader), len(new_reader), len(merged))
+    return buffer.getvalue()
+
+
 def build_csv_string(items: Iterable[BenefitInfo]) -> str:
     """
     혜택 목록을 CSV '내용'(문자열)으로 만듭니다. 파일로 저장하지 않고

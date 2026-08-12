@@ -16,12 +16,12 @@ crawlers/one_store.py, crawlers/google_play.py 처럼 파일이 늘어날 때마
 
 [v2 변경사항 — 팀 결정 반영]
 크롤러가 더 이상 BigQuery에 직접 저장하지 않습니다. 대신 CSV를 만들어서
-GCS 버킷의 incoming/ 폴더에 올립니다. 그래서 이 스크립트의 "저장 대상"도
+GCS 버킷의 temp/ 폴더에 올립니다. 그래서 이 스크립트의 "저장 대상"도
 BigQuery -> GCS로 바뀌었습니다. --dry-run 의 의미도 "BigQuery에 안 씀"에서
 "GCS에 안 올림"으로 바뀐 것뿐, 사용법 자체는 거의 같습니다.
 
 [사용법]
-    # 전체 크롤러를 실행해서 GCS incoming/ 폴더에 실제로 업로드
+    # 전체 크롤러를 실행해서 GCS temp/ 폴더에 실제로 업로드
     python -m scripts.run_all
 
     # GCS에 올리지 않고 결과만 확인 (안전하게 미리 점검할 때)
@@ -151,7 +151,7 @@ def print_summary(results: list[CrawlerRunResult], upload_to_gcs: bool) -> None:
     print("=" * 70)
 
     if upload_to_gcs:
-        print("  (GCS incoming/ 폴더에 실제로 업로드했습니다)")
+        print("  (GCS temp/ 폴더에 실제로 업로드했습니다)")
     else:
         print("  (--dry-run 모드: GCS에 업로드하지 않았습니다)")
     print()

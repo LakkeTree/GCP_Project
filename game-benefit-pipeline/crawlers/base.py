@@ -37,7 +37,7 @@ from typing import Iterator, Optional
 from zoneinfo import ZoneInfo
 
 from common.ai_client import GeminiClient
-from common.csv_export import build_csv_string
+from common.csv_export import build_csv_string, merge_csv_strings
 from common.dedupe import deduplicate, to_benefit_info
 from common.gcs_client import GcsClient
 from common.http_client import HttpClient
@@ -197,7 +197,20 @@ class BaseCrawler(ABC):
         GCS_TARGET_FILENAME = "Total_Benefit_Info_DB.csv"
 
         if upload_to_gcs and results:
-            csv_content = build_csv_string(results)
+            new_csv_content = build_csv_string(results)
+
+            # ⚠️ 여러 크롤러가 같은 파일명으로 올리기 때문에, 먼저 이미 있는
+            # 내용이 있는지 확인해서 있으면 덮어쓰지 않고 합칩니다. (원래는
+            # handle-csv-upload 처리기가 처리 즉시 파일을 processed/로
+            # 옮겨줘야 이 상황 자체가 안 생기지만, 그 처리기의 감시 대상
+            # 폴더 설정이 아직 안 맞을 수 있어 방어적으로 병합합니다)
+            existing_content = self.gcs.download_text(GCS_TARGET_FILENAME)
+            if existing_content:
+                csv_content = merge_csv_strings(existing_content, new_csv_content)
+                log.info("[%s] 기존 GCS 파일을 발견해 병합해서 올립니다.", self.source_name)
+            else:
+                csv_content = new_csv_content
+
             gs_uri = self.gcs.upload_csv_content(csv_content, GCS_TARGET_FILENAME)
             log.info("[%s] GCS 업로드 완료: %s", self.source_name, gs_uri)
         elif not upload_to_gcs:
