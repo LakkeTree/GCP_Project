@@ -37,66 +37,6 @@ class RouteRequest(BaseModel):
 def health_check():
     return {"status": "ok", "message": "API Server with BigQuery Data Engine is running"}
 
-# 랭킹 데이터 요청 처리 (모든 탭 카테고리 완벽 대응)
-# 랭킹 데이터 요청 처리 (프론트엔드 RankCategoryData 타입 규격 적용)
-@app.get("/ranks")
-def get_game_ranks(category: str = "HOGAENG"):
-    titles = {
-        "HOGAENG": "🔥 호갱탈출 7일간 검색 순위",
-        "GOOGLE": "🤖 구글 플레이 7일간 결제 순위",
-        "ONESTORE": "🛍️ 원스토어 7일간 결제 순위",
-        "GALAXY": "🌌 갤럭시 스토어 7일간 결제 순위",
-        "APPLE": "🍎 앱스토어 7일간 결제 순위"
-    }
-
-    default_list = [
-        {
-            "rank": 1,
-            "name": "쿠키런: 킹덤",
-            "benefitText": "스토어 15% 쿠폰 + 문화상품권 10% 우회 결제",
-            "rankChange": "SAME",
-            "rankChangeText": "-",
-            "badge": "매출 1위"
-        },
-        {
-            "rank": 2,
-            "name": "승리의 여신: 니케",
-            "benefitText": "T멤버십 10% 차감 할인 혜택",
-            "rankChange": "UP",
-            "rankChangeText": "▲2",
-            "badge": "인기"
-        },
-        {
-            "rank": 3,
-            "name": "메이플스토리M",
-            "benefitText": "원스 쿠폰 20% 즉시 적용",
-            "rankChange": "DOWN",
-            "rankChangeText": "▼1",
-            "badge": "상승"
-        },
-        {
-            "rank": 4,
-            "name": "오딘: 발할라 라이징",
-            "benefitText": "매일 첫 결제 10% 할인",
-            "rankChange": "SAME",
-            "rankChangeText": "-",
-            "badge": "유지"
-        },
-        {
-            "rank": 5,
-            "name": "기적의 검",
-            "benefitText": "원스 전용 포인트 적립",
-            "rankChange": "SAME",
-            "rankChangeText": "-",
-            "badge": "유지"
-        }
-    ]
-    
-    return {
-        "title": titles.get(category, "순위 대시보드"),
-        "list": default_list  # ✅ 프론트엔드가 요구하는 "list" 키 이름으로 변경
-    }
-
 @app.post("/routes")
 def get_optimal_routes(request: RouteRequest):
     held_methods = list(request.payment_methods)
