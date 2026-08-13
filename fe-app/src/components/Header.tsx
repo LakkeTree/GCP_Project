@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom'; // 👈 useNavigate 추가
 import LoginModal from './LoginModal';
 
 export default function Header() {
   const location = useLocation();
-  const navigate = useNavigate();
+  const navigate = useNavigate(); // 👈 navigate 사용 함수 정의
 
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [loggedInUser, setLoggedInUser] = useState<string | null>(null);
@@ -50,10 +50,8 @@ export default function Header() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // 5대 핵심 메뉴
   const navItems = [
     { name: '오늘의 최고할인', path: '/' },
-    { name: '게임랭킹', path: '/rank' },
     { name: '지원하는 게임', path: '/supported-games' },
     { name: '지원하는 결제수단', path: '/supported-payment' },
     { name: '최저가 검색', path: '/search' },
@@ -68,10 +66,8 @@ export default function Header() {
       >
         <div className="max-w-[1400px] mx-auto px-4 md:px-6 space-y-2.5 transition-all duration-300">
           
-          {/* 1행: 로고 & 프로필/로그인 버튼 */}
           <div className="flex items-center justify-between gap-4">
             
-            {/* 브랜드 로고 */}
             <Link
               to="/"
               className={`font-black text-cyan-600 tracking-tight shrink-0 flex items-center gap-2 transition-all duration-300 ${
@@ -82,10 +78,8 @@ export default function Header() {
               <span>호갱탈출</span>
             </Link>
 
-            {/* 우측 회원 영역 */}
             <div className="shrink-0">
               {loggedInUser ? (
-                /* 로그인 완료 시: 프로필 버튼 & 드롭다운 */
                 <div className="relative" ref={dropdownRef}>
                   <button
                     type="button"
@@ -119,7 +113,7 @@ export default function Header() {
                     </svg>
                   </button>
 
-                  {/* 마이페이지 메뉴와 1:1 매핑된 드롭다운 */}
+                  {/* 프로필 클릭 시 나타나는 드롭다운 메뉴 */}
                   {isProfileMenuOpen && (
                     <div className="absolute right-0 mt-2 w-60 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
                       <div className="px-4 py-2 border-b border-slate-100">
@@ -141,7 +135,7 @@ export default function Header() {
                           <span>본인 정보 & 즐겨찾기</span>
                         </button>
 
-                        {/* 2. 계정 보안 & 비밀번호 */}
+                        {/* 2. 계정 보안 & 비밀번호 (신규 추가!) */}
                         <button
                           type="button"
                           onClick={() => {
@@ -187,13 +181,14 @@ export default function Header() {
                   )}
                 </div>
               ) : (
-                /* 비로그인 상태 */
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setLoggedInUser('dev_user@example.com')}
                     className={`bg-amber-500 hover:bg-amber-600 text-white font-black rounded-lg transition-all duration-300 shadow-sm cursor-pointer ${
-                      isScrolled ? 'px-3 py-1 text-xs' : 'px-3.5 py-1.5 text-sm'
+                      isScrolled
+                        ? 'px-3 py-1 text-xs'
+                        : 'px-3.5 py-1.5 text-sm'
                     }`}
                   >
                     ⚡ 개발자 로그인
@@ -203,7 +198,9 @@ export default function Header() {
                     type="button"
                     onClick={() => setIsLoginModalOpen(true)}
                     className={`border-2 border-cyan-500 text-cyan-600 hover:bg-cyan-50 font-black rounded-lg transition-all duration-300 shadow-sm cursor-pointer ${
-                      isScrolled ? 'px-3.5 py-1 text-xs' : 'px-4.5 py-1.5 text-sm'
+                      isScrolled
+                        ? 'px-3.5 py-1 text-xs'
+                        : 'px-4.5 py-1.5 text-sm'
                     }`}
                   >
                     로그인
@@ -213,7 +210,6 @@ export default function Header() {
             </div>
           </div>
 
-          {/* 2행: 네비게이션 바 */}
           <nav
             className={`flex items-center justify-start border-t border-slate-100 space-x-6 md:space-x-8 overflow-x-auto no-scrollbar transition-all duration-300 ${
               isScrolled ? 'pt-1' : 'pt-2'
