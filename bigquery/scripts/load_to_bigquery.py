@@ -12,6 +12,8 @@
     때문이다. source_file 기준으로 범위를 좁히면 그 데이터를 건드리지 않는다.
   - platform_connection: 이 테이블은 이 파이프라인이 유일한 출처이므로(다른 출처
     데이터 혼재 없음) 테이블 전체를 WRITE_TRUNCATE한다.
+  - game_info: 크롤링 파이프라인과 연결 계획 없음, 유일한 출처이므로 platform_connection과
+    동일하게 테이블 전체를 WRITE_TRUNCATE한다.
 """
 
 import json
@@ -27,6 +29,7 @@ SCHEMAS_DIR = Path(__file__).resolve().parents[1] / "schemas"
 
 BENEFIT_INFO_TABLE = f"{PROJECT_ID}.{DATASET_ID}.benefit_info"
 PLATFORM_CONNECTION_TABLE = f"{PROJECT_ID}.{DATASET_ID}.platform_connection"
+GAME_INFO_TABLE = f"{PROJECT_ID}.{DATASET_ID}.game_info"
 
 
 def _load_schema(filename: str) -> list:
@@ -83,6 +86,24 @@ def load_platform_connection(client: bigquery.Client, rows: list) -> int:
         PLATFORM_CONNECTION_TABLE,
         job_config=bigquery.LoadJobConfig(
             schema=_load_schema("platform_connection_schema.json"),
+            write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE,
+        ),
+        location=LOCATION,
+    )
+    load_job.result()
+    return len(rows)
+
+
+def load_game_info(client: bigquery.Client, rows: list) -> int:
+    """game_info 테이블 전체를 새 rows로 교체한다."""
+    if not rows:
+        raise ValueError("적재할 game_info 행이 없음")
+
+    load_job = client.load_table_from_json(
+        rows,
+        GAME_INFO_TABLE,
+        job_config=bigquery.LoadJobConfig(
+            schema=_load_schema("game_info_schema.json"),
             write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE,
         ),
         location=LOCATION,

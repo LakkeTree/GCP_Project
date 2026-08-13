@@ -71,6 +71,13 @@ def to_denomination_list(value: str, row_ctx: str):
     return out
 
 
+def to_tag_list(value: str, row_ctx: str):
+    """세미콜론으로 구분된 태그 문자열("RPG; 시뮬레이션")을 문자열 배열로 분해한다."""
+    if is_null(value):
+        return []
+    return [p.strip() for p in value.split(";") if p.strip()]
+
+
 def clean_platform_connection_rows(rows: list) -> list:
     """csv.DictReader가 만든 platform_connection 원본 행 리스트를 정제해 반환한다."""
     cleaned = []
@@ -135,5 +142,32 @@ def clean_benefit_info_rows(rows: list) -> list:
             "crawled_at": to_str_or_none(row.get("crawled_at", "")),
             "updated_at": to_str_or_none(row.get("updated_at", "")),
             "is_active": to_bool_or_none(row.get("is_active", ""), ctx),
+        })
+    return cleaned
+
+
+def clean_game_info_rows(rows: list) -> list:
+    """csv.DictReader가 만든 game_info 원본 행 리스트를 정제해 반환한다."""
+    cleaned = []
+    seen_ids = set()  # game_id 중복 검증용
+    for i, row in enumerate(rows, start=2):
+        ctx = f"game_info L{i} ({row.get('game_id')})"
+
+        gid = row["game_id"].strip()
+        if gid in seen_ids:
+            raise ValueError(f"[{ctx}] game_id 중복: {gid}")
+        seen_ids.add(gid)
+
+        cleaned.append({
+            "game_id": gid,
+            "game_name": row["game_name"].strip(),
+            "company": row["company"].strip(),
+            "genre_tags": to_tag_list(row["genre_tags"], ctx),
+            "is_google_play": to_bool(row["is_google_play"], ctx),
+            "is_app_store": to_bool(row["is_app_store"], ctx),
+            "is_one_store": to_bool(row["is_one_store"], ctx),
+            "is_galaxy_store": to_bool(row["is_galaxy_store"], ctx),
+            "description": to_str_or_none(row["description"]),
+            "icon_url": to_str_or_none(row["icon_url"]),
         })
     return cleaned
