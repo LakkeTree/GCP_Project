@@ -92,9 +92,30 @@ def is_method_supported(compat_index, payment_method, platform):
 # [단계 3] 자격 필터링
 # =============================================================================
 
+import datetime  # 👈 파일 최상단에 datetime 모듈 import 확인
+
 def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
                              held_methods, is_first_purchase, has_prev_spend=None,
                              has_pre_applied=False, use_game_benefits=True):
+    eligible = []
+    warnings = []
+    
+    # 💡 오늘 날짜 (YYYY-MM-DD)
+    today_str = datetime.date.today().isoformat()
+
+    for b in benefits:
+        # 1. 🗓️ 이벤트 기간 검증 (종료일이 지난 쿠폰 또는 아직 시작하지 않은 쿠폰 제외)
+        start_date = b.get("start_date")
+        end_date = b.get("end_date")
+
+        if end_date and str(end_date) < today_str:
+            continue  # ❌ 이미 만료된 이벤트/쿠폰은 계산 대상에서 자동 제외
+
+        if start_date and str(start_date) > today_str:
+            continue  # ❌ 아직 시작하지 않은 이벤트는 계산 대상에서 자동 제외
+
+        if b["benefit_type"] not in CALCULABLE_TYPES:
+            continue
     """
     has_prev_spend: None=모름(경고와 함께 포함), True=충족(경고 없이 포함),
                     False=미충족(제외).

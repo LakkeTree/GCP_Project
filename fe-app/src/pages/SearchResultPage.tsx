@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import type { OsType } from '../constants/searchOptions';
+import { getGameCode } from '../constants/gameMapping';
 import {
   ANDROID_STORE_OPTIONS,
   CARRIER_OPTIONS,
@@ -280,18 +281,18 @@ export default function SearchResultPage() {
         if (platform === 'GOOGLE_PLAY') tier = googlePlayTier;
         if (platform === 'GALAXY_STORE') tier = galaxyStoreTier;
 
-        const payload = {
-          platform: platform,
-          amount: amountNum,
-          is_first_pay: isFirstPayment,
-          payment_methods: selectedProviders,
-          game: gameTitle === '쿠키런: 킹덤' ? 'COOKIERUN_KINGDOM' : 'ALL',
-          membership_tier: tier,
-          has_subscription: useSpecialOptions,
-          has_prev_spend: useSpecialOptions ? hasPrevSpend : false,
-          has_pre_applied: hasPreApplied,
-          use_game_benefits: useGameBenefits,
-        };
+      const payload = {
+        platform: platform,
+        amount: amountNum,
+        is_first_pay: isFirstPayment,
+        payment_methods: selectedProviders,
+        game: getGameCode(gameTitle), // 👈 121개 게임 동적 변환 함수 적용
+        membership_tier: tier,
+        has_subscription: useSpecialOptions,
+        has_prev_spend: useSpecialOptions ? hasPrevSpend : false,
+        has_pre_applied: hasPreApplied,
+        use_game_benefits: useGameBenefits,
+      };
 
         return fetch(BACKEND_API_URL, {
           method: 'POST',
