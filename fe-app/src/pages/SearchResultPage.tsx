@@ -148,7 +148,10 @@ export default function SearchResultPage() {
   const [pays, setPays] = useState<string[]>(initialPays);
 
   const [useVoucherBypasses, setUseVoucherBypasses] = useState(initialVouchers.length > 0);
-  const [vouchers] = useState<string[]>(initialVouchers);
+  // OFF 상태로 넘어와도 선택 가능한 전체 옵션 목록은 기본 세팅해둠
+  const [vouchers, setVouchers] = useState<string[]>(
+    initialVouchers.length > 0 ? initialVouchers : VOUCHER_OPTIONS
+  );
 
   const [useSpecialOptions, setUseSpecialOptions] = useState(initialSpecialCard !== 'NONE');
   const [selectedSpecialCard, setSelectedSpecialCard] = useState(initialSpecialCard);
@@ -1123,6 +1126,52 @@ const isOneStoreSelected = osType === 'ANDROID' && androidStores.includes('원�
                         }`}
                       >
                         {selected ? '✓ ' : '+ '}{p}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 💡 [여기서부터 새로 들어가는 문화상품권 블록] */}
+              <div className="space-y-2 pt-2 border-t border-slate-100">
+                <label className="flex items-center space-x-2.5 p-2.5 bg-slate-50 rounded-xl border border-slate-200 cursor-pointer min-h-[44px]">
+                  <input
+                    type="checkbox"
+                    id="resVoucherToggle"
+                    checked={useVoucherBypasses}
+                    onChange={(e) => {
+                      setUseVoucherBypasses(e.target.checked);
+                      if (e.target.checked && vouchers.length === 0) {
+                        setVouchers([...VOUCHER_OPTIONS]);
+                      }
+                    }}
+                    className="w-4 h-4 text-cyan-600 rounded border-slate-300 shrink-0 cursor-pointer"
+                  />
+                  <span className="text-xs md:text-sm font-extrabold text-slate-800 select-none">
+                    문화상품권 우회 충전 할인
+                  </span>
+                </label>
+
+                <div
+                  className={`flex flex-wrap gap-1.5 pl-1 transition-all ${
+                    useVoucherBypasses ? 'opacity-100' : 'opacity-40 pointer-events-none'
+                  }`}
+                >
+                  {VOUCHER_OPTIONS.map((v: string) => {
+                    const selected = vouchers.includes(v);
+                    return (
+                      <button
+                        key={v}
+                        type="button"
+                        disabled={!useVoucherBypasses}
+                        onClick={() => handleToggleArray(setVouchers, v)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all min-h-[36px] ${
+                          selected && useVoucherBypasses
+                            ? 'bg-cyan-500 text-white border-cyan-500 cursor-pointer'
+                            : 'bg-slate-50 text-slate-600 border-slate-200 cursor-pointer'
+                        }`}
+                      >
+                        {selected ? '✓ ' : '+ '}{v}
                       </button>
                     );
                   })}
