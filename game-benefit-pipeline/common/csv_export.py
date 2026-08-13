@@ -55,14 +55,98 @@ def _build_csv_rows(items: list[BenefitInfo]) -> tuple[list[str], list[dict]]:
     return fieldnames, rows
 
 
+import re
+
+
+def _dedup_key(row: dict) -> str:
+    """
+    '이 행이 저 행과 같은 혜택인가'를 판단하는 비교용 키를 만듭니다.
+
+    [초보자 설명: benefit_id 대신 이걸 쓰는 이유]
+    benefit_id는 Gemini가 만든 item_or_event_name 텍스트로 해시를 만듭니다.
+    그런데 Gemini는 temperature=0으로 설정해도 완벽하게 똑같은 문장을 매번
+    만들지는 않습니다 — "위클리 출석체크 5%"와 "위클리출석체크 5%"처럼
+    공백·문장부호가 살짝 다르면 benefit_id도 매번 달라져서, 같은 혜택인데도
+    "새 혜택"으로 착각해 계속 쌓이는 문제가 생깁니다.
+
+    이 함수는 공백·문장부호를 전부 지우고 핵심 필드만 비교해서, 표현이
+    조금 달라도 "같은 혜택"으로 정확히 인식하게 만듭니다.
+    """
+    def strip_symbols(s: str) -> str:
+        s = (s or "").lower()
+        return re.sub(r"[^a-z0-9가-힣]", "", s)
+
+    return "|".join([
+        (row.get("source_file") or "").strip().lower(),
+        strip_symbols(row.get("provider_or_retailer", "")),
+        (row.get("target_platform") or "").strip().upper(),
+        strip_symbols(row.get("target_game", "")),
+        (row.get("benefit_type") or "").strip().upper(),
+        (row.get("benefit_unit") or "").strip().upper(),
+        (row.get("benefit_value") or "").strip(),
+        (row.get("end_date") or "").strip(),
+        # 이름은 앞 40자만 비교합니다. 전체를 다 비교하면 사소한 차이에도
+        # 여전히 민감해지고, 아예 안 쓰면 서로 다른 혜택(예: 1차/2차 쿠폰,
+        # 출석 일수별 다른 보상)까지 하나로 뭉개질 위험이 있어 절충했습니다.
+        strip_symbols(row.get("item_or_event_name", ""))[:40],
+    ])
+
+
+def _loose_key(row: dict) -> str:
+    """
+    _dedup_key()보다 한 단계 더 느슨한 키입니다. item_or_event_name을 아예
+    빼고, provider+platform+게임+할인율+종료일만 봅니다. 이 키가 같은데
+    _dedup_key()는 다른 행이 있으면 "진짜 중복인데 이름 차이 때문에 못
+    합쳐진 것"일 가능성이 있어 경고만 남깁니다(자동으로 합치지는 않습니다 —
+    '돌격 기사단' 1차/2차처럼 할인율까지 같은 진짜 별개 혜택을 잘못 합칠
+    위험이 있기 때문입니다).
+    """
+    def strip_symbols(s: str) -> str:
+        s = (s or "").lower()
+        return re.sub(r"[^a-z0-9가-힣]", "", s)
+
+    return "|".join([
+        (row.get("source_file") or "").strip().lower(),
+        strip_symbols(row.get("provider_or_retailer", "")),
+        (row.get("target_platform") or "").strip().upper(),
+        strip_symbols(row.get("target_game", "")),
+        (row.get("benefit_value") or "").strip(),
+        (row.get("end_date") or "").strip(),
+    ])
+
+
+def _warn_near_duplicates(rows: list[dict]) -> None:
+    """병합 후에도 '이름만 다르고 사실상 같아 보이는' 행이 남아있으면 경고 로그를 남깁니다."""
+    groups: dict[str, list[dict]] = {}
+    for row in rows:
+        groups.setdefault(_loose_key(row), []).append(row)
+
+    for key, group in groups.items():
+        if len(group) > 1:
+            names = [r.get("item_or_event_name", "") for r in group]
+            log.warning(
+                "⚠️ 이름만 다르고 나머지 조건(제공처/플랫폼/게임/할인율/종료일)이 "
+                "전부 같은 행이 %d개 있습니다 — 실제로는 같은 혜택인데 Gemini가 "
+                "이름을 다르게 표현해서 안 합쳐졌을 수 있습니다. 직접 확인해 "
+                "주세요: %s",
+                len(group), names,
+            )
+
+
 def merge_csv_strings(existing_csv: str, new_csv: str) -> str:
     """
     기존 CSV 내용과 새로 만든 CSV 내용을 합쳐서 하나의 CSV 문자열로 돌려줍니다.
 
     [초보자 설명: 병합 규칙]
-    같은 benefit_id가 양쪽에 다 있으면, '새 것'(new_csv)의 값으로 덮어씁니다.
-    다른 크롤러가 만든 행이라 보통 겹칠 일이 없지만, 혹시 같은 크롤러를
-    두 번 돌려서 겹치더라도 최신 내용이 남도록 이렇게 정했습니다.
+    benefit_id가 아니라 _dedup_key()로 계산한 '느슨한 동일성 키'가 같으면
+    같은 혜택으로 보고, '새 것'(new_csv)의 값으로 덮어씁니다. Gemini가
+    실행마다 이름을 살짝 다르게 표현해도 이 키는 안정적으로 같게 나오므로,
+    같은 페이지를 여러 번 크롤링해도 행이 계속 늘어나지 않습니다.
+
+    이름 차이가 너무 커서 _dedup_key()로도 못 잡아내는 경우에 대비해,
+    병합이 끝난 뒤 _warn_near_duplicates()로 "혹시 놓친 중복이 있는지"
+    경고 로그를 남깁니다(자동으로 지우지는 않습니다 — 잘못 지우면 진짜
+    다른 혜택을 잃을 위험이 있어서, 사람이 확인하도록 알림만 줍니다).
 
     Args:
         existing_csv: 버킷에 이미 있던 CSV 내용 (download_text() 결과)
@@ -79,12 +163,12 @@ def merge_csv_strings(existing_csv: str, new_csv: str) -> str:
 
     existing_reader = list(csv.DictReader(io.StringIO(existing_csv)))
 
-    # benefit_id를 키로 병합합니다. 같은 키면 새 것(new_csv)이 이깁니다.
+    # _dedup_key()가 같으면 같은 혜택으로 보고, 나중에 들어온(new_csv) 쪽이 이깁니다.
     merged: dict[str, dict] = {}
     for row in existing_reader:
-        merged[row.get("benefit_id", "")] = row
+        merged[_dedup_key(row)] = row
     for row in new_reader:
-        merged[row.get("benefit_id", "")] = row
+        merged[_dedup_key(row)] = row
 
     fieldnames = list(new_reader[0].keys()) if new_reader else list(existing_reader[0].keys())
 
@@ -98,6 +182,9 @@ def merge_csv_strings(existing_csv: str, new_csv: str) -> str:
 
     log.info("CSV 병합: 기존 %d건 + 신규 %d건 -> 합계 %d건",
               len(existing_reader), len(new_reader), len(merged))
+
+    _warn_near_duplicates(list(merged.values()))
+
     return buffer.getvalue()
 
 

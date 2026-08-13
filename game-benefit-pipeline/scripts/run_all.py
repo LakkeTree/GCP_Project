@@ -16,12 +16,12 @@ crawlers/one_store.py, crawlers/google_play.py 처럼 파일이 늘어날 때마
 
 [v2 변경사항 — 팀 결정 반영]
 크롤러가 더 이상 BigQuery에 직접 저장하지 않습니다. 대신 CSV를 만들어서
-GCS 버킷의 temp/ 폴더에 올립니다. 그래서 이 스크립트의 "저장 대상"도
+GCS 버킷의 incoming/ 폴더에 올립니다. 그래서 이 스크립트의 "저장 대상"도
 BigQuery -> GCS로 바뀌었습니다. --dry-run 의 의미도 "BigQuery에 안 씀"에서
 "GCS에 안 올림"으로 바뀐 것뿐, 사용법 자체는 거의 같습니다.
 
 [사용법]
-    # 전체 크롤러를 실행해서 GCS temp/ 폴더에 실제로 업로드
+    # 전체 크롤러를 실행해서 GCS incoming/ 폴더에 실제로 업로드
     python -m scripts.run_all
 
     # GCS에 올리지 않고 결과만 확인 (안전하게 미리 점검할 때)
@@ -105,11 +105,31 @@ def discover_crawlers() -> list[type[BaseCrawler]]:
         # 그 모듈 안에서 'BaseCrawler를 상속했고, BaseCrawler 그 자체는 아닌'
         # 클래스만 골라냅니다.
         for _, obj in inspect.getmembers(module, inspect.isclass):
-            if issubclass(obj, BaseCrawler) and obj is not BaseCrawler:
-                # 같은 클래스가 여러 모듈에서 다시 나오는 걸 방지합니다.
+            # ⚠️ obj.__module__ 검사가 핵심입니다. card_base.py의 CardEventCrawler처럼
+            # '공유 부모 클래스'를 여러 카드사 파일이 import해서 쓰는데, 이 검사가
+            # 없으면 import된 부모 클래스까지 "이 파일에서 정의된 크롤러"로
+            # 착각해서 실행 목록에 잘못 들어갑니다. obj.__module__이 지금 보고
+            # 있는 파일(full_module_name) 자신과 같을 때만 진짜로 그 파일에서
+            # 정의된 클래스입니다.
+            if (
+                issubclass(obj, BaseCrawler)
+                and obj is not BaseCrawler
+                and obj.__module__ == full_module_name
+            ):
                 if obj not in found:
                     found.append(obj)
 
+    # ⚠️ 크롤러마다 페이지 수(=Gemini 호출 수)가 크게 다릅니다. 페이지가 많은
+    # 크롤러(예: 갤럭시 스토어의 상세 페이지 여러 개)가 먼저 돌면 무료 등급의
+    # 적은 일일 할당량을 혼자 다 써버려서, 뒤에 도는 크롤러들이 아예 시도도
+    # 못 해보고 실패할 수 있습니다. 그래서 "적게 쓰는 크롤러 먼저" 순서로
+    # 정렬합니다 — 할당량이 부족한 상황에서도 최대한 많은 크롤러가 최소
+    # 한 번씩은 시도할 기회를 갖게 하기 위함입니다.
+    def _estimated_cost(cls: type[BaseCrawler]) -> int:
+        # MAX_DETAIL_PAGES 가 있으면 그 값을, 없으면(단일 페이지 크롤러) 1로 봅니다.
+        return getattr(cls, "MAX_DETAIL_PAGES", 1)
+
+    found.sort(key=_estimated_cost)
     return found
 
 
@@ -151,7 +171,7 @@ def print_summary(results: list[CrawlerRunResult], upload_to_gcs: bool) -> None:
     print("=" * 70)
 
     if upload_to_gcs:
-        print("  (GCS temp/ 폴더에 실제로 업로드했습니다)")
+        print("  (GCS incoming/ 폴더에 실제로 업로드했습니다)")
     else:
         print("  (--dry-run 모드: GCS에 업로드하지 않았습니다)")
     print()
