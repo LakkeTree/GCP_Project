@@ -220,3 +220,7 @@ __marimo__/
 
 node_modules/
 fe-app/node_modules/
+
+# card_data 크롤러: 로그인 세션(storage_state, 민감정보)과 로컬 산출물 CSV는 커밋 안 함
+card_data/.auth/
+card_data/output/

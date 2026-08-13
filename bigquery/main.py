@@ -6,9 +6,10 @@ Cloud Run Function(Gen2, Eventarc Storage 트리거) 진입점.
 Eventarc GCS 트리거는 오브젝트 경로 접두사로 필터링할 수 없으므로, incoming/ 여부는
 이 함수 안에서 직접 판별한다.
 
-파일명 → 대상 테이블 매핑 (두 CSV는 서로 다른 테이블로 가는 독립적인 적재라
+파일명 → 대상 테이블 매핑 (CSV들은 서로 다른 테이블로 가는 독립적인 적재라
 쌍으로 기다리지 않고 파일명 기준으로 각각 처리한다):
   Total_Benefit_Info_DB.csv        → benefit_info (source_file 기준 scoped delete + append)
+  Card_Benefit_Info_DB.csv         → benefit_info (동일 스키마, card_data/ 크롤러 전용 파일명)
   Total_Platform_Connection_DB.csv → platform_connection (전체 truncate)
 그 외 파일명은 검증 없이 바로 quarantine/로 이동한다.
 
@@ -33,6 +34,7 @@ QUARANTINE_PREFIX = "quarantine/"
 
 TARGETS = {
     "Total_Benefit_Info_DB.csv": (clean_benefit_info_rows, load_benefit_info),
+    "Card_Benefit_Info_DB.csv": (clean_benefit_info_rows, load_benefit_info),
     "Total_Platform_Connection_DB.csv": (clean_platform_connection_rows, load_platform_connection),
 }
 
