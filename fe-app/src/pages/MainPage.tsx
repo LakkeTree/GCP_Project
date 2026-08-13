@@ -27,8 +27,9 @@ export default function MainPage() {
       {/* 상단 오늘의 이벤트 (우측 안내 문구 및 버튼 삭제) */}
       <section className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-extrabold text-slate-800 flex items-center gap-2">
-            <span>🔥</span> 오늘의 이벤트
+          <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+            <span>🔥</span>
+            <span>오늘의 이벤트</span>
           </h2>
         </div>
 
@@ -116,10 +117,10 @@ export default function MainPage() {
         </div>
       </section>
 
-      {/* 하단 TOP 5 랭킹 */}
+      {/* 하단 TOP 20 최근 7일간 검색 순위 */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-2 border-t border-slate-200">
         <div className="lg:col-span-9">
-          <GameRankBoard limit={5} autoRotate={true} compact={true} />
+          <GameRankBoard />
         </div>
 
         <aside className="lg:col-span-3">
