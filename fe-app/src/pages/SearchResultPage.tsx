@@ -103,9 +103,21 @@ export default function SearchResultPage() {
   const initialAmount = Number(searchParams.get('amount')) || 150000;
   const initialOs = (searchParams.get('os') as OsType) || 'ANDROID';
   const initialStores = searchParams.get('stores') ? searchParams.get('stores')!.split(',') : ANDROID_STORE_OPTIONS;
-  const initialCarriers = searchParams.get('carriers') ? searchParams.get('carriers')!.split(',') : [];
-  const initialPays = searchParams.get('pays') ? searchParams.get('pays')!.split(',') : PAY_OPTIONS;
-  const initialVouchers = searchParams.get('vouchers') ? searchParams.get('vouchers')!.split(',') : VOUCHER_OPTIONS;
+  // 빈 문자열("")로 넘어왔을 때 VOUCHER_OPTIONS로 복원되는 버그 수정
+  const rawCarriers = searchParams.get('carriers');
+  const initialCarriers = rawCarriers !== null 
+    ? (rawCarriers.trim() ? rawCarriers.split(',') : []) 
+    : [];
+
+  const rawPays = searchParams.get('pays');
+  const initialPays = rawPays !== null 
+    ? (rawPays.trim() ? rawPays.split(',') : PAY_OPTIONS) 
+    : PAY_OPTIONS;
+
+  const rawVouchers = searchParams.get('vouchers');
+  const initialVouchers = rawVouchers !== null 
+    ? (rawVouchers.trim() ? rawVouchers.split(',') : []) 
+    : VOUCHER_OPTIONS;
   const initialSpecialCard = searchParams.get('specialCard') || 'NONE';
   const initialHasPrevSpend = searchParams.get('hasPrevSpend') === 'true';
 
