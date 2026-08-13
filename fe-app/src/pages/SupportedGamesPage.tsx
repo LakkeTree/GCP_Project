@@ -71,7 +71,10 @@ export default function SupportedGamesPage() {
         <div className="lg:col-span-10 space-y-6">
           <header className="space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-black text-slate-900">🎮 호갱탈출 지원 게임 목록</h2>
+              <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                <span>🎮</span>
+                <span>호갱탈출 지원 게임 목록</span>
+              </h2>
               {!loading && (
                 <span className="text-xs font-black text-cyan-800 bg-cyan-50 px-3 py-1 rounded-full border border-cyan-200">
                   총 {filtered.length}개 게임 서비스 중
@@ -112,13 +115,23 @@ export default function SupportedGamesPage() {
             </div>
           </header>
 
-          {/* 💡 친근하고 부드러운 로딩 문구 */}
-          {loading && (
-            <div className="p-16 text-center text-xs font-bold text-cyan-600 animate-pulse bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-2">
-              <div className="text-2xl">🔍</div>
-              <div>지원하는 게임 목록을 확인하고 있습니다...</div>
-            </div>
-          )}
+          {/* 💡 화면 전체를 어둡게 가리고 아래 요소 클릭을 완전히 차단하는 전체 화면 로딩 오버레이 */}
+      {loading && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex flex-col items-center justify-center space-y-5 cursor-wait select-none animate-fadeIn">
+          {/* 1. 크고 명확하게 회전하는 동그라미 원 (Circular Spinner) */}
+          <div className="w-16 h-16 border-4 border-slate-200/30 border-t-cyan-400 rounded-full animate-spin shadow-xl" />
+
+          {/* 2. 대형 실행 중 메인 문구 */}
+          <div className="text-center space-y-1.5">
+            <h3 className="text-2xl font-black text-white tracking-widest animate-pulse">
+              실행 중...
+            </h3>
+            <p className="text-xs font-bold text-slate-300">
+              최신 지원 게임 목록을 불러오고 있습니다. 잠시만 기다려 주세요.
+            </p>
+          </div>
+        </div>
+      )}
 
           {/* 실시간 게임 카드 그리드 */}
           {!loading && (

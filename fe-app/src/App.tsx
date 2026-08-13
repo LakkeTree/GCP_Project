@@ -3,7 +3,6 @@ import ScrollToTop from './components/ScrollToTop';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import MainPage from './pages/MainPage';
-import GameRankPage from './pages/GameRankPage';
 import SupportedGamesPage from './pages/SupportedGamesPage';
 import SupportedPaymentPage from './pages/SupportedPaymentPage';
 import SearchPage from './pages/SearchPage';
@@ -20,7 +19,6 @@ export default function App() {
           <main>
             <Routes>
               <Route path="/" element={<MainPage />} />
-              <Route path="/rank" element={<GameRankPage />} />
               <Route path="/supported-games" element={<SupportedGamesPage />} />
               <Route path="/supported-payment" element={<SupportedPaymentPage />} />
               <Route path="/search" element={<SearchPage />} /> {/* 👈 검색/입력 페이지 */}
