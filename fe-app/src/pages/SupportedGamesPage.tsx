@@ -11,15 +11,28 @@ export interface GameItem {
   stores: string[];
 }
 
+// 💡 [핵심] 페이지 이탈 후 재진입 시 중복 로딩을 방지하는 메모리 캐시 변수
+let cachedGamesList: GameItem[] | null = null;
+
 export default function SupportedGamesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGenre, setSelectedGenre] = useState('전체');
-  const [games, setGames] = useState<GameItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  
+  // 💡 이미 저장된 캐시 데이터가 있으면 로딩을 생략(false)하고 즉시 출력
+  const [games, setGames] = useState<GameItem[]>(cachedGamesList || []);
+  const [loading, setLoading] = useState<boolean>(!cachedGamesList);
 
   useEffect(() => {
+    // 🎯 1. 이미 캐시된 데이터가 존재하면 백엔드 API 요청 없이 즉시 리턴
+    if (cachedGamesList && cachedGamesList.length > 0) {
+      setGames(cachedGamesList);
+      setLoading(false);
+      return;
+    }
+
     let isMounted = true;
 
+    // 🎯 2. 최초 1회 진입 시에만 데이터베이스에서 게임 목록 수집
     const fetchGames = async () => {
       try {
         setLoading(true);
@@ -28,6 +41,7 @@ export default function SupportedGamesPage() {
         const result = await res.json();
         
         if (isMounted && result.status === 'ok' && Array.isArray(result.data)) {
+          cachedGamesList = result.data; // 캐시에 저장
           setGames(result.data);
         }
       } catch (err) {
@@ -64,7 +78,25 @@ export default function SupportedGamesPage() {
   });
 
   return (
-    <div className="max-w-[1400px] mx-auto px-4 py-6 space-y-6">
+    <div className="max-w-[1400px] mx-auto px-4 py-6 space-y-6 relative">
+      {/* 💡 [최초 1회 로딩 오버레이] 화면 전체 회색 딤딩 + 큰 동그라미 회전 원형 로더 */}
+      {loading && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex flex-col items-center justify-center space-y-5 cursor-wait select-none animate-fadeIn">
+          {/* 회전하는 큰 동그라미 원 */}
+          <div className="w-16 h-16 border-4 border-slate-200/30 border-t-cyan-400 rounded-full animate-spin shadow-xl" />
+
+          {/* 대형 안내 문구 */}
+          <div className="text-center space-y-1.5">
+            <h3 className="text-2xl font-black text-white tracking-widest animate-pulse">
+              실행 중...
+            </h3>
+            <p className="text-xs font-bold text-slate-300">
+              최신 지원 게임 목록을 불러오고 있습니다. 잠시만 기다려 주세요.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
         
         {/* [좌측 10열] 메인 게임 카탈로그 */}
@@ -76,7 +108,7 @@ export default function SupportedGamesPage() {
                 <span>호갱탈출 지원 게임 목록</span>
               </h2>
               {!loading && (
-                <span className="text-xs font-black text-cyan-800 bg-cyan-50 px-3 py-1 rounded-full border border-cyan-200">
+                <span className="text-xs font-black text-cyan-800 bg-cyan-50 px-3 py-1 rounded-full border border-cyan-200 shadow-2xs">
                   총 {filtered.length}개 게임 서비스 중
                 </span>
               )}
@@ -114,24 +146,6 @@ export default function SupportedGamesPage() {
               </div>
             </div>
           </header>
-
-          {/* 💡 화면 전체를 어둡게 가리고 아래 요소 클릭을 완전히 차단하는 전체 화면 로딩 오버레이 */}
-      {loading && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex flex-col items-center justify-center space-y-5 cursor-wait select-none animate-fadeIn">
-          {/* 1. 크고 명확하게 회전하는 동그라미 원 (Circular Spinner) */}
-          <div className="w-16 h-16 border-4 border-slate-200/30 border-t-cyan-400 rounded-full animate-spin shadow-xl" />
-
-          {/* 2. 대형 실행 중 메인 문구 */}
-          <div className="text-center space-y-1.5">
-            <h3 className="text-2xl font-black text-white tracking-widest animate-pulse">
-              실행 중...
-            </h3>
-            <p className="text-xs font-bold text-slate-300">
-              최신 지원 게임 목록을 불러오고 있습니다. 잠시만 기다려 주세요.
-            </p>
-          </div>
-        </div>
-      )}
 
           {/* 실시간 게임 카드 그리드 */}
           {!loading && (
