@@ -28,22 +28,34 @@ export default function MyProfilePage() {
   const filterRef = useRef<HTMLDivElement>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
-  // Cloud SQL 연동 유저 프로필 상태
+  // 1. 공통 필터 훅 (컴포넌트 최상단에서 단 1회 선언)
+  const {
+    filter,
+    setFilter,
+    saveFilterSettings,
+    addFavoriteGame,
+    removeFavoriteGame,
+    selectAll,
+    deselectAll,
+    toggleArrayItem,
+  } = useFilterState(false);
+
+  // 2. 최상단 상태 선언
   const [userProfile, setUserProfile] = useState<{ email: string; nickname: string; provider: string }>({
     email: '불러오는 중...',
     nickname: '',
     provider: 'GOOGLE',
   });
   
-  // 닉네임 입력 및 변경 감지 상태 (최대 12자)
   const [nicknameInput, setNicknameInput] = useState('');
   const [originalNickname, setOriginalNickname] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  // SearchPage.tsx와 동일한 전체 게임 DB 상태
   const [allGames, setAllGames] = useState<GameItem[]>([]);
+  const [gameSearchInput, setGameSearchInput] = useState('');
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
 
-  // 1. SearchPage.tsx와 동일한 API (http://127.0.0.1:8000/games) 연동
+  // 3. 게임 DB 목록 로드
   useEffect(() => {
     fetch('http://127.0.0.1:8000/games')
       .then((res) => res.json())
@@ -55,49 +67,65 @@ export default function MyProfilePage() {
       .catch((err) => console.error('게임 DB 목록 로드 실패:', err));
   }, []);
 
-  // 2. 유저 프로필 데이터 로드 (Cloud SQL)
-useEffect(() => {
-  const token = localStorage.getItem('google_token');
-  if (token) {
-    // 토큰에서 구글 이름(given_name/name) 파싱
-    let googleNick = '유저';
-    try {
-      const base64Url = token.split('.')[1];
-      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-      const jsonPayload = decodeURIComponent(
-        atob(base64).split('').map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
-      );
-      const parsed = JSON.parse(jsonPayload);
-      googleNick = parsed.given_name || parsed.name || '유저';
-    } catch (e) {}
+  // 4. 유저 프로필 및 저장된 필터 로드 (단일 useEffect로 통합)
+  useEffect(() => {
+    // 1) LocalStorage 저장 필터 우선 로드
+    const savedFilterStr = localStorage.getItem('user_filter_settings');
+    if (savedFilterStr) {
+      try {
+        const parsed = JSON.parse(savedFilterStr);
+        setFilter((prev) => ({ ...prev, ...parsed }));
+      } catch (e) {}
+    }
 
-    fetch('http://127.0.0.1:8000/user/profile', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-      .then((res) => res.json())
-      .then((result) => {
-        // 💡 DB에 저장된 닉네임이 없으면 '구글 계정 이름(googleNick)'을 기본 디폴트로 사용!
-        const finalNick = result.data?.nickname || googleNick;
-        setUserProfile({
-          email: result.data?.email || '이메일 없음',
-          nickname: finalNick,
-          provider: result.data?.provider || 'GOOGLE',
-        });
-        setNicknameInput(finalNick);
-        setOriginalNickname(finalNick);
-        
-        if (result.data?.favorite_games) {
-          setFilter((prev) => ({ ...prev, favoriteGames: result.data.favorite_games }));
-        }
+    // 2) Cloud SQL DB 서버 최신 프로필/즐겨찾기 조회
+    const token = localStorage.getItem('google_token');
+    if (token) {
+      let googleNick = '유저';
+      try {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(
+          atob(base64).split('').map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
+        );
+        const parsed = JSON.parse(jsonPayload);
+        googleNick = parsed.given_name || parsed.name || '유저';
+      } catch (e) {}
+
+      fetch('http://127.0.0.1:8000/user/profile', {
+        headers: { 'Authorization': `Bearer ${token}` }
       })
-      .catch((err) => {
-        console.error("프로필 로드 실패:", err);
-        setNicknameInput(googleNick);
-        setOriginalNickname(googleNick);
-      });
-  }
-}, []);
+        .then((res) => {
+          if (!res.ok) throw new Error('Unauthorized');
+          return res.json();
+        })
+        .then((result) => {
+          if (result.status === 'success' && result.data) {
+            const finalNick = result.data.nickname || googleNick;
+            setUserProfile({
+              email: result.data.email || '이메일 없음',
+              nickname: finalNick,
+              provider: result.data.provider || 'GOOGLE',
+            });
+            setNicknameInput(finalNick);
+            setOriginalNickname(finalNick);
+            
+            if (result.data.favorite_games) {
+              setFilter((prev) => ({ ...prev, favoriteGames: result.data.favorite_games }));
+            }
+          }
+        })
+        .catch((err) => {
+          console.error("프로필 로드 실패/미인증:", err);
+          setNicknameInput(googleNick);
+          setOriginalNickname(googleNick);
+        });
+    } else {
+      setUserProfile({ email: '로그인 필요', nickname: '게스트', provider: 'GOOGLE' });
+    }
+  }, []);
 
+  // 5. 탭 파라미터 감지 스크롤
   useEffect(() => {
     const tabParam = searchParams.get('tab');
     if (tabParam === 'filter') {
@@ -105,7 +133,7 @@ useEffect(() => {
     }
   }, [searchParams]);
 
-  // 검색창 외부 클릭 시 드롭다운 닫기
+  // 6. 검색창 외부 클릭시 드롭다운 닫기
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
@@ -116,6 +144,7 @@ useEffect(() => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // 7. 스크롤 인터섹션 옵저버
   useEffect(() => {
     const observerOptions = {
       root: null,
@@ -151,21 +180,7 @@ useEffect(() => {
     }
   };
 
-  const {
-    filter,
-    setFilter,
-    saveFilterSettings,
-    addFavoriteGame,
-    removeFavoriteGame,
-    selectAll,
-    deselectAll,
-    toggleArrayItem,
-  } = useFilterState(true);
-  
-  const [gameSearchInput, setGameSearchInput] = useState('');
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
-
-  // SearchPage.tsx와 동일한 실시간 검색어 필터링
+  // 실시간 검색어 필터링
   const suggestedGames = gameSearchInput.trim()
     ? allGames.filter(
         (g) =>
@@ -179,7 +194,7 @@ useEffect(() => {
     setFilter((prev) => ({ ...prev, [key]: value }));
   };
 
-  // 즐겨찾기 추가 ➔ 백엔드/로컬 자동 저장
+  // 즐겨찾기 추가 ➔ 자동 저장
   const handleSelectGame = (gameName: string) => {
     const updatedGames = [...filter.favoriteGames, gameName];
     addFavoriteGame(gameName);
@@ -188,7 +203,7 @@ useEffect(() => {
     autoSaveFavoriteGames(updatedGames);
   };
 
-  // 즐겨찾기 삭제 ➔ 백엔드/로컬 자동 저장
+  // 즐겨찾기 삭제 ➔ 자동 저장
   const handleRemoveGame = (gameToRemove: string) => {
     const updatedGames = filter.favoriteGames.filter((g) => g !== gameToRemove);
     removeFavoriteGame(gameToRemove);
@@ -219,52 +234,49 @@ useEffect(() => {
     }
   };
 
-// 닉네임 저장 핸들러
-const handleSaveNickname = async () => {
-  const token = localStorage.getItem('google_token');
-  if (!token) {
-    alert('로그인이 필요합니다.');
-    return;
-  }
-
-  setIsSaving(true);
-  try {
-    const payload = {
-      nickname: nicknameInput,
-      favorite_games: filter.favoriteGames,
-    };
-
-    const res = await fetch('http://127.0.0.1:8000/user/profile', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify(payload)
-    });
-
-    if (res.ok) {
-      setOriginalNickname(nicknameInput);
-      setUserProfile((prev) => ({ ...prev, nickname: nicknameInput }));
-      
-      // 💡 [실시간 연동] Header 컴포넌트에 닉네임 변경 커스텀 알림 이벤트 전송!
-      window.dispatchEvent(new Event('user_profile_updated'));
-
-      alert('닉네임이 성공적으로 변경되었습니다! 🎉');
-    } else {
-      alert('저장 중 오류가 발생했습니다.');
+  // 닉네임 저장
+  const handleSaveNickname = async () => {
+    const token = localStorage.getItem('google_token');
+    if (!token) {
+      alert('로그인이 필요합니다.');
+      return;
     }
-  } catch (err) {
-    console.error("저장 실패:", err);
-    alert('서버 연결 실패');
-  } finally {
-    setIsSaving(false);
-  }
-};
 
-  // 필터 설정 저장 핸들러 (로컬스토리지 + 백엔드 양방향 저장)
+    setIsSaving(true);
+    try {
+      const payload = {
+        nickname: nicknameInput,
+        favorite_games: filter.favoriteGames,
+      };
+
+      const res = await fetch('http://127.0.0.1:8000/user/profile', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        setOriginalNickname(nicknameInput);
+        setUserProfile((prev) => ({ ...prev, nickname: nicknameInput }));
+        window.dispatchEvent(new Event('user_profile_updated'));
+        alert('닉네임이 성공적으로 변경되었습니다! 🎉');
+      } else {
+        alert('저장 중 오류가 발생했습니다.');
+      }
+    } catch (err) {
+      console.error("저장 실패:", err);
+      alert('서버 연결 실패');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // 필터 저장
   const handleSaveFilterSection = async () => {
-    saveFilterSettings(); // 로컬스토리지 저장 (SearchPage와 공유)
+    saveFilterSettings();
 
     const token = localStorage.getItem('google_token');
     if (token) {
@@ -301,8 +313,6 @@ const handleSaveNickname = async () => {
   };
 
   const isNicknameChanged = nicknameInput.trim() !== '' && nicknameInput !== originalNickname;
-  
-  // 스토어 선택 감지 상태
   const isGoogleSelected = filter.osType === 'ANDROID' && filter.androidStores.includes('구글 플레이 스토어');
   const isGalaxySelected = filter.osType === 'ANDROID' && filter.androidStores.includes('갤럭시 스토어');
   const isOneStoreSelected = filter.osType === 'ANDROID' && filter.androidStores.includes('원스토어');
@@ -460,7 +470,7 @@ const handleSaveNickname = async () => {
                   className="w-full px-4 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-800 focus:outline-none focus:border-cyan-500 h-[48px]"
                 />
 
-                {/* SearchPage와 100% 동일한 드롭다운 */}
+                {/* 드롭다운 */}
                 {isSearchFocused && gameSearchInput.trim().length > 0 && (
                   <div className="absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-56 overflow-y-auto z-30 py-1.5 border-t-2 border-t-cyan-500 animate-in fade-in slide-in-from-top-1">
                     {suggestedGames.length > 0 ? (
@@ -571,7 +581,7 @@ const handleSaveNickname = async () => {
             </div>
           </section>
 
-          {/* 💡 SECTION 2: 기본 검색 조건 필터링 (SearchPage.tsx와 100% 동일한 모든 항목 수록) */}
+          {/* SECTION 2: 기본 검색 조건 필터링 */}
           <section id="filter-section" ref={filterRef} className="bg-white rounded-2xl border border-slate-200 p-6 md:p-8 shadow-sm space-y-6 scroll-mt-24">
             <div className="border-b border-slate-100 pb-3">
               <h2 className="text-lg font-black text-slate-800 flex items-center gap-2">
@@ -915,7 +925,7 @@ const handleSaveNickname = async () => {
                       <label className="flex items-center space-x-2 cursor-pointer">
                         <input
                           type="checkbox"
-                          checked={filter.hasPrevSpend}
+                          checked={filter.hasPrevSpend} 
                           onChange={(e) => updateFilter('hasPrevSpend', e.target.checked)}
                           className="w-4 h-4 text-cyan-600 rounded"
                         />

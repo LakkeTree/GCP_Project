@@ -182,13 +182,13 @@ export default function SearchResultPage() {
   const initialHasPreApplied = searchParams.get('hasPreApplied') === 'true';
   const initialIsFirstPayment = searchParams.get('isFirstPayment') !== 'false';
 
-  // 💡 필터 및 입력 상태 (gameTitle 선언)
+  // 필터 및 입력 상태
   const [gameTitle, setGameTitle] = useState(initialGame);
   const [payAmount, setPayAmount] = useState<number>(initialAmount);
   const [osType, setOsType] = useState<OsType>(initialOs);
   const [androidStores, setAndroidStores] = useState<string[]>(initialStores);
 
-  // 💡 프로필 연동 즐겨찾기 상태 (gameTitle 선언 이후 위치하여 타입 에러 완벽 해결!)
+  // 프로필 연동 즐겨찾기 상태
   const [favoriteGames, setFavoriteGames] = useState<string[]>([]);
 
   useEffect(() => {
@@ -203,6 +203,7 @@ export default function SearchResultPage() {
 
   const isFavorite = favoriteGames.includes(gameTitle);
 
+  // 💡 배경 박스 없는 깔끔한 별표 토글 및 자동 저장
   const handleToggleFavorite = () => {
     let updated: string[];
     if (isFavorite) {
@@ -620,21 +621,29 @@ export default function SearchResultPage() {
           {/* 상단 타이틀 배너 */}
           <div className="bg-slate-100 rounded-xl border border-slate-200 p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="space-y-3">
-              {/* 💡 [실시간 최저가 연산 완료] 뱃지 위치에 [★ 즐겨찾기] 별표 버튼 배치 */}
+              {/* 💡 [박스 배경 없는 깔끔한 노란 별 토글 버튼] */}
               <div>
                 <button
                   type="button"
                   onClick={handleToggleFavorite}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs ${
-                    isFavorite
-                      ? 'bg-amber-400 text-slate-900 hover:bg-amber-500 border border-amber-500'
-                      : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-300'
-                  }`}
+                  className="inline-flex items-center gap-1.5 py-1 text-xs font-bold text-slate-700 hover:text-slate-900 transition-all cursor-pointer group select-none"
                 >
-                  <svg className={`w-4 h-4 ${isFavorite ? 'fill-slate-900 text-slate-900' : 'fill-none text-slate-400'}`} viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                  <svg
+                    className={`w-5 h-5 transition-transform duration-200 group-active:scale-125 ${
+                      isFavorite
+                        ? 'fill-amber-400 stroke-amber-400'
+                        : 'fill-none stroke-amber-400 hover:fill-amber-100'
+                    }`}
+                    viewBox="0 0 24 24"
+                    strokeWidth="2"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"
+                    />
                   </svg>
-                  <span>{isFavorite ? '즐겨찾기 해제' : '즐겨찾기 등록'}</span>
+                  <span className="font-extrabold text-slate-800">즐겨찾기</span>
                 </button>
               </div>
 
@@ -1067,73 +1076,70 @@ export default function SearchResultPage() {
 
         </main>
 
-        <aside className="lg:col-span-4 h-full space-y-5">
+        {/* 💡 [우측 4열] 실시간 필터 조절 사이드바 (필터 항목별 독립 카드/박스 구조로 전면 리디자인!) */}
+        <aside className="lg:col-span-4 h-full space-y-3.5">
           <form
             onSubmit={handleReSearch}
-            className="bg-white rounded-2xl border border-slate-200 p-4 md:p-5 shadow-sm space-y-4"
+            className="space-y-3"
           >
-            <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
-              <h3 className="text-sm md:text-base font-black text-slate-900 flex items-center gap-1.5">
-                <span>실시간 필터 조절</span>
-              </h3>
-              <span className="text-[10px] text-cyan-600 bg-cyan-50 font-bold px-2 py-0.5 rounded border border-cyan-200">
-                실시간 연산
-              </span>
-            </div>
 
-            <div className="space-y-1.5">
-              <span className="text-xs font-bold text-slate-800 block">스마트폰 OS</span>
-              <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1.5 rounded-xl border border-slate-200 text-xs font-bold">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOsType('ANDROID');
-                    if (androidStores.length === 0) {
-                      const supported = ANDROID_STORE_OPTIONS.filter((st) =>
-                        isStoreSupported(st, currentGameObj?.stores)
-                      );
-                      setAndroidStores(supported.length > 0 ? [supported[0]] : ['구글 플레이 스토어']);
-                    }
-                  }}
-                  className={`py-2.5 rounded-lg transition-all cursor-pointer text-xs md:text-sm min-h-[44px] flex items-center justify-center ${
-                    osType === 'ANDROID'
-                      ? 'bg-slate-900 text-white font-black shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  안드로이드
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setOsType('IOS')}
-                  className={`py-2.5 rounded-lg transition-all cursor-pointer text-xs md:text-sm min-h-[44px] flex items-center justify-center ${
-                    osType === 'IOS'
-                      ? 'bg-slate-900 text-white font-black shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  iOS
-                </button>
+            {/* 카드 1: OS & 결제 금액 설정 */}
+            <div className="bg-slate-50/80 rounded-xl border border-slate-200/90 p-3.5 shadow-2xs space-y-3">
+              <div className="space-y-1.5">
+                <span className="text-xs font-black text-slate-800 block">스마트폰 OS</span>
+                <div className="grid grid-cols-2 gap-2 bg-white p-1 rounded-lg border border-slate-200 text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOsType('ANDROID');
+                      if (androidStores.length === 0) {
+                        const supported = ANDROID_STORE_OPTIONS.filter((st) =>
+                          isStoreSupported(st, currentGameObj?.stores)
+                        );
+                        setAndroidStores(supported.length > 0 ? [supported[0]] : ['구글 플레이 스토어']);
+                      }
+                    }}
+                    className={`py-2 rounded-md transition-all cursor-pointer text-xs flex items-center justify-center ${
+                      osType === 'ANDROID'
+                        ? 'bg-slate-900 text-white font-black shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    안드로이드
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOsType('IOS')}
+                    className={`py-2 rounded-md transition-all cursor-pointer text-xs flex items-center justify-center ${
+                      osType === 'IOS'
+                        ? 'bg-slate-900 text-white font-black shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    iOS
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-1.5 pt-1 border-t border-slate-200/60">
+                <span className="text-xs font-black text-slate-800 block">결제 금액 수정</span>
+                <div className="relative flex items-center">
+                  <input
+                    type="number"
+                    value={payAmount}
+                    onChange={(e) => setPayAmount(Number(e.target.value))}
+                    className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white font-black text-slate-900 focus:outline-none transition-all pr-8 h-[38px]"
+                  />
+                  <span className="absolute right-3 text-xs font-bold text-slate-400">원</span>
+                </div>
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <span className="text-xs font-bold text-slate-800 block">결제 금액 수정</span>
-              <div className="relative flex items-center">
-                <input
-                  type="number"
-                  value={payAmount}
-                  onChange={(e) => setPayAmount(Number(e.target.value))}
-                  className="w-full px-3.5 py-2.5 text-xs md:text-sm rounded-xl border border-slate-300 bg-slate-50 font-black text-slate-900 focus:outline-none focus:bg-white transition-all pr-8 min-h-[44px]"
-                />
-                <span className="absolute right-3 text-xs font-bold text-slate-400">원</span>
-              </div>
-            </div>
-
+            {/* 카드 2: 이용 스토어 & 멤버십 등급 */}
             {osType === 'ANDROID' && (
-              <div className="space-y-2 pt-2 border-t border-slate-100">
-                <span className="text-xs font-bold text-slate-800 block">이용 스토어 필터</span>
-                <div className="flex flex-wrap gap-2">
+              <div className="bg-slate-50/80 rounded-xl border border-slate-200/90 p-3.5 shadow-2xs space-y-2.5">
+                <span className="text-xs font-black text-slate-800 block">이용 스토어 필터</span>
+                <div className="flex flex-wrap gap-1.5">
                   {ANDROID_STORE_OPTIONS.map((st: string) => {
                     const isSupported = isStoreSupported(st, currentGameObj?.stores);
                     const selected = androidStores.includes(st);
@@ -1147,14 +1153,13 @@ export default function SearchResultPage() {
                             handleToggleArray(setAndroidStores, st);
                           }
                         }}
-                        className={`px-3 py-2 rounded-xl text-xs md:text-sm font-bold border transition-all min-h-[40px] flex items-center ${
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-all ${
                           !isSupported
                             ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed blur-[0.6px] opacity-40 line-through select-none'
                             : selected
-                            ? 'bg-cyan-500 text-white border-cyan-500 shadow-sm cursor-pointer'
-                            : 'bg-slate-50 text-slate-600 border-slate-200 cursor-pointer hover:border-cyan-300'
+                            ? 'bg-cyan-500 text-white border-cyan-500 shadow-2xs cursor-pointer'
+                            : 'bg-white text-slate-600 border-slate-200 cursor-pointer hover:border-cyan-300'
                         }`}
-                        title={!isSupported ? '선택한 게임에서 지원하지 않는 스토어입니다.' : ''}
                       >
                         {!isSupported ? '✕ ' : selected ? '✓ ' : '+ '}{st}
                       </button>
@@ -1163,8 +1168,8 @@ export default function SearchResultPage() {
                 </div>
 
                 {isOneStoreSelected && isStoreSupported('원스토어', currentGameObj?.stores) && (
-                  <div className="pt-1 animate-fadeIn">
-                    <label className="flex items-center space-x-2.5 p-2.5 bg-slate-50 rounded-xl border border-slate-200 cursor-pointer min-h-[44px]">
+                  <div className="pt-1.5 border-t border-slate-200/60">
+                    <label className="flex items-center space-x-2 p-2 bg-white rounded-lg border border-slate-200 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={useTMembership}
@@ -1177,14 +1182,14 @@ export default function SearchResultPage() {
                 )}
 
                 {(isGoogleSelected || isGalaxySelected) && (
-                  <div className="p-3 bg-cyan-50/60 rounded-xl border border-cyan-200/80 space-y-2.5 mt-2 animate-fadeIn">
+                  <div className="p-2.5 bg-cyan-50/80 rounded-lg border border-cyan-200/80 space-y-2 mt-2">
                     {isGoogleSelected && (
                       <div className="space-y-1">
                         <label className="text-[11px] font-extrabold text-cyan-950 block">Google Play Points 등급</label>
                         <select
                           value={googlePlayTier}
                           onChange={(e) => setGooglePlayTier(e.target.value)}
-                          className="w-full px-2.5 py-2 text-xs rounded-lg border border-cyan-300 bg-white font-bold text-slate-900 focus:outline-none"
+                          className="w-full px-2 py-1.5 text-xs rounded-md border border-cyan-300 bg-white font-bold text-slate-900 focus:outline-none"
                         >
                           <option value="BRONZE">브론즈 (10원당 1pt)</option>
                           <option value="SILVER">실버 (10원당 1.1pt)</option>
@@ -1201,7 +1206,7 @@ export default function SearchResultPage() {
                         <select
                           value={galaxyStoreTier}
                           onChange={(e) => setGalaxyStoreTier(e.target.value)}
-                          className="w-full px-2.5 py-2 text-xs rounded-lg border border-cyan-300 bg-white font-bold text-slate-900 focus:outline-none"
+                          className="w-full px-2 py-1.5 text-xs rounded-md border border-cyan-300 bg-white font-bold text-slate-900 focus:outline-none"
                         >
                           <option value="STANDARD">일반 (1% 적립)</option>
                           <option value="VIP">VIP (2% 적립)</option>
@@ -1215,19 +1220,20 @@ export default function SearchResultPage() {
               </div>
             )}
 
-            <div className="space-y-3 pt-2 border-t border-slate-100">
-              <span className="text-xs font-black text-slate-900 block">보유 결제 수단 필터</span>
+            {/* 카드 3: 보유 결제 수단 (통신사 & 간편결제 & 상품권) */}
+            <div className="bg-slate-50/80 rounded-xl border border-slate-200/90 p-3.5 shadow-2xs space-y-3">
+              <span className="text-xs font-black text-slate-800 block">보유 결제 수단 필터</span>
 
-              <div className="space-y-2">
-                <label className="flex items-center space-x-2.5 p-2.5 bg-slate-50 rounded-xl border border-slate-200 cursor-pointer min-h-[44px]">
+              {/* 통신사 */}
+              <div className="space-y-1.5">
+                <label className="flex items-center space-x-2 p-2 bg-white rounded-lg border border-slate-200 cursor-pointer">
                   <input
                     type="checkbox"
-                    id="resCarriersToggle"
                     checked={useCarriers}
                     onChange={(e) => setUseCarriers(e.target.checked)}
                     className="w-4 h-4 text-cyan-600 rounded border-slate-300 shrink-0 cursor-pointer"
                   />
-                  <span className="text-xs md:text-sm font-extrabold text-slate-800 select-none">
+                  <span className="text-xs font-extrabold text-slate-800 select-none">
                     통신사 할인 사용하기
                   </span>
                 </label>
@@ -1241,10 +1247,10 @@ export default function SearchResultPage() {
                         type="button"
                         disabled={!useCarriers}
                         onClick={() => handleToggleArray(setCarriers, c)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all min-h-[36px] ${
+                        className={`px-2.5 py-1 rounded-md text-xs font-bold border transition-all ${
                           selected && useCarriers
                             ? 'bg-cyan-500 text-white border-cyan-500 cursor-pointer'
-                            : 'bg-slate-50 text-slate-600 border-slate-200 cursor-pointer'
+                            : 'bg-white text-slate-600 border-slate-200 cursor-pointer'
                         }`}
                       >
                         {selected ? '✓ ' : '+ '}{c}
@@ -1254,16 +1260,16 @@ export default function SearchResultPage() {
                 </div>
               </div>
 
-              <div className="space-y-2 pt-1 border-t border-slate-100">
-                <label className="flex items-center space-x-2.5 p-2.5 bg-slate-50 rounded-xl border border-slate-200 cursor-pointer min-h-[44px]">
+              {/* 간편결제 */}
+              <div className="space-y-1.5 pt-2 border-t border-slate-200/60">
+                <label className="flex items-center space-x-2 p-2 bg-white rounded-lg border border-slate-200 cursor-pointer">
                   <input
                     type="checkbox"
-                    id="resPaysToggle"
                     checked={usePays}
                     onChange={(e) => setUsePays(e.target.checked)}
                     className="w-4 h-4 text-cyan-600 rounded border-slate-300 shrink-0 cursor-pointer"
                   />
-                  <span className="text-xs md:text-sm font-extrabold text-slate-800 select-none">
+                  <span className="text-xs font-extrabold text-slate-800 select-none">
                     사용 간편결제 (페이) 선택
                   </span>
                 </label>
@@ -1277,10 +1283,10 @@ export default function SearchResultPage() {
                         type="button"
                         disabled={!usePays}
                         onClick={() => handleToggleArray(setPays, p)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all min-h-[36px] ${
+                        className={`px-2.5 py-1 rounded-md text-xs font-bold border transition-all ${
                           selected && usePays
                             ? 'bg-cyan-500 text-white border-cyan-500 cursor-pointer'
-                            : 'bg-slate-50 text-slate-600 border-slate-200 cursor-pointer'
+                            : 'bg-white text-slate-600 border-slate-200 cursor-pointer'
                         }`}
                       >
                         {selected ? '✓ ' : '+ '}{p}
@@ -1290,11 +1296,11 @@ export default function SearchResultPage() {
                 </div>
               </div>
 
-              <div className="space-y-2 pt-2 border-t border-slate-100">
-                <label className="flex items-center space-x-2.5 p-2.5 bg-slate-50 rounded-xl border border-slate-200 cursor-pointer min-h-[44px]">
+              {/* 문화상품권 */}
+              <div className="space-y-1.5 pt-2 border-t border-slate-200/60">
+                <label className="flex items-center space-x-2 p-2 bg-white rounded-lg border border-slate-200 cursor-pointer">
                   <input
                     type="checkbox"
-                    id="resVoucherToggle"
                     checked={useVoucherBypasses}
                     onChange={(e) => {
                       setUseVoucherBypasses(e.target.checked);
@@ -1304,16 +1310,12 @@ export default function SearchResultPage() {
                     }}
                     className="w-4 h-4 text-cyan-600 rounded border-slate-300 shrink-0 cursor-pointer"
                   />
-                  <span className="text-xs md:text-sm font-extrabold text-slate-800 select-none">
+                  <span className="text-xs font-extrabold text-slate-800 select-none">
                     문화상품권 우회 충전 할인
                   </span>
                 </label>
 
-                <div
-                  className={`flex flex-wrap gap-1.5 pl-1 transition-all ${
-                    useVoucherBypasses ? 'opacity-100' : 'opacity-40 pointer-events-none'
-                  }`}
-                >
+                <div className={`flex flex-wrap gap-1.5 pl-1 transition-all ${useVoucherBypasses ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
                   {VOUCHER_OPTIONS.map((v: string) => {
                     const selected = vouchers.includes(v);
                     return (
@@ -1322,10 +1324,10 @@ export default function SearchResultPage() {
                         type="button"
                         disabled={!useVoucherBypasses}
                         onClick={() => handleToggleArray(setVouchers, v)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all min-h-[36px] ${
+                        className={`px-2.5 py-1 rounded-md text-xs font-bold border transition-all ${
                           selected && useVoucherBypasses
                             ? 'bg-cyan-500 text-white border-cyan-500 cursor-pointer'
-                            : 'bg-slate-50 text-slate-600 border-slate-200 cursor-pointer'
+                            : 'bg-white text-slate-600 border-slate-200 cursor-pointer'
                         }`}
                       >
                         {selected ? '✓ ' : '+ '}{v}
@@ -1336,9 +1338,10 @@ export default function SearchResultPage() {
               </div>
             </div>
 
-            <div className="space-y-2 pt-3 border-t border-slate-100">
+            {/* 카드 4: 제휴 카드 할인 */}
+            <div className="bg-slate-50/80 rounded-xl border border-slate-200/90 p-3.5 shadow-2xs space-y-2.5">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-slate-900 block">제휴 카드 선택 (옵션)</span>
+                <span className="text-xs font-black text-slate-800 block">제휴 카드 선택 (옵션)</span>
                 <label className="flex items-center space-x-1.5 cursor-pointer">
                   <input
                     type="checkbox"
@@ -1351,11 +1354,11 @@ export default function SearchResultPage() {
               </div>
 
               {useSpecialOptions && (
-                <div className="space-y-2 pt-1 animate-fadeIn">
+                <div className="space-y-2 pt-1">
                   <select
                     value={selectedSpecialCard}
                     onChange={(e) => setSelectedSpecialCard(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 bg-slate-50 font-bold text-slate-900 focus:outline-none focus:bg-white transition-all min-h-[40px]"
+                    className="w-full px-2.5 py-2 text-xs rounded-lg border border-slate-300 bg-white font-bold text-slate-900 focus:outline-none"
                   >
                     {SPECIAL_CARD_OPTIONS.map((card: { label: string; value: string }) => (
                       <option key={card.value} value={card.value}>
@@ -1365,7 +1368,7 @@ export default function SearchResultPage() {
                   </select>
 
                   {selectedSpecialCard !== 'NONE' && (
-                    <label className="flex items-center space-x-2.5 p-2 bg-slate-50 rounded-xl border border-slate-200 cursor-pointer min-h-[40px]">
+                    <label className="flex items-center space-x-2 p-2 bg-white rounded-lg border border-slate-200 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={hasPrevSpend}
@@ -1379,11 +1382,12 @@ export default function SearchResultPage() {
               )}
             </div>
 
-            <div className="space-y-2 pt-3 border-t border-slate-200">
-              <span className="text-xs font-black text-slate-900 block">기타 혜택</span>
+            {/* 카드 5: 기타 혜택 */}
+            <div className="bg-slate-50/80 rounded-xl border border-slate-200/90 p-3.5 shadow-2xs space-y-2.5">
+              <span className="text-xs font-black text-slate-800 block">기타 혜택</span>
 
-              <div className="space-y-2 text-xs md:text-sm font-extrabold text-slate-800">
-                <label className="flex items-center space-x-3 cursor-pointer p-2 rounded-xl hover:bg-slate-50 transition-colors min-h-[40px]">
+              <div className="space-y-1.5 text-xs font-bold text-slate-800">
+                <label className="flex items-center space-x-2.5 p-2 bg-white rounded-lg border border-slate-200 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={useGameBenefits}
@@ -1393,7 +1397,7 @@ export default function SearchResultPage() {
                   <span>게임 전용 혜택 포함</span>
                 </label>
 
-                <label className="flex items-center space-x-3 cursor-pointer p-2 rounded-xl hover:bg-slate-50 transition-colors min-h-[40px]">
+                <label className="flex items-center space-x-2.5 p-2 bg-white rounded-lg border border-slate-200 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={hasPreApplied}
@@ -1403,7 +1407,7 @@ export default function SearchResultPage() {
                   <span>사전 응모 완료 혜택</span>
                 </label>
 
-                <label className="flex items-center space-x-3 cursor-pointer p-2 rounded-xl hover:bg-slate-50 transition-colors min-h-[40px]">
+                <label className="flex items-center space-x-2.5 p-2 bg-white rounded-lg border border-slate-200 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={isFirstPayment}
@@ -1416,17 +1420,18 @@ export default function SearchResultPage() {
             </div>
           </form>
 
-          <div className="sticky top-28 min-h-[550px] p-6 bg-slate-100 rounded-xl border border-slate-200/80 flex flex-col items-center justify-between text-center space-y-6 shadow-inner">
+          {/* 💡 광고 배너 카드 (화면 높이에 맞춘 h-[calc(100vh-140px)] 및 스티키 스크롤 적용) */}
+          <div className="sticky top-28 h-[calc(100vh-140px)] min-h-[500px] p-6 bg-slate-100 rounded-2xl border border-slate-200/80 flex flex-col items-center justify-between text-center shadow-inner">
             <span className="px-3 py-1 bg-slate-800 text-white font-bold text-[10px] rounded tracking-wider">ADVERTISEMENT</span>
             
-            <div className="space-y-5 my-auto">
-              <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-3xl font-black text-slate-400 shadow-sm border border-slate-200 mx-auto animate-pulse">
+            <div className="space-y-4 my-auto">
+              <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-xl font-black text-slate-400 shadow-sm border border-slate-200 mx-auto animate-pulse">
                 AD
               </div>
               
               <div className="space-y-2">
                 <h3 className="font-black text-slate-800 text-sm md:text-base">협업 제휴 프로모션</h3>
-                <p className="text-xs text-slate-500 leading-relaxed max-w-[160px] mx-auto font-medium">
+                <p className="text-xs text-slate-500 leading-relaxed max-w-[180px] mx-auto font-medium">
                   게임별 스토어 & 제휴 카드사 전용 특별 혜택 및 광고 영역입니다.
                 </p>
               </div>
@@ -1440,6 +1445,7 @@ export default function SearchResultPage() {
 
       </div>
 
+      {/* 환산 기준 안내 모달 */}
       {isCriteriaModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
@@ -1462,6 +1468,7 @@ export default function SearchResultPage() {
         </div>
       )}
 
+      {/* 스토어별 1위 최저가 비교 모달 */}
       {isCompareModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
           <div className="bg-white rounded-2xl max-w-xl w-full p-6 space-y-5 shadow-2xl">
@@ -1520,6 +1527,7 @@ export default function SearchResultPage() {
         </div>
       )}
 
+      {/* 세부 결제 경로 모달 */}
       {selectedResultForDetail && (
         <div
           onClick={() => setSelectedResultForDetail(null)}
