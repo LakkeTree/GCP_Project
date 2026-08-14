@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
 
-// 구글 ID 토큰(JWT) 파서 헬퍼
 const parseGoogleToken = (token: string) => {
   try {
     const base64Url = token.split('.')[1];
@@ -29,7 +28,6 @@ export default function Header() {
 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // 백엔드 및 구글 토큰 정보 파싱하여 프로필 설정
   const fetchUserProfile = async (token: string) => {
     try {
       const googleData = parseGoogleToken(token);
@@ -41,7 +39,6 @@ export default function Header() {
 
       if (res.ok) {
         const result = await res.json();
-        // 💡 백엔드 DB에 변경 저장된 닉네임이 없으면 구글 계정 이름(googleNick)을 기본으로 사용
         setUser({
           email: result.data?.email || googleData?.email || '이메일 없음',
           nickname: result.data?.nickname || googleNick,
@@ -49,7 +46,6 @@ export default function Header() {
           provider: 'GOOGLE',
         });
       } else {
-        // 백엔드 미응답 시 구글 기본 데이터로 표출
         setUser({
           email: googleData?.email || '이메일 없음',
           nickname: googleNick,
@@ -68,7 +64,6 @@ export default function Header() {
       fetchUserProfile(token);
     }
 
-    // 💡 마이페이지에서 닉네임 저장 시 실시간 반영되는 커스텀 이벤트 핸들러
     const handleProfileUpdate = () => {
       const currentToken = localStorage.getItem('google_token');
       if (currentToken) {
@@ -134,52 +129,66 @@ export default function Header() {
 
   return (
     <header
-      className={`bg-white border-b border-slate-200 sticky top-0 z-50 transition-all duration-300 ${
-        isScrolled ? 'shadow-md py-2' : 'shadow-sm py-3.5'
+      className={`bg-slate-900 border-b border-slate-800 sticky top-0 z-50 transition-all duration-300 ${
+        isScrolled ? 'shadow-xl py-2.5' : 'shadow-lg py-4'
       }`}
     >
-      <div className="max-w-[1400px] mx-auto px-4 md:px-6 space-y-2.5 transition-all duration-300">
+      <div className="max-w-[1400px] mx-auto px-4 md:px-6 space-y-3 transition-all duration-300">
         <div className="flex items-center justify-between gap-4">
           
+          {/* 브랜드 로고 (그라데이션 타이틀 텍스트 적용) */}
           <Link
             to="/"
-            className={`font-black text-cyan-600 tracking-tight shrink-0 flex items-center gap-2 transition-all duration-300 ${
-              isScrolled ? 'text-2xl' : 'text-3xl md:text-4xl'
-            }`}
+            className="group shrink-0 flex items-center gap-3 transition-transform duration-200 active:scale-95"
           >
-            <span className={isScrolled ? 'text-2xl' : 'text-4xl'}>🛡️</span>
-            <span>호갱탈출</span>
+            <div className="w-12 h-12 md:w-13 md:h-13 bg-gradient-to-br from-[#00D2B8]/15 to-[#00E5FF]/15 border border-[#00D2B8]/40 rounded-md flex items-center justify-center text-[#00D2B8] shadow-md group-hover:border-[#00D2B8] transition-all p-2">
+              <svg
+                className="w-8 h-8 md:w-9 md:h-9 stroke-[2.2]"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"
+                />
+              </svg>
+            </div>
+
+            <span className="font-black text-xl md:text-2xl bg-gradient-to-r from-[#00D2B8] to-[#00E5FF] bg-clip-text text-transparent tracking-tight">
+              호갱탈출
+            </span>
           </Link>
 
+          {/* 프로필 및 구글 로그인 버튼 */}
           <div className="shrink-0 flex items-center gap-2">
             {user ? (
               <div className="relative" ref={dropdownRef}>
                 <button
                   type="button"
                   onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-                  className="flex items-center gap-2.5 bg-slate-50 border border-slate-200 rounded-full pl-1.5 pr-3 py-1 shadow-sm hover:bg-slate-100 transition-all cursor-pointer"
+                  className="flex items-center gap-2.5 bg-slate-800 border border-slate-700 rounded-md pl-1.5 pr-3 py-1.5 shadow-sm hover:bg-slate-750 transition-all cursor-pointer"
                 >
-                  {/* 구글 프로필 사진 또는 첫 글자 */}
                   {user.picture ? (
                     <img
                       src={user.picture}
                       alt="프로필"
                       referrerPolicy="no-referrer"
-                      className="w-8 h-8 rounded-full object-cover border border-slate-200 shrink-0"
+                      className="w-7 h-7 rounded object-cover border border-slate-600 shrink-0"
                     />
                   ) : (
-                    <div className="w-8 h-8 rounded-full bg-cyan-600 flex items-center justify-center text-white font-bold overflow-hidden border border-slate-200 shrink-0 text-xs">
+                    <div className="w-7 h-7 rounded bg-gradient-to-r from-[#00D2B8] to-[#00E5FF] flex items-center justify-center text-slate-950 font-black overflow-hidden shrink-0 text-xs">
                       {user.nickname ? user.nickname[0] : '👤'}
                     </div>
                   )}
 
-                  {/* 💡 일정 길이를 초과하면 ... 으로 잘리는 닉네임 박스 */}
                   <div className="flex flex-col text-left">
-                    <div className="flex items-center gap-0.5 text-xs font-bold text-slate-800 leading-tight">
+                    <div className="flex items-center gap-0.5 text-xs font-extrabold text-slate-100 leading-tight">
                       <span className="truncate max-w-[70px] sm:max-w-[90px] inline-block">{user.nickname}</span>
                       <span>님</span>
                     </div>
-                    <span className="text-[10px] text-slate-400 leading-tight">
+                    <span className="text-[10px] bg-gradient-to-r from-[#00D2B8] to-[#00E5FF] bg-clip-text text-transparent font-black leading-tight">
                       GOOGLE
                     </span>
                   </div>
@@ -196,37 +205,54 @@ export default function Header() {
                   </svg>
                 </button>
 
+                {/* 프로필 드롭다운 패널 */}
                 {isProfileMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-60 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
-                    <div className="px-4 py-2 border-b border-slate-100 flex items-center gap-2.5">
-                      {user.picture && (
-                        <img src={user.picture} alt="프로필" referrerPolicy="no-referrer" className="w-7 h-7 rounded-full object-cover" />
+                  <div className="absolute right-0 mt-3 w-70 bg-slate-950 rounded-lg shadow-[0_20px_50px_rgba(0,0,0,0.6)] border border-[#00D2B8]/50 p-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150 space-y-1.5">
+                    <div className="absolute -top-1.5 right-6 w-3 h-3 bg-slate-950 border-l border-t border-[#00D2B8]/50 rotate-45 z-10" />
+
+                    <div className="relative z-20 p-3 bg-slate-800 border border-slate-700/80 rounded-md flex items-center gap-3 shadow-sm">
+                      {user.picture ? (
+                        <img
+                          src={user.picture}
+                          alt="프로필"
+                          referrerPolicy="no-referrer"
+                          className="w-9 h-9 rounded object-cover border border-[#00D2B8]/60 shrink-0"
+                        />
+                      ) : (
+                        <div className="w-9 h-9 rounded bg-gradient-to-r from-[#00D2B8] to-[#00E5FF] flex items-center justify-center text-slate-950 font-black shrink-0 text-xs shadow-xs">
+                          {user.nickname ? user.nickname[0] : '👤'}
+                        </div>
                       )}
                       <div className="truncate">
-                        <p className="text-[11px] font-semibold text-slate-400">접속 계정</p>
-                        <p className="text-xs font-bold text-slate-800 truncate">{user.email}</p>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-black text-white truncate">{user.nickname}</span>
+                          <span className="text-[9.5px] font-black text-slate-950 bg-gradient-to-r from-[#00D2B8] to-[#00E5FF] px-1.5 py-0.2 rounded shrink-0">
+                            GOOGLE
+                          </span>
+                        </div>
+                        <p className="text-[11px] font-medium text-slate-300 truncate mt-0.5">{user.email}</p>
                       </div>
                     </div>
 
-                    <div className="py-1">
+                    <div className="relative z-20">
                       <button
                         type="button"
                         onClick={() => {
                           setIsProfileMenuOpen(false);
                           navigate('/profile?tab=profile');
                         }}
-                        className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-cyan-600 flex items-center gap-2.5 transition-colors cursor-pointer"
+                        className="w-full text-left p-3 bg-slate-800 hover:bg-slate-750 border border-slate-700/80 hover:border-[#00D2B8] rounded-md text-xs font-extrabold text-slate-100 hover:text-[#00D2B8] flex items-center gap-2.5 transition-all cursor-pointer shadow-sm"
                       >
                         <span className="text-sm">👤</span>
                         <span>개인 정보 & 즐겨찾기</span>
                       </button>
                     </div>
 
-                    <div className="border-t border-slate-100 pt-1 mt-1">
+                    <div className="relative z-20">
                       <button
                         type="button"
                         onClick={handleLogout}
-                        className="w-full text-left px-4 py-2 text-xs font-bold text-red-500 hover:bg-red-50 flex items-center gap-2.5 transition-colors cursor-pointer"
+                        className="w-full text-left p-3 bg-slate-800 hover:bg-rose-950/50 border border-slate-700/80 hover:border-rose-500/50 rounded-md text-xs font-extrabold text-rose-400 flex items-center gap-2.5 transition-all cursor-pointer shadow-sm"
                       >
                         <span className="text-sm">🚪</span>
                         <span>로그아웃</span>
@@ -236,11 +262,9 @@ export default function Header() {
                 )}
               </div>
             ) : (
-              <div className="relative overflow-hidden rounded-full">
-                <div className={`bg-cyan-600 hover:bg-cyan-700 text-white font-bold transition-all duration-200 shadow-sm flex items-center gap-2.5 pointer-events-none ${
-                  isScrolled ? 'pl-2 pr-4 py-1 text-xs' : 'pl-2.5 pr-5 py-1.5 text-sm'
-                }`}>
-                  <div className="bg-white rounded-full p-1 flex items-center justify-center shrink-0 shadow-xs">
+              <div className="relative overflow-hidden rounded-md">
+                <div className="bg-gradient-to-r from-[#00D2B8] to-[#00E5FF] hover:brightness-105 text-slate-950 font-black transition-all duration-200 shadow-md flex items-center gap-2.5 pointer-events-none pl-2.5 pr-4 py-1.5 text-xs md:text-sm">
+                  <div className="bg-slate-950 rounded p-1 flex items-center justify-center shrink-0 shadow-xs">
                     <svg className="w-4 h-4" viewBox="0 0 24 24">
                       <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
                       <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
@@ -262,20 +286,24 @@ export default function Header() {
           </div>
         </div>
 
-        <nav className="flex items-center justify-start border-t border-slate-100 space-x-6 overflow-x-auto no-scrollbar pt-1.5">
-          {navItems.map((item) => (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={`font-bold text-sm whitespace-nowrap pb-1 border-b-2 ${
-                location.pathname === item.path
-                  ? 'text-cyan-600 border-cyan-500 font-black'
-                  : 'text-slate-600 border-transparent hover:text-cyan-600'
-              }`}
-            >
-              {item.name}
-            </Link>
-          ))}
+        {/* 네비게이션 메뉴 (활성 탭 그라데이션 텍스트 적용) */}
+        <nav className="flex items-center justify-start border-t border-slate-800 space-x-6 overflow-x-auto no-scrollbar pt-2">
+          {navItems.map((item) => {
+            const isSelected = location.pathname === item.path;
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={`font-bold text-sm whitespace-nowrap pb-1.5 border-b-2 transition-all ${
+                  isSelected
+                    ? 'bg-gradient-to-r from-[#00D2B8] to-[#00E5FF] bg-clip-text text-transparent border-[#00D2B8] font-black'
+                    : 'text-slate-400 border-transparent hover:text-[#00D2B8]'
+                }`}
+              >
+                {item.name}
+              </Link>
+            );
+          })}
         </nav>
       </div>
     </header>
