@@ -1,53 +1,77 @@
 import json
 import os
+import sys
+from io import StringIO
+from pathlib import Path
 from typing import List, Optional
-from fastapi import FastAPI, Depends, HTTPException, status
+
+import pandas as pd
+from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
+from google.cloud import storage
 from pydantic import BaseModel, Field, field_validator
+from sqlalchemy.orm import Session
 
-from database import get_db, engine, Base
-from models import UserModel, GameRequestLogModel, OutboundClickLogModel
+# -----------------------------------------------------------------------------
+# 1. 내부 모듈 경로 등록 및 Import
+# -----------------------------------------------------------------------------
+BASE_DIR = Path(__file__).resolve().parent.parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.append(str(BASE_DIR))
+
+# DB, 인증, 데이터 모델, 계산 엔진 모듈 가져오기
 from auth import verify_google_token_and_get_user, verify_google_token_optional
-#from constants import SUPPORTED_GAMES, VALID_PAYMENT_METHODS
-#from engine.loader import recommend_best_routes
+from database import Base, engine, get_db
+from engine.loader import recommend_best_routes
+from models import GameRequestLogModel, OutboundClickLogModel, UserModel
 
-# 임시 테스트용 더미 상숫값 (에러 방지용) # ⚠️ 현재 테스트용 임시 더미 상숫값 (주석 해제 시 아래 2줄은 삭제 또는 주석 처리)
-SUPPORTED_GAMES = {
-    "COOKIERUN_KINGDOM": "쿠키런: 킹덤",
-    "GENSHIN_IMPACT": "원신",
-    "HONKAI_STAR_RAIL": "붕괴: 스타레일"  # 테스트를 위해 2~3개 더 넣어두시면 편리합니다.
-}
-VALID_PAYMENT_METHODS = {
-    "KB_CARD", "SHINHAN_CARD", "SAMSUNG_CARD", "KAKAO_PAY", "NAVER_PAY", "SKT"
-}
-
-# DB 테이블 생성
+# -----------------------------------------------------------------------------
+# 2. 초기 설정 및 DB 테이블 생성
+# -----------------------------------------------------------------------------
+# Cloud SQL DB 테이블 자동 생성
 Base.metadata.create_all(bind=engine)
+
+# GCS 버킷 이름 및 결제 수단 검증 목록
+BUCKET_NAME = "game-csv-bucket"
+VALID_PAYMENT_METHODS = {
+    "KB_CARD",
+    "SHINHAN_CARD",
+    "SAMSUNG_CARD",
+    "KAKAO_PAY",
+    "NAVER_PAY",
+    "SKT",
+    "KT",
+    "LGU",
+}
 
 app = FastAPI(
     title="Optimal Payment Route API",
-    description="Cloud SQL 및 Google OAuth 연동 결제 경로 추천 API",
-    version="2.2.0",
+    description="Cloud SQL, Google OAuth, GCS 및 최저가 추천 엔진 연동 통합 API",
+    version="3.0.0",
 )
 
-# CORS 설정
-raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
+# CORS 설정 (허용 도메인 지정 및 전체 허용 백업)
+raw_origins = os.getenv(
+    "ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"
+)
 origins = [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
+if "*" not in origins:
+    origins.append("*")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],  # 개발 프로토타입 편의를 위해 전체 허용
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+
 # -----------------------------------------------------------------------------
-# 데이터 직렬화 헬퍼 함수 (DB 세미콜론 문자열 ↔ 프론트엔드 JSON 배열)
+# 3. 데이터 변환 헬퍼 함수 (DB ↔ 프론트엔드)
 # -----------------------------------------------------------------------------
 def parse_db_list(val: Optional[str]) -> List[str]:
-    """DB에 저장된 세미콜론(;) 구분 문자열이나 JSON 문자열을 List[str]로 파싱"""
+    """DB에 저장된 문자열(세미콜론 구분 또는 JSON)을 파이썬 리스트로 변환"""
     if not val or val == "NONE":
         return []
     val_str = str(val).strip()
@@ -61,38 +85,39 @@ def parse_db_list(val: Optional[str]) -> List[str]:
 
 
 def to_db_string(val_list: Optional[List[str]]) -> str:
-    """List[str]를 DB 저장용 세미콜론(;) 구분 문자열로 변환"""
+    """파이썬 리스트를 DB 저장용 세미콜론(;) 문자열로 변환"""
     if not val_list:
         return "NONE"
-    clean_list = [str(x).strip() for x in val_list if str(x).strip() and str(x).strip() != "NONE"]
+    clean_list = [
+        str(x).strip()
+        for x in val_list
+        if str(x).strip() and str(x).strip() != "NONE"
+    ]
     return ";".join(clean_list) if clean_list else "NONE"
 
 
 # -----------------------------------------------------------------------------
-# DTO (Pydantic 스키마)
+# 4. Pydantic 요청/응답 양식 (DTO)
 # -----------------------------------------------------------------------------
 class RouteRequest(BaseModel):
-    platform: str = Field("ALL", description="스토어 플랫폼 (ALL, GOOGLE_PLAY, ONE_STORE, GALAXY_STORE 등)")
+    platform: str = Field(
+        "ALL",
+        description="스토어 플랫폼 (ALL, GOOGLE_PLAY, ONE_STORE, GALAXY_STORE 등)",
+    )
     amount: int = Field(..., gt=0, le=10_000_000, description="결제 예정 금액")
     is_first_pay: bool = Field(False, description="첫 결제 여부")
-    payment_methods: List[str] = Field(default_factory=list, description="보유 결제 수단 코드")
+    payment_methods: List[str] = Field(
+        default_factory=list, description="보유 결제 수단 코드"
+    )
     game: str = Field("COOKIERUN_KINGDOM", description="게임 ID")
-    membership_tier: Optional[str] = Field("GENERAL", description="스토어 멤버십 등급")
+    membership_tier: Optional[str] = Field(
+        "GENERAL", description="스토어 멤버십 등급"
+    )
     has_prev_spend: Optional[bool] = Field(False, description="전월 실적 충족 여부")
     has_pre_applied: Optional[bool] = Field(False, description="사전 응모 완료 여부")
-    use_game_benefits: Optional[bool] = Field(True, description="게임 전용 혜택 사용 여부")
-
-    @field_validator("payment_methods")
-    @classmethod
-    def validate_payment_methods(cls, v: List[str]) -> List[str]:
-        if not v:
-            return []
-        sanitized = []
-        for method in v:
-            clean_method = method.strip().upper()
-            if clean_method in VALID_PAYMENT_METHODS:
-                sanitized.append(clean_method)
-        return sanitized
+    use_game_benefits: Optional[bool] = Field(
+        True, description="게임 전용 혜택 사용 여부"
+    )
 
 
 class GameRequest(BaseModel):
@@ -120,97 +145,217 @@ class ProfileUpdateRequest(BaseModel):
 
 
 # -----------------------------------------------------------------------------
-# API 엔드포인트
+# 5. API 엔드포인트
 # -----------------------------------------------------------------------------
+
+
+# [공통] 서버 연결 체크
 @app.get("/")
 def health_check():
-    return {"status": "ok", "message": "API Server connected with Cloud SQL PostgreSQL"}
+    return {
+        "status": "ok",
+        "message": "API Server connected with Cloud SQL & GCS Bucket",
+    }
 
 
-@app.get("/games/supported", summary="지원하는 TOP 50 게임 목록 조회 (FR-12)")
-def get_supported_games():
-    return {"status": "success", "data": SUPPORTED_GAMES}
+# [공통] 랭킹 조회 API
+@app.get("/ranks", summary="실시간 혜택 랭킹 조회")
+def get_game_ranks(category: str = "HOGAENG"):
+    default_list = [
+        {
+            "rank": 1,
+            "name": "쿠키런: 킹덤",
+            "benefitText": "스토어 15% 쿠폰 + 문화상품권 10% 우회 결제",
+            "rankChange": "SAME",
+            "rankChangeText": "-",
+            "badge": "매출 1위",
+        },
+        {
+            "rank": 2,
+            "name": "승리의 여신: 니케",
+            "benefitText": "T멤버십 10% 차감 할인 혜택",
+            "rankChange": "UP",
+            "rankChangeText": "▲2",
+            "badge": "인기",
+        },
+        {
+            "rank": 3,
+            "name": "메이플스토리M",
+            "benefitText": "원스 쿠폰 20% 즉시 적용",
+            "rankChange": "DOWN",
+            "rankChangeText": "▼1",
+            "badge": "상승",
+        },
+        {
+            "rank": 4,
+            "name": "오딘: 발할라 라이징",
+            "benefitText": "매일 첫 결제 10% 할인",
+            "rankChange": "SAME",
+            "rankChangeText": "-",
+            "badge": "유지",
+        },
+        {
+            "rank": 5,
+            "name": "기적의 검",
+            "benefitText": "원스 전용 포인트 적립",
+            "rankChange": "SAME",
+            "rankChangeText": "-",
+            "badge": "유지",
+        },
+    ]
+    return {"title": "실시간 순위 대시보드", "list": default_list}
 
 
-@app.post("/routes", summary="최적 결제 경로 연산 (Dual-Track 추천 연동)")
-def get_optimal_routes(request: RouteRequest):
-    # 지원 게임 여부 검증 (FR-12)
-    is_supported = request.game in SUPPORTED_GAMES
-    if not is_supported:
+# [공통] GCS 기반 지원 게임 목록 조회 및 검색
+@app.get("/games", summary="지원 가능 게임 목록 및 검색 (GCS CSV 연동)")
+def get_supported_games(search: Optional[str] = None):
+    try:
+        client = storage.Client(project="positive-tuner-504502-m5")
+        bucket = client.bucket(BUCKET_NAME)
+        blob = bucket.blob("2026-0813-games.csv")
+
+        if not blob.exists():
+            return {
+                "status": "error",
+                "message": "2026-0813-games.csv 파일이 없습니다.",
+                "data": [],
+            }
+
+        csv_data = blob.download_as_text(encoding="utf-8-sig")
+        df = pd.read_csv(StringIO(csv_data)).fillna("")
+        df.columns = df.columns.str.replace("\ufeff", "", regex=True).str.strip()
+
+        games_list = []
+        for idx, row in df.iterrows():
+            game_id = str(row.get("game_id") or f"GAME_{idx+1}").strip()
+            game_name = str(
+                row.get("game_name") or row.get("name") or ""
+            ).strip()
+            company = str(row.get("company") or "").strip()
+            genre_tags_raw = str(row.get("genre_tags") or "").strip()
+            description = str(row.get("description") or "").strip()
+            icon_url = str(row.get("icon_url") or "").strip()
+
+            if not game_name:
+                continue
+
+            tags = [t.strip() for t in genre_tags_raw.split(";") if t.strip()]
+
+            stores = []
+
+            def check_true(val):
+                return str(val).strip().upper() in ["TRUE", "1", "T", "Y"]
+
+            if check_true(row.get("is_google_play")):
+                stores.append("구글")
+            if check_true(row.get("is_one_store")):
+                stores.append("원스")
+            if check_true(row.get("is_galaxy_store")):
+                stores.append("갤스")
+            if check_true(row.get("is_app_store")):
+                stores.append("앱스토어")
+
+            if not stores:
+                stores = ["구글"]
+
+            games_list.append(
+                {
+                    "id": game_id,
+                    "name": game_name,
+                    "company": company if company else "인기 게임사",
+                    "genre_tags": tags if tags else ["인기"],
+                    "main_genre": tags[0] if tags else "기타",
+                    "description": description
+                    if description
+                    else f"{game_name} 실시간 최저가 연산 지원",
+                    "icon_url": icon_url,
+                    "stores": stores,
+                }
+            )
+
+        if search:
+            query = search.lower()
+            games_list = [
+                g
+                for g in games_list
+                if query in g["name"].lower() or query in g["company"].lower()
+            ]
+
         return {
-            "status": "warning",
-            "is_supported": False,
-            "message": f"'{request.game}'은(는) 아직 지원하지 않는 게임입니다. 미지원 게임 추가 요청을 등록해 주세요.",
-            "routes": []
+            "status": "ok",
+            "total_count": len(games_list),
+            "data": games_list,
         }
 
-    #try:
-    #   result = recommend_best_routes(
-    #        platform=request.platform,
-    #        amount=request.amount,
-    #        held_methods=request.payment_methods,
-    #        game=request.game,
-    #        is_first_purchase=request.is_first_pay,
-    #        top_n=10,
-    #        store_tier=request.membership_tier,
-    #        has_prev_spend=request.has_prev_spend,
-    #        has_pre_applied=request.has_pre_applied,
-    #        use_game_benefits=request.use_game_benefits,
-    #        force_refresh=False,  
-    #   )
-    #   return {
-    #       "status": "success",
-    #        "is_supported": True,
-    #        "data": result
-    #    }
-    #except Exception as e:
-    #    raise HTTPException(
-    #       status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-    #        detail=f"계산 엔진 처리 중 오류가 발생했습니다: {str(e)}",
-    #   )
-
-    # ⚠️ 계산 엔진 연동 전 임시 더미 응답 (추후 위 주석 해제 시 아래 return은 삭제)
-    return {
-        "status": "success",
-        "is_supported": True,
-        "message": "[테스트용] 계산 엔진 준비 전 임시 더미 응답입니다.",
-        "data": [
-            {
-                "route_id": "dummy_route_1",
-                "store": "ONE_STORE",
-                "final_amount": 8000,
-                "saved_amount": 2000
-            }
-        ]
-    } 
-
-@app.post("/games/request", summary="미지원 게임 추가 요청 등록 (FR-12)")
-def request_game_addition(req: GameRequest, db: Session = Depends(get_db)):
-    log_entry = GameRequestLogModel(query=req.query)
-    db.add(log_entry)
-    db.commit()
-    return {"status": "success", "message": f"'{req.query}' 게임 추가 요청이 적재되었습니다."}
+    except Exception as e:
+        print(f"❌ GCS 데이터 로드 오류: {e}")
+        return {"status": "error", "message": str(e), "data": []}
 
 
-@app.post("/events/outbound-click", summary="추천 결과 결제 링크 클릭 트래킹 (FR-13)")
-def track_outbound_click(
-    req: OutboundClickRequest,
-    current_user: Optional[UserModel] = Depends(verify_google_token_optional),
-    db: Session = Depends(get_db)
+# [핵심] 최저가 계산 추천 API (알고리즘 연동)
+@app.post("/routes", summary="최적 결제 경로 계산 (엔진 직접 연동)")
+def get_optimal_routes(request: RouteRequest):
+    try:
+        held_methods = list(request.payment_methods)
+        result = recommend_best_routes(
+            platform=request.platform,
+            amount=request.amount,
+            held_methods=held_methods,
+            game=request.game,
+            is_first_purchase=request.is_first_pay,
+            top_n=10,
+            store_tier=request.membership_tier,
+            has_prev_spend=request.has_prev_spend,
+            has_pre_applied=request.has_pre_applied,
+            use_game_benefits=request.use_game_benefits,
+            force_refresh=True,
+        )
+        return {"status": "success", "is_supported": True, "data": result}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"계산 엔진 처리 중 오류가 발생했습니다: {str(e)}",
+        )
+
+
+# [DB 연동] 미지원 게임 신청 적재 API
+#@app.post("/games/request", summary="미지원 게임 추가 요청 등록")
+#def request_game_addition(req: GameRequest, db: Session = Depends(get_db)):
+#    log_entry = GameRequestLogModel(query=req.query)
+#    db.add(log_entry)
+#    db.commit()
+#   return {
+#        "status": "success",
+#        "message": f"'{req.query}' 게임 추가 요청이 DB에 적재되었습니다.",
+#    }
+
+
+# [DB 연동] 결제 링크 클릭 로그 적재 API
+#@app.post("/events/outbound-click", summary="추천 결과 결제 링크 클릭 트래킹")
+#def track_outbound_click(
+#    req: OutboundClickRequest,
+#    current_user: Optional[UserModel] = Depends(verify_google_token_optional),
+#   db: Session = Depends(get_db),
+#):
+#    user_id_val = current_user.user_id if current_user else "ANONYMOUS"
+#    log_entry = OutboundClickLogModel(
+#        user_id=user_id_val,
+#        selected_route_id=req.route_id,
+#        saved_amount=req.saved_amount,
+#    )
+#    db.add(log_entry)
+#    db.commit()
+#    return {
+#        "status": "success",
+#        "message": "클릭 트래킹 데이터가 DB에 적재되었습니다.",
+#    }
+
+
+# [회원] 구글 소셜 로그인 기반 프로필 조회
+@app.get("/user/profile", summary="[회원] 내 프로필 조회")
+def get_user_profile(
+    current_user: UserModel = Depends(verify_google_token_and_get_user),
 ):
-    user_id_val = current_user.user_id if current_user else "ANONYMOUS"
-    log_entry = OutboundClickLogModel(
-        user_id=user_id_val,
-        selected_route_id=req.route_id,
-        saved_amount=req.saved_amount
-    )
-    db.add(log_entry)
-    db.commit()
-    return {"status": "success", "message": "클릭 트래킹 데이터가 적재되었습니다."}
-
-
-@app.get("/user/profile", summary="[회원] 내 프로필 조회 (FR-10)")
-def get_user_profile(current_user: UserModel = Depends(verify_google_token_and_get_user)):
     return {
         "status": "success",
         "data": {
@@ -228,16 +373,17 @@ def get_user_profile(current_user: UserModel = Depends(verify_google_token_and_g
             "held_vouchers": parse_db_list(current_user.held_vouchers),
             "preferred_store": current_user.preferred_store,
             "galaxy_store_tier": current_user.galaxy_store_tier,
-            "favorite_games": parse_db_list(current_user.favorite_games)
-        }
+            "favorite_games": parse_db_list(current_user.favorite_games),
+        },
     }
 
 
-@app.post("/user/profile", summary="[회원] 보유 혜택 자산 프로필 업데이트 (FR-10)")
+# [회원] 내 프로필/카드/혜택 자산 업데이트
+@app.post("/user/profile", summary="[회원] 보유 혜택 자산 프로필 업데이트")
 def update_user_profile(
     req: ProfileUpdateRequest,
     current_user: UserModel = Depends(verify_google_token_and_get_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     if req.nickname:
         current_user.nickname = req.nickname
@@ -255,14 +401,21 @@ def update_user_profile(
 
     db.commit()
     db.refresh(current_user)
-    return {"status": "success", "message": "유저 혜택 자산 프로필이 성공적으로 업데이트되었습니다."}
+    return {
+        "status": "success",
+        "message": "유저 혜택 자산 프로필이 Cloud SQL DB에 성공적으로 업데이트되었습니다.",
+    }
 
 
-@app.delete("/user/withdraw", summary="[회원] 회원 탈퇴 및 DB 영구 파기 (AC-10.3)")
+# [회원] 탈퇴 및 DB 삭제
+@app.delete("/user/withdraw", summary="[회원] 회원 탈퇴 및 DB 영구 파기")
 def withdraw_user(
     current_user: UserModel = Depends(verify_google_token_and_get_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     db.delete(current_user)
     db.commit()
-    return {"status": "success", "message": "회원 탈퇴가 완료되어 계정 정보가 DB에서 파기되었습니다."}
+    return {
+        "status": "success",
+        "message": "회원 탈퇴가 완료되어 계정 정보가 DB에서 파기되었습니다.",
+    }
