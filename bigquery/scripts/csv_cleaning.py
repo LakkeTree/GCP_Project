@@ -48,8 +48,19 @@ def to_float(value: str, row_ctx: str) -> float:
 
 
 def to_date_or_none(value: str):
-    """빈 값이면 None, 아니면 날짜 문자열(YYYY-MM-DD)을 그대로 반환한다."""
-    return None if is_null(value) else value.strip()
+    """빈 값이면 None, 아니면 날짜 부분(YYYY-MM-DD)만 반환한다.
+
+    Gemini가 이벤트 원문의 시각까지 반영해서 '2026-08-12T11:00:00'처럼 시간을
+    포함한 값을 줄 때가 있는데(예: galaxy_store.py의 시한부 이벤트), BigQuery의
+    DATE 컬럼은 시간을 허용하지 않아 그대로 넣으면 적재가 통째로 실패한다.
+    정확한 시각은 condition_raw_text에 원문 그대로 남아 있으므로, 여기서는
+    날짜 부분만 잘라내도 정보 손실이 아니다."""
+    if is_null(value):
+        return None
+    v = value.strip()
+    if len(v) > 10 and v[10] in ("T", " "):
+        return v[:10]
+    return v
 
 
 def to_str_or_none(value: str):
