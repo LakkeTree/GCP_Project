@@ -28,7 +28,7 @@ from models import GameRequestLogModel, OutboundClickLogModel, UserModel
 # -----------------------------------------------------------------------------
 # 2. 초기 설정 및 DB 테이블 생성
 # -----------------------------------------------------------------------------
-# Cloud SQL DB 테이블 자동 생성
+# Cloud SQL DB 테이블 자동 생성 (users, game_request_logs, outbound_click_logs)
 Base.metadata.create_all(bind=engine)
 
 # GCS 버킷 이름 및 결제 수단 검증 목록
@@ -39,9 +39,15 @@ VALID_PAYMENT_METHODS = {
     "SAMSUNG_CARD",
     "KAKAO_PAY",
     "NAVER_PAY",
+    "TOSS_PAY",
+    "SAMSUNG_PAY",
+    "PAYCO",
     "SKT",
     "KT",
     "LGU",
+    "GOOGLE_PLAY_GIFTCARD",
+    "CULTURELAND_CASH",
+    "BOOKNLIFE_VOUCHER",
 }
 
 app = FastAPI(
@@ -50,17 +56,10 @@ app = FastAPI(
     version="3.0.0",
 )
 
-# CORS 설정 (허용 도메인 지정 및 전체 허용 백업)
-raw_origins = os.getenv(
-    "ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"
-)
-origins = [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
-if "*" not in origins:
-    origins.append("*")
-
+# CORS 설정 (프론트엔드 통신 허용)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 개발 프로토타입 편의를 위해 전체 허용
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -71,7 +70,7 @@ app.add_middleware(
 # 3. 데이터 변환 헬퍼 함수 (DB ↔ 프론트엔드)
 # -----------------------------------------------------------------------------
 def parse_db_list(val: Optional[str]) -> List[str]:
-    """DB에 저장된 문자열(세미콜론 구분 또는 JSON)을 파이썬 리스트로 변환"""
+    """DB에 저장된 세미콜론(;) 구분자 문자열 또는 JSON을 리스트로 변환"""
     if not val or val == "NONE":
         return []
     val_str = str(val).strip()
@@ -85,7 +84,7 @@ def parse_db_list(val: Optional[str]) -> List[str]:
 
 
 def to_db_string(val_list: Optional[List[str]]) -> str:
-    """파이썬 리스트를 DB 저장용 세미콜론(;) 문자열로 변환"""
+    """리스트를 DB 저장용 세미콜론(;) 문자열로 변환"""
     if not val_list:
         return "NONE"
     clean_list = [
@@ -97,12 +96,12 @@ def to_db_string(val_list: Optional[List[str]]) -> str:
 
 
 # -----------------------------------------------------------------------------
-# 4. Pydantic 요청/응답 양식 (DTO)
+# 4. Pydantic DTO (요청/응답 양식 및 검증)
 # -----------------------------------------------------------------------------
 class RouteRequest(BaseModel):
     platform: str = Field(
         "ALL",
-        description="스토어 플랫폼 (ALL, GOOGLE_PLAY, ONE_STORE, GALAXY_STORE 등)",
+        description="스토어 플랫폼 (ALL, GOOGLE_PLAY, ONE_STORE, GALAXY_STORE, APP_STORE 등)",
     )
     amount: int = Field(..., gt=0, le=10_000_000, description="결제 예정 금액")
     is_first_pay: bool = Field(False, description="첫 결제 여부")
@@ -118,6 +117,21 @@ class RouteRequest(BaseModel):
     use_game_benefits: Optional[bool] = Field(
         True, description="게임 전용 혜택 사용 여부"
     )
+
+    @field_validator("platform")
+    @classmethod
+    def clean_platform(cls, v: str) -> str:
+        return v.strip().upper() if v else "ALL"
+
+    @field_validator("payment_methods")
+    @classmethod
+    def clean_payment_methods(cls, v: List[str]) -> List[str]:
+        cleaned = []
+        for m in v:
+            m_upper = str(m).strip().upper()
+            if m_upper and m_upper != "NONE":
+                cleaned.append(m_upper)
+        return cleaned
 
 
 class GameRequest(BaseModel):
@@ -148,8 +162,7 @@ class ProfileUpdateRequest(BaseModel):
 # 5. API 엔드포인트
 # -----------------------------------------------------------------------------
 
-
-# [공통] 서버 연결 체크
+# [공통] 서버 상태 체크
 @app.get("/")
 def health_check():
     return {
@@ -158,7 +171,7 @@ def health_check():
     }
 
 
-# [공통] 랭킹 조회 API
+# [공통] 실시간 랭킹 조회 API
 @app.get("/ranks", summary="실시간 혜택 랭킹 조회")
 def get_game_ranks(category: str = "HOGAENG"):
     default_list = [
@@ -292,7 +305,7 @@ def get_supported_games(search: Optional[str] = None):
         return {"status": "error", "message": str(e), "data": []}
 
 
-# [핵심] 최저가 계산 추천 API (알고리즘 연동)
+# [핵심] 최저가 계산 추천 API (알고리즘 연동 - 프론트엔드 직접 반환 복원)
 @app.post("/routes", summary="최적 결제 경로 계산 (엔진 직접 연동)")
 def get_optimal_routes(request: RouteRequest):
     try:
@@ -310,7 +323,8 @@ def get_optimal_routes(request: RouteRequest):
             use_game_benefits=request.use_game_benefits,
             force_refresh=True,
         )
-        return {"status": "success", "is_supported": True, "data": result}
+        # 💡 프론트엔드 호환성을 위해 result 객체를 직접 반환합니다.
+        return result
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -318,37 +332,37 @@ def get_optimal_routes(request: RouteRequest):
         )
 
 
-# [DB 연동] 미지원 게임 신청 적재 API
-#@app.post("/games/request", summary="미지원 게임 추가 요청 등록")
-#def request_game_addition(req: GameRequest, db: Session = Depends(get_db)):
-#    log_entry = GameRequestLogModel(query=req.query)
-#    db.add(log_entry)
-#    db.commit()
-#   return {
-#        "status": "success",
-#        "message": f"'{req.query}' 게임 추가 요청이 DB에 적재되었습니다.",
-#    }
+# [DB 연동] 미지원 게임 신청 적재 API (복원)
+@app.post("/games/request", summary="미지원 게임 추가 요청 등록")
+def request_game_addition(req: GameRequest, db: Session = Depends(get_db)):
+    log_entry = GameRequestLogModel(query=req.query)
+    db.add(log_entry)
+    db.commit()
+    return {
+        "status": "success",
+        "message": f"'{req.query}' 게임 추가 요청이 Cloud SQL DB에 적재되었습니다.",
+    }
 
 
-# [DB 연동] 결제 링크 클릭 로그 적재 API
-#@app.post("/events/outbound-click", summary="추천 결과 결제 링크 클릭 트래킹")
-#def track_outbound_click(
-#    req: OutboundClickRequest,
-#    current_user: Optional[UserModel] = Depends(verify_google_token_optional),
-#   db: Session = Depends(get_db),
-#):
-#    user_id_val = current_user.user_id if current_user else "ANONYMOUS"
-#    log_entry = OutboundClickLogModel(
-#        user_id=user_id_val,
-#        selected_route_id=req.route_id,
-#        saved_amount=req.saved_amount,
-#    )
-#    db.add(log_entry)
-#    db.commit()
-#    return {
-#        "status": "success",
-#        "message": "클릭 트래킹 데이터가 DB에 적재되었습니다.",
-#    }
+# [DB 연동] 결제 링크 클릭 로그 적재 API (복원)
+@app.post("/events/outbound-click", summary="추천 결과 결제 링크 클릭 트래킹")
+def track_outbound_click(
+    req: OutboundClickRequest,
+    current_user: Optional[UserModel] = Depends(verify_google_token_optional),
+    db: Session = Depends(get_db),
+):
+    user_id_val = current_user.user_id if current_user else "ANONYMOUS"
+    log_entry = OutboundClickLogModel(
+        user_id=user_id_val,
+        selected_route_id=req.route_id,
+        saved_amount=req.saved_amount,
+    )
+    db.add(log_entry)
+    db.commit()
+    return {
+        "status": "success",
+        "message": "클릭 트래킹 데이터가 Cloud SQL DB에 적재되었습니다.",
+    }
 
 
 # [회원] 구글 소셜 로그인 기반 프로필 조회
@@ -364,7 +378,7 @@ def get_user_profile(
             "nickname": current_user.nickname,
             "provider": current_user.provider,
             "telecom": current_user.telecom,
-            "use_t_membership": current_user.use_t_membership,
+            "use_t_membership": getattr(current_user, "use_t_membership", False),
             "held_epay": parse_db_list(current_user.held_epay),
             "has_naver_plus": current_user.has_naver_plus,
             "has_toss_prime": current_user.has_toss_prime,

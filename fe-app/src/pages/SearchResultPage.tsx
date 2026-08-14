@@ -16,8 +16,6 @@ import {
   BACKEND_API_URL,
 } from '../constants/searchOptions';
 
-// 💡 영문명 한글화 및 긴 이벤트명 자동 요약 단축 함수
-// 💡 영문명 한글화 및 긴 이벤트명 자동 요약 단축 함수
 const formatMethodName = (text: string) => {
   if (!text) return '';
   return text
@@ -41,36 +39,35 @@ const formatMethodName = (text: string) => {
     .replace(/NAVER_PAY/g, '네이버페이');
 };
 
-// 💡 [상품권 핀번호 입력 절차 포함] 동적 상세 경로 안내 생성 함수
 const getUsageGuide = (pathText: string) => {
   const text = pathText.toUpperCase();
 
   if (text.includes('CU')) {
-    return '💡 결제 경로 가이드: CU 편의점/Pocket CU 앱에서 구글 기프트카드 구매 ➔ 영수증/카드 핀번호(코드) 입력 ➔ 구글 스토어 충전 후 결제';
+    return '결제 경로 가이드: CU 편의점/Pocket CU 앱에서 구글 기프트카드 구매 ➔ 영수증/카드 핀번호(코드) 입력 ➔ 구글 스토어 충전 후 결제';
   }
   if (text.includes('ZEROPIN') || text.includes('제로핀')) {
-    return '💡 결제 경로 가이드: 제로핀 공식몰에서 기프트코드 할인 구매 ➔ 발급된 핀번호 입력 및 스토어 충전 ➔ 인앱 결제 진행';
+    return '결제 경로 가이드: 제로핀 공식몰에서 기프트코드 할인 구매 ➔ 발급된 핀번호 입력 및 스토어 충전 ➔ 인앱 결제 진행';
   }
   if (text.includes('CULTURELAND') || text.includes('컬쳐랜드') || text.includes('북앤라이프')) {
-    return '💡 결제 경로 가이드: 문화상품권 할인 구매 ➔ 해당 컬쳐캐시/상품권 핀번호 입력 충전 ➔ 스토어 우회 결제 적용';
+    return '결제 경로 가이드: 문화상품권 할인 구매 ➔ 해당 컬쳐캐시/상품권 핀번호 입력 충전 ➔ 스토어 우회 결제 적용';
   }
   if (text.includes('NAVER') && (text.includes('STORE') || text.includes('스토어'))) {
-    return '💡 결제 경로 가이드: 네이버 스마트스토어 공식 판매처 구매 ➔ 문자/알림톡 기프트코드 핀번호 입력 ➔ 스토어 등록 후 결제';
+    return '결제 경로 가이드: 네이버 스마트스토어 공식 판매처 구매 ➔ 문자/알림톡 기프트코드 핀번호 입력 ➔ 스토어 등록 후 결제';
   }
   if (text.includes('삼성페이') || text.includes('SAMSUNG_PAY')) {
-    return '💡 결제 경로 가이드: 스토어 쿠폰함에서 할인 쿠폰 받기 ➔ 게임 결제창 접속 ➔ 삼성페이 선택하여 즉시 결제';
+    return '결제 경로 가이드: 스토어 쿠폰함에서 할인 쿠폰 받기 ➔ 게임 결제창 접속 ➔ 삼성페이 선택하여 즉시 결제';
   }
   if (text.includes('갤럭시') || text.includes('GALAXY')) {
-    return '💡 결제 경로 가이드: 갤럭시 스토어 [쿠폰함] 쿠폰 다운로드 ➔ 게임 결제창에서 쿠폰 적용 후 선택 결제 수단으로 결제';
+    return '결제 경로 가이드: 갤럭시 스토어 [쿠폰함] 쿠폰 다운로드 ➔ 게임 결제창에서 쿠폰 적용 후 선택 결제 수단으로 결제';
   }
   if (text.includes('원스토어') || text.includes('ONE_STORE')) {
-    return '💡 결제 경로 가이드: 원스토어 [혜택/쿠폰함] 쿠폰 및 T멤버십 할인 선택 ➔ 결제 수단 최종 확인 후 결제';
+    return '결제 경로 가이드: 원스토어 [혜택/쿠폰함] 쿠폰 및 T멤버십 할인 선택 ➔ 결제 수단 최종 확인 후 결제';
   }
   if (text.includes('구글') || text.includes('GOOGLE')) {
-    return '💡 결제 경로 가이드: 구글 플레이 [혜택] 탭 쿠폰 적용 확인 ➔ 게임 인앱 결제창에서 보유 수단으로 진행';
+    return '결제 경로 가이드: 구글 플레이 [혜택] 탭 쿠폰 적용 확인 ➔ 게임 인앱 결제창에서 보유 수단으로 진행';
   }
   
-  return '💡 결제 경로 가이드: 해당 스토어 쿠폰함에서 이벤트 쿠폰 적용 ➔ 지정된 결제 수단 선택 후 최종 결제 진행';
+  return '결제 경로 가이드: 해당 스토어 쿠폰함에서 이벤트 쿠폰 적용 ➔ 지정된 결제 수단 선택 후 최종 결제 진행';
 };
 
 export interface RouteStep {
@@ -185,13 +182,55 @@ export default function SearchResultPage() {
   const initialHasPreApplied = searchParams.get('hasPreApplied') === 'true';
   const initialIsFirstPayment = searchParams.get('isFirstPayment') !== 'false';
 
-  // 필터 및 입력 상태
+  // 💡 필터 및 입력 상태 (gameTitle 선언)
   const [gameTitle, setGameTitle] = useState(initialGame);
   const [payAmount, setPayAmount] = useState<number>(initialAmount);
   const [osType, setOsType] = useState<OsType>(initialOs);
   const [androidStores, setAndroidStores] = useState<string[]>(initialStores);
 
-  // 💡 상태 변경 함수(setGooglePlayTier, setGalaxyStoreTier) 추가
+  // 💡 프로필 연동 즐겨찾기 상태 (gameTitle 선언 이후 위치하여 타입 에러 완벽 해결!)
+  const [favoriteGames, setFavoriteGames] = useState<string[]>([]);
+
+  useEffect(() => {
+    const savedFilter = localStorage.getItem('user_filter_settings');
+    if (savedFilter) {
+      try {
+        const parsed = JSON.parse(savedFilter);
+        if (parsed.favoriteGames) setFavoriteGames(parsed.favoriteGames);
+      } catch (e) {}
+    }
+  }, []);
+
+  const isFavorite = favoriteGames.includes(gameTitle);
+
+  const handleToggleFavorite = () => {
+    let updated: string[];
+    if (isFavorite) {
+      updated = favoriteGames.filter((g) => g !== gameTitle);
+    } else {
+      updated = [...favoriteGames, gameTitle];
+    }
+
+    setFavoriteGames(updated);
+
+    const savedFilter = localStorage.getItem('user_filter_settings');
+    const parsed = savedFilter ? JSON.parse(savedFilter) : {};
+    parsed.favoriteGames = updated;
+    localStorage.setItem('user_filter_settings', JSON.stringify(parsed));
+
+    const token = localStorage.getItem('google_token');
+    if (token) {
+      fetch('http://127.0.0.1:8000/user/profile', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ favorite_games: updated }),
+      }).catch((err) => console.error('즐겨찾기 저장 에러:', err));
+    }
+  };
+
   const [googlePlayTier, setGooglePlayTier] = useState(initialGoogleTier);
   const [galaxyStoreTier, setGalaxyStoreTier] = useState(initialGalaxyTier);
   const [isPcVersion] = useState(initialIsPcVersion);
@@ -281,18 +320,18 @@ export default function SearchResultPage() {
         if (platform === 'GOOGLE_PLAY') tier = googlePlayTier;
         if (platform === 'GALAXY_STORE') tier = galaxyStoreTier;
 
-      const payload = {
-        platform: platform,
-        amount: amountNum,
-        is_first_pay: isFirstPayment,
-        payment_methods: selectedProviders,
-        game: getGameCode(gameTitle), // 👈 121개 게임 동적 변환 함수 적용
-        membership_tier: tier,
-        has_subscription: useSpecialOptions,
-        has_prev_spend: useSpecialOptions ? hasPrevSpend : false,
-        has_pre_applied: hasPreApplied,
-        use_game_benefits: useGameBenefits,
-      };
+        const payload = {
+          platform: platform,
+          amount: amountNum,
+          is_first_pay: isFirstPayment,
+          payment_methods: selectedProviders,
+          game: getGameCode(gameTitle),
+          membership_tier: tier,
+          has_subscription: useSpecialOptions,
+          has_prev_spend: useSpecialOptions ? hasPrevSpend : false,
+          has_pre_applied: hasPreApplied,
+          use_game_benefits: useGameBenefits,
+        };
 
         return fetch(BACKEND_API_URL, {
           method: 'POST',
@@ -309,9 +348,9 @@ export default function SearchResultPage() {
       combinedRoutes.sort((a, b) => a.net_cost - b.net_cost);
 
       const bonusBadges: string[] = [];
-      if (useGameBenefits) bonusBadges.push('🎮 게임 전용 혜택');
-      if (hasPreApplied) bonusBadges.push('📝 사전 응모 완료');
-      if (isFirstPayment) bonusBadges.push('🎉 첫 결제 대상');
+      if (useGameBenefits) bonusBadges.push('게임 전용 혜택');
+      if (hasPreApplied) bonusBadges.push('사전 응모 완료');
+      if (isFirstPayment) bonusBadges.push('첫 결제 대상');
 
       const converted: OptimizationResult[] = combinedRoutes.map((route, idx) => {
         const routeProviders: string[] = [];
@@ -403,11 +442,11 @@ export default function SearchResultPage() {
           displayPlatform = androidStores[0];
         }
 
-        let storeIcon = '🛍️';
-        if (displayPlatform.includes('구글')) storeIcon = '🤖';
-        if (displayPlatform.includes('갤럭시')) storeIcon = '🌌';
-        if (displayPlatform.includes('원스토어')) storeIcon = '🛍️';
-        if (osType === 'IOS' || displayPlatform.includes('앱스토어')) storeIcon = '🍎';
+        let storeIcon = 'GOOGLE';
+        if (displayPlatform.includes('구글')) storeIcon = 'GOOGLE';
+        if (displayPlatform.includes('갤럭시')) storeIcon = 'GALAXY';
+        if (displayPlatform.includes('원스토어')) storeIcon = 'ONE';
+        if (osType === 'IOS' || displayPlatform.includes('앱스토어')) storeIcon = 'APPLE';
 
         const routeTitle = routeProviders.length > 0
           ? `[${routeProviders.slice(0, 2).join(' + ')}] 최적 조합`
@@ -459,12 +498,9 @@ export default function SearchResultPage() {
     hasPreApplied, useGameBenefits, gameTitle
   ]);
 
-  // 💡 DB에서 전체 게임 목록(아이콘, 회사명) 수집 상태
-  // 💡 DB에서 스토어 지원 목록(stores) 포함 수집
   const [allGames, setAllGames] = useState<{ id: string; name: string; company: string; icon_url: string; stores?: string[] }[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
 
-  // 백엔드 DB에서 실제 게임 목록 & 아이콘 수집
   useEffect(() => {
     fetch('http://127.0.0.1:8000/games')
       .then((res) => res.json())
@@ -476,10 +512,8 @@ export default function SearchResultPage() {
       .catch((err) => console.error('게임 DB 수집 실패:', err));
   }, []);
 
-// 현재 입력된 게임명에 해당하는 DB 객체 (이미지 URL 추출용)
   const currentGameObj = allGames.find((g) => g.name === gameTitle);
 
-  // 💡 DB 스토어명과 프론트엔드 스토어 옵션 매칭 검사 함수
   const isStoreSupported = (storeName: string, supportedStores?: string[]) => {
     if (!supportedStores || supportedStores.length === 0) return true;
     return supportedStores.some((s) => {
@@ -493,16 +527,12 @@ export default function SearchResultPage() {
     });
   };
 
-  // 💡 게임 변경 시 미지원 스토어 자동 선택 해제
   useEffect(() => {
     if (currentGameObj?.stores && currentGameObj.stores.length > 0) {
       setAndroidStores((prev) => prev.filter((st) => isStoreSupported(st, currentGameObj.stores)));
     }
   }, [gameTitle, currentGameObj]);
 
-  // 실시간 입력어 기반 자동완성 필터링
-
-  // 실시간 입력어 기반 자동완성 필터링
   const suggestedGames = gameTitle.trim()
     ? allGames.filter(
         (g) =>
@@ -511,10 +541,8 @@ export default function SearchResultPage() {
       )
     : [];
 
-  // 💡 [핵심] 필터 변경 시 자동 연산 방지 ➔ 최초 페이지 진입 시에만 1회 연산
   useEffect(() => {
     fetchBackendData();
-    // eslint-disable-next-deps-no-warning
   }, []);
 
   const resultsList = useMemo(() => {
@@ -580,8 +608,6 @@ export default function SearchResultPage() {
   };
 
   const isOneStoreSelected = osType === 'ANDROID' && androidStores.includes('원스토어');
-  
-  // 💡 구글 / 갤럭시 스토어 선택 여부 변수 추가
   const isGoogleSelected = osType === 'ANDROID' && androidStores.includes('구글 플레이 스토어');
   const isGalaxySelected = osType === 'ANDROID' && androidStores.includes('갤럭시 스토어');
 
@@ -589,20 +615,30 @@ export default function SearchResultPage() {
     <div className="max-w-[1400px] mx-auto px-4 py-6 space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
-        {/* [좌측 8열] 메인 검색 타이틀 & 연산 카드 리스트 */}
         <main className="lg:col-span-8 space-y-5">
           
           {/* 상단 타이틀 배너 */}
           <div className="bg-slate-100 rounded-xl border border-slate-200 p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="space-y-3">
+              {/* 💡 [실시간 최저가 연산 완료] 뱃지 위치에 [★ 즐겨찾기] 별표 버튼 배치 */}
               <div>
-                <span className="text-[11px] font-black text-cyan-800 bg-cyan-100 px-2.5 py-1 rounded border border-cyan-200">
-                  실시간 최저가 연산 완료
-                </span>
+                <button
+                  type="button"
+                  onClick={handleToggleFavorite}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs ${
+                    isFavorite
+                      ? 'bg-amber-400 text-slate-900 hover:bg-amber-500 border border-amber-500'
+                      : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-300'
+                  }`}
+                >
+                  <svg className={`w-4 h-4 ${isFavorite ? 'fill-slate-900 text-slate-900' : 'fill-none text-slate-400'}`} viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                  </svg>
+                  <span>{isFavorite ? '즐겨찾기 해제' : '즐겨찾기 등록'}</span>
+                </button>
               </div>
 
               <div className="flex items-center space-x-3 flex-wrap gap-y-2">
-                {/* 🖼️ 보라색 이모티콘 대신 DB에서 불러온 실제 고화질 게임 아이콘 표출 */}
                 {currentGameObj?.icon_url ? (
                   <img
                     src={currentGameObj.icon_url}
@@ -611,17 +647,16 @@ export default function SearchResultPage() {
                     className="w-10 h-10 md:w-12 md:h-12 rounded-xl object-cover border border-slate-200 shrink-0 shadow-2xs"
                     onError={(e) => {
                       e.currentTarget.onerror = null;
-                      e.currentTarget.src = 'https://via.placeholder.com/48?text=🎮';
+                      e.currentTarget.src = 'https://via.placeholder.com/48?text=GAME';
                     }}
                   />
                 ) : (
-                  <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-slate-200 flex items-center justify-center text-xl shrink-0 border border-slate-300">
-                    🎮
+                  <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-500 shrink-0 border border-slate-300">
+                    GAME
                   </div>
                 )}
 
                 <div className="flex items-center flex-wrap gap-1.5 relative">
-                  {/* 검색창 & 자동완성 드롭다운 */}
                   <div className="relative inline-block">
                     <input
                       type="text"
@@ -637,7 +672,6 @@ export default function SearchResultPage() {
                       placeholder="게임명 입력"
                     />
 
-                    {/* 🔍 실시간 게임 추천 자동완성 목록 */}
                     {showDropdown && suggestedGames.length > 0 && (
                       <ul className="absolute left-0 top-full mt-1.5 z-50 w-72 bg-white border border-slate-200 rounded-xl shadow-xl max-h-52 overflow-y-auto divide-y divide-slate-100">
                         {suggestedGames.map((game) => (
@@ -655,14 +689,10 @@ export default function SearchResultPage() {
                                 alt={game.name}
                                 referrerPolicy="no-referrer"
                                 className="w-7 h-7 rounded-lg object-cover border border-slate-200 shrink-0"
-                                onError={(e) => {
-                                  e.currentTarget.onerror = null;
-                                  e.currentTarget.src = 'https://via.placeholder.com/28?text=🎮';
-                                }}
                               />
                             ) : (
-                              <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-xs shrink-0">
-                                🎮
+                              <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-400 shrink-0">
+                                GAME
                               </div>
                             )}
                             <div className="min-w-0 flex-1 text-left">
@@ -689,7 +719,6 @@ export default function SearchResultPage() {
 
                 <div className="h-3 w-[1px] bg-slate-300 hidden sm:block" />
 
-                {/* 🎯 DB 데이터를 기반으로 지원 스토어 동적 태그 표출 */}
                 <div className="flex items-center space-x-1.5">
                   <span className="text-slate-400 font-bold text-[11px]">지원 스토어:</span>
                   <div className="flex flex-wrap gap-1">
@@ -712,13 +741,14 @@ export default function SearchResultPage() {
                 onClick={(e) => handleReSearch(e)}
                 className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs rounded-xl shadow-sm transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap"
               >
-                <span>🔄</span>
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
                 <span>다시 검색 (재연산)</span>
               </button>
             </div>
           </div>
 
-          {/* 정렬 탭 바 & 환산 기준 모달 / 스토어별 비교 버튼 */}
           <div className="flex items-center justify-between border-b border-slate-200 pb-2">
             <div className="flex items-center space-x-3">
               <span className="text-xs font-bold text-slate-500">
@@ -734,9 +764,8 @@ export default function SearchResultPage() {
               <button
                 type="button"
                 onClick={() => setIsCompareModalOpen(true)}
-                className="text-xs font-extrabold text-cyan-700 bg-cyan-50 hover:bg-cyan-100 px-2 py-0.5 rounded border border-cyan-300 transition-all cursor-pointer flex items-center gap-1 shadow-2xs"
+                className="text-xs font-extrabold text-cyan-700 bg-cyan-50 hover:bg-cyan-100 px-2.5 py-1 rounded border border-cyan-300 transition-all cursor-pointer flex items-center gap-1 shadow-2xs"
               >
-                <span>📊</span>
                 <span>스토어별 최저가 비교</span>
               </button>
             </div>
@@ -765,25 +794,20 @@ export default function SearchResultPage() {
             </div>
           </div>
 
-          {/* 💡 검색 결과 영역 전용 블러 오버레이 & 큰 동그라미 회전 로더 */}
           {loading && (
             <div className="relative min-h-[420px] w-full rounded-2xl border border-slate-200 bg-white/60 overflow-hidden shadow-sm flex flex-col items-center justify-center p-8 select-none">
-              {/* 뒷배경 서서히 블러 처리되는 스켈레톤 베이스 */}
               <div className="absolute inset-0 p-4 space-y-3 filter blur-md opacity-40 pointer-events-none">
                 {[1, 2, 3].map((idx) => (
                   <div key={idx} className="h-28 bg-slate-200 rounded-xl" />
                 ))}
               </div>
 
-              {/* 🎯 결과 영역 중앙 오버레이 & 대형 회전 원 로더 */}
               <div className="relative z-10 flex flex-col items-center justify-center space-y-4 text-center">
-                {/* 1. 회전하는 큰 동그라미 원 (Circular Spinner) */}
                 <div className="relative flex items-center justify-center">
                   <div className="w-16 h-16 border-4 border-slate-200 border-t-cyan-500 rounded-full animate-spin shadow-md" />
                   <div className="absolute w-8 h-8 border-4 border-slate-100 border-b-cyan-300 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.8s' }} />
                 </div>
 
-                {/* 2. 연산 실행 중 안내 문구 */}
                 <div className="space-y-1">
                   <h3 className="text-xl font-black text-slate-900 tracking-wider animate-pulse">
                     최저가 연산 실행 중...
@@ -796,28 +820,28 @@ export default function SearchResultPage() {
             </div>
           )}
 
-          {/* 에러 상태 */}
           {!loading && error && (
             <div className="p-8 bg-rose-50 rounded-xl border border-rose-200 text-center space-y-2">
               <p className="text-xs font-bold text-rose-700">{error}</p>
-              <p className="text-[11px] text-slate-500">백엔드 서버(`main.py`)가 8000번 포트에서 실행 중인지 확인해주세요.</p>
+              <p className="text-[11px] text-slate-500">백엔드 서버가 8000번 포트에서 실행 중인지 확인해주세요.</p>
             </div>
           )}
 
-          {/* 결과 카드 리스트 */}
           {!loading && !error && (
             <div className="space-y-3">
               {resultsList.length === 0 ? (
                 <div className="p-8 md:p-12 bg-white rounded-2xl border-2 border-dashed border-slate-200 text-center space-y-4 shadow-2xs">
-                  <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center text-3xl mx-auto border border-slate-200">
-                    🔍
+                  <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 mx-auto border border-slate-200">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
                   </div>
                   <div className="space-y-1.5 max-w-sm mx-auto">
                     <h4 className="text-base font-black text-slate-800">
                       조건에 맞는 최저가 경로가 없습니다
                     </h4>
                     <p className="text-xs text-slate-500 leading-relaxed font-medium">
-                      보유하신 결제 수단이나 이용 스토어가 모두 해제되어 있을 수 있습니다. 우측 필터에서 조건(페이, 문화상품권 등)을 추가해 보세요!
+                      보유하신 결제 수단이나 이용 스토어가 모두 해제되어 있을 수 있습니다. 우측 필터에서 조건을 추가해 보세요!
                     </p>
                   </div>
                   
@@ -831,7 +855,7 @@ export default function SearchResultPage() {
                       }}
                       className="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 text-white font-extrabold text-xs rounded-xl shadow-sm transition-all cursor-pointer"
                     >
-                      ⚡ 주요 결제 수단 한 번에 모두 켜기
+                      주요 결제 수단 한 번에 모두 켜기
                     </button>
                   </div>
                 </div>
@@ -857,7 +881,6 @@ export default function SearchResultPage() {
                       onClick={() => setSelectedResultForDetail(item)}
                       className={`rounded-xl border transition-all hover:shadow-md grid grid-cols-1 md:grid-cols-12 overflow-hidden cursor-pointer items-stretch ${cardStyle}`}
                     >
-                      {/* 1. [좌측 2.5열] 슬림 컴팩트 스토어 박스 */}
                       <div className="md:col-span-3 lg:col-span-2.5 p-3 bg-slate-50/90 border-b md:border-b-0 md:border-r border-slate-200/80 flex flex-col justify-between space-y-2 shrink-0">
                         <div className="flex items-center space-x-1.5">
                           <span className={`px-2 py-0.5 rounded-md text-xs font-black shadow-2xs ${rankStyle}`}>
@@ -865,7 +888,7 @@ export default function SearchResultPage() {
                           </span>
                           {item.rank === 1 && (
                             <span className="text-[10px] font-extrabold text-amber-800 bg-amber-100/90 px-1.5 py-0.5 rounded border border-amber-300 shadow-2xs whitespace-nowrap">
-                              최고 추천 👍
+                              최고 추천
                             </span>
                           )}
                         </div>
@@ -874,16 +897,12 @@ export default function SearchResultPage() {
                           <span className="text-[9.5px] text-slate-400 font-extrabold block tracking-tight">
                             결제 추천 스토어
                           </span>
-                          <div className="text-2xl sm:text-3xl shrink-0 leading-none">
-                            {item.storeIcon}
-                          </div>
                           <h4 className="font-black text-slate-900 text-xs sm:text-sm truncate max-w-full px-1">
                             {item.platform}
                           </h4>
                         </div>
                       </div>
 
-                      {/* 2. [중앙 6.5열] 결제 경로 및 슬림 쿠폰/적립 바 */}
                       <div className="md:col-span-6 lg:col-span-6.5 p-3 md:p-3.5 flex flex-col justify-between space-y-2 min-w-0">
                         <div className="space-y-1">
                           <span className="text-[9.5px] text-slate-400 font-extrabold block">
@@ -904,7 +923,6 @@ export default function SearchResultPage() {
 
                           <div className="pt-0.5">
                             <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-cyan-800 bg-cyan-50 hover:bg-cyan-100 px-2 py-0.5 rounded border border-cyan-200 transition-all cursor-pointer shadow-2xs">
-                              <span>💡</span>
                               <span>추천 결제 가이드 & 적립 상세 보기 ➔</span>
                             </span>
                           </div>
@@ -923,12 +941,10 @@ export default function SearchResultPage() {
                           )}
                         </div>
 
-                        {/* 적용 할인 & 적립 혜택 슬림 행 ('쿠폰' -> '할인' 명칭 변경) */}
                         <div className="pt-2 border-t border-slate-100 space-y-1">
                           <div className="flex items-center text-[11px] font-bold min-h-[22px]">
-                            <span className="w-16 shrink-0 text-slate-500 font-extrabold flex items-center gap-1">
-                              <span>🎫</span>
-                              <span>할인</span>
+                            <span className="w-12 shrink-0 text-slate-500 font-extrabold">
+                              할인
                             </span>
                             <div className="flex-1 flex flex-wrap items-center gap-1">
                               {item.discount_steps.length > 0 ? (
@@ -948,9 +964,8 @@ export default function SearchResultPage() {
                           </div>
 
                           <div className="flex items-center text-[11px] font-bold min-h-[22px]">
-                            <span className="w-16 shrink-0 text-slate-500 font-extrabold flex items-center gap-1">
-                              <span>🎁</span>
-                              <span>적립</span>
+                            <span className="w-12 shrink-0 text-slate-500 font-extrabold">
+                              적립
                             </span>
                             <div className="flex-1 flex flex-wrap items-center gap-1">
                               {item.reward_steps.length > 0 ? (
@@ -971,7 +986,6 @@ export default function SearchResultPage() {
                         </div>
                       </div>
 
-                      {/* 3. [우측 3열] 슬림 가격 박스 */}
                       <div className="md:col-span-3 lg:col-span-3 p-3 md:p-3.5 bg-slate-50/40 border-t md:border-t-0 md:border-l border-slate-200/80 flex flex-col justify-between items-end text-right space-y-2 shrink-0">
                         <div className="text-right space-y-1 w-full">
                           <div className="flex items-center justify-end">
@@ -1032,12 +1046,12 @@ export default function SearchResultPage() {
                           </div>
 
                           <div className="flex justify-between items-center text-[11px] font-black text-slate-800">
-                            <span>💳 실제 결제액</span>
+                            <span>실제 결제액</span>
                             <span>{item.actual_payment_price.toLocaleString()}원</span>
                           </div>
 
                           <div className="flex justify-between items-center pt-1 border-t border-slate-200">
-                            <span className="text-[11px] font-black text-cyan-950">🎉 실질 체감가</span>
+                            <span className="text-[11px] font-black text-cyan-950">실질 체감가</span>
                             <span className="text-lg font-black text-cyan-600">
                               {item.final_price.toLocaleString()}원
                             </span>
@@ -1053,7 +1067,6 @@ export default function SearchResultPage() {
 
         </main>
 
-        {/* [우측 4열] 우측 실시간 필터 조절 사이드바 */}
         <aside className="lg:col-span-4 h-full space-y-5">
           <form
             onSubmit={handleReSearch}
@@ -1061,7 +1074,6 @@ export default function SearchResultPage() {
           >
             <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
               <h3 className="text-sm md:text-base font-black text-slate-900 flex items-center gap-1.5">
-                <span>🎛️</span>
                 <span>실시간 필터 조절</span>
               </h3>
               <span className="text-[10px] text-cyan-600 bg-cyan-50 font-bold px-2 py-0.5 rounded border border-cyan-200">
@@ -1069,7 +1081,6 @@ export default function SearchResultPage() {
               </span>
             </div>
 
-            {/* 스마트폰 OS (안드로이드 전환 시 기본 지원 스토어 자동 선택) */}
             <div className="space-y-1.5">
               <span className="text-xs font-bold text-slate-800 block">스마트폰 OS</span>
               <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1.5 rounded-xl border border-slate-200 text-xs font-bold">
@@ -1077,7 +1088,6 @@ export default function SearchResultPage() {
                   type="button"
                   onClick={() => {
                     setOsType('ANDROID');
-                    // 💡 안드로이드로 전환 시 현재 게임이 지원하는 스토어 중 기본 스토어(구글 등) 자동 선택
                     if (androidStores.length === 0) {
                       const supported = ANDROID_STORE_OPTIONS.filter((st) =>
                         isStoreSupported(st, currentGameObj?.stores)
@@ -1120,7 +1130,6 @@ export default function SearchResultPage() {
               </div>
             </div>
 
-            {/* 이용 스토어 필터 (미지원 스토어 블러 & 선택 제한 적용) */}
             {osType === 'ANDROID' && (
               <div className="space-y-2 pt-2 border-t border-slate-100">
                 <span className="text-xs font-bold text-slate-800 block">이용 스토어 필터</span>
@@ -1167,7 +1176,6 @@ export default function SearchResultPage() {
                   </div>
                 )}
 
-                {/* 🎯 [복원] 구글/갤럭시 스토어 선택 시 등급 선택 드롭다운 팝업 표출 */}
                 {(isGoogleSelected || isGalaxySelected) && (
                   <div className="p-3 bg-cyan-50/60 rounded-xl border border-cyan-200/80 space-y-2.5 mt-2 animate-fadeIn">
                     {isGoogleSelected && (
@@ -1382,7 +1390,7 @@ export default function SearchResultPage() {
                     onChange={(e) => setUseGameBenefits(e.target.checked)}
                     className="w-4 h-4 text-cyan-600 rounded border-slate-300 shrink-0"
                   />
-                  <span>🎮 게임 전용 혜택 포함</span>
+                  <span>게임 전용 혜택 포함</span>
                 </label>
 
                 <label className="flex items-center space-x-3 cursor-pointer p-2 rounded-xl hover:bg-slate-50 transition-colors min-h-[40px]">
@@ -1392,7 +1400,7 @@ export default function SearchResultPage() {
                     onChange={(e) => setHasPreApplied(e.target.checked)}
                     className="w-4 h-4 text-cyan-600 rounded border-slate-300 shrink-0"
                   />
-                  <span>📝 사전 응모 완료 혜택</span>
+                  <span>사전 응모 완료 혜택</span>
                 </label>
 
                 <label className="flex items-center space-x-3 cursor-pointer p-2 rounded-xl hover:bg-slate-50 transition-colors min-h-[40px]">
@@ -1402,19 +1410,18 @@ export default function SearchResultPage() {
                     onChange={(e) => setIsFirstPayment(e.target.checked)}
                     className="w-4 h-4 text-cyan-600 rounded border-slate-300 shrink-0"
                   />
-                  <span>🎉 첫 결제 이벤트 대상</span>
+                  <span>첫 결제 이벤트 대상</span>
                 </label>
               </div>
             </div>
           </form>
 
-          {/* 광고 배너 */}
           <div className="sticky top-28 min-h-[550px] p-6 bg-slate-100 rounded-xl border border-slate-200/80 flex flex-col items-center justify-between text-center space-y-6 shadow-inner">
             <span className="px-3 py-1 bg-slate-800 text-white font-bold text-[10px] rounded tracking-wider">ADVERTISEMENT</span>
             
             <div className="space-y-5 my-auto">
               <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-3xl font-black text-slate-400 shadow-sm border border-slate-200 mx-auto animate-pulse">
-                📢
+                AD
               </div>
               
               <div className="space-y-2">
@@ -1433,12 +1440,11 @@ export default function SearchResultPage() {
 
       </div>
 
-      {/* 환산 기준 안내 모달 */}
       {isCriteriaModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
             <h3 className="text-lg font-bold text-slate-800 border-b pb-2">
-              💡 실시간 최저가 연산 기준 안내
+              실시간 최저가 연산 기준 안내
             </h3>
             <div className="text-xs text-slate-600 space-y-2 leading-relaxed">
               <p>• <strong>스토어 멤버십 반영</strong>: 구글 Play Points / 갤럭시 스토어 등급별 적립률이 실시간 연산에 포함됩니다.</p>
@@ -1456,13 +1462,11 @@ export default function SearchResultPage() {
         </div>
       )}
 
-      {/* 스토어별 1위 최저가 비교 모달 */}
       {isCompareModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
           <div className="bg-white rounded-2xl max-w-xl w-full p-6 space-y-5 shadow-2xl">
             <div className="flex items-center justify-between border-b pb-3">
               <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                <span>📊</span>
                 <span>스토어별 1위 최저가 비교표</span>
               </h3>
               <button
@@ -1486,7 +1490,6 @@ export default function SearchResultPage() {
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-1.5">
-                      <span className="text-xl">{store.icon}</span>
                       <span className="font-extrabold text-slate-800 text-xs">{store.platform}</span>
                     </div>
                   </div>
@@ -1517,7 +1520,6 @@ export default function SearchResultPage() {
         </div>
       )}
 
-      {/* 세부 결제 경로 모달 (포인트 적립 세부 내역 안내) */}
       {selectedResultForDetail && (
         <div
           onClick={() => setSelectedResultForDetail(null)}
@@ -1555,7 +1557,7 @@ export default function SearchResultPage() {
                 <span>-{selectedResultForDetail.immediate_discount_total.toLocaleString()}원</span>
               </div>
               <div className="flex justify-between items-center text-slate-900 font-bold border-t border-cyan-200/80 pt-1.5">
-                <span>💳 실제 결제창 결제액</span>
+                <span>실제 결제창 결제액</span>
                 <span className="text-sm">{selectedResultForDetail.actual_payment_price.toLocaleString()}원</span>
               </div>
               <div className="flex justify-between items-center text-emerald-600 font-medium">
@@ -1563,21 +1565,18 @@ export default function SearchResultPage() {
                 <span>-{selectedResultForDetail.reward_point.toLocaleString()}원</span>
               </div>
               <div className="flex justify-between items-center text-cyan-900 font-black border-t border-cyan-300 pt-2 text-sm">
-                <span>🎉 최종 체감가</span>
+                <span>최종 체감가</span>
                 <span className="text-base text-cyan-600">{selectedResultForDetail.final_price.toLocaleString()}원</span>
               </div>
             </div>
 
-            {/* 💡 [결제 가이드] 모달 상단에 결제 경로 및 핀번호 입력 안내 표출 */}
             <div className="p-3 bg-cyan-50/90 rounded-xl border border-cyan-200 text-xs font-extrabold text-cyan-950 leading-relaxed shadow-2xs">
               {getUsageGuide(selectedResultForDetail.paymentRoute.join(' '))}
             </div>
 
-            {/* 1. 💳 결제 시 즉시 할인 이벤트 (분홍/장미 테마 테두리 적용으로 초록 적립상자와 완벽 대칭) */}
             {selectedResultForDetail.discount_steps.length > 0 && (
               <div className="p-4 bg-rose-50/50 rounded-xl border border-rose-200 space-y-2 text-xs">
                 <h4 className="font-black text-rose-900 flex items-center gap-1.5 text-sm">
-                  <span>💳</span>
                   <span>결제 시 즉시 할인 이벤트</span>
                 </h4>
                 <div className="space-y-2 pt-1">
@@ -1587,11 +1586,11 @@ export default function SearchResultPage() {
                         <div className="flex items-center space-x-1.5">
                           {step.isGameSpecific ? (
                             <span className="text-[10px] font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-md">
-                              🎮 {step.targetGame} 전용
+                              {step.targetGame} 전용
                             </span>
                           ) : (
                             <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
-                              🌐 공통 혜택
+                              공통 혜택
                             </span>
                           )}
                           <span className="text-xs font-extrabold text-slate-800">{step.eventName}</span>
@@ -1601,7 +1600,7 @@ export default function SearchResultPage() {
                         </span>
                       </div>
                       <p className="text-[11px] text-slate-600 leading-relaxed bg-slate-50/80 p-2 rounded border border-slate-100">
-                        📝 <strong>상세 조건:</strong> {step.conditionText}
+                        <strong>상세 조건:</strong> {step.conditionText}
                       </p>
                     </div>
                   ))}
@@ -1609,11 +1608,9 @@ export default function SearchResultPage() {
               </div>
             )}
 
-            {/* 2. 🎁 포인트 적립 세부 내역 (적립 내역을 아래로 배치 & ++ 중복 표기 제거) */}
             {selectedResultForDetail.reward_steps.length > 0 && (
               <div className="p-4 bg-emerald-50/80 rounded-xl border border-emerald-200 space-y-2 text-xs">
                 <h4 className="font-black text-emerald-900 flex items-center gap-1.5 text-sm">
-                  <span>🎁</span>
                   <span>포인트 적립 세부 내역</span>
                 </h4>
                 <div className="space-y-1.5 pt-1">
