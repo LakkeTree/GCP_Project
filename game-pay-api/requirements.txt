@@ -4,6 +4,7 @@ uvicorn[standard]
 gunicorn
 pydantic
 pydantic[email]
+email-validator
 
 # Environment & OAuth Security
 python-dotenv
@@ -11,7 +12,12 @@ google-auth
 requests
 python-jose[cryptography]
 
-# Data Processing & BigQuery
+# Database (Cloud SQL PostgreSQL 연동 추가)
+sqlalchemy
+psycopg2-binary
+
+# Data Processing & GCP Storage / BigQuery Engine
+google-cloud-storage
 google-cloud-bigquery
 pandas
 db-dtypes
