@@ -34,7 +34,6 @@ export interface FilterState {
   recentGames: string[];
 }
 
-// ⭕ 초기 비어있는 필터 상태 (스토어/결제수단 모두 해제, 등급 브론즈 고정)
 export const emptyFilterState: FilterState = {
   osType: 'ANDROID',
   androidStores: [],
@@ -72,7 +71,6 @@ export function useFilterState(startEmpty: boolean = false) {
       }
     }
 
-    // startEmpty가 true(검색 페이지)면 필터 옵션은 비우고, 즐겨찾기/최근찾은 게임 정보만 유지
     if (startEmpty) {
       return {
         ...emptyFilterState,
@@ -81,17 +79,14 @@ export function useFilterState(startEmpty: boolean = false) {
       };
     }
 
-    // 마이페이지: 저장되어 있는 전체 필터 로드
     return { ...emptyFilterState, ...savedObj };
   });
 
-  // 💾 수동 저장 함수 (명시적으로 버튼을 누를 때만 localStorage에 저장)
   const saveFilterSettings = () => {
     localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(filter));
     alert('기본 검색 조건 및 설정이 성공적으로 저장되었습니다!');
   };
 
-  // 📥 저장된 필터 불러오기 함수
   const loadSavedFilter = () => {
     const saved = localStorage.getItem(FILTER_STORAGE_KEY);
     if (saved) {
@@ -109,31 +104,34 @@ export function useFilterState(startEmpty: boolean = false) {
     return false;
   };
 
+  // 💡 즐겨찾기 추가 (최대 10개 제한)
   const addFavoriteGame = (gameName: string) => {
-    if (!filter.favoriteGames.includes(gameName)) {
-      setFilter((prev) => {
-        const updated = { ...prev, favoriteGames: [...prev.favoriteGames, gameName] };
-        localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(updated));
-        return updated;
-      });
-    }
-  };
-
-  const removeFavoriteGame = (gameName: string) => {
     setFilter((prev) => {
-      const updated = { ...prev, favoriteGames: prev.favoriteGames.filter((g) => g !== gameName) };
-      localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(updated));
-      return updated;
+      if (prev.favoriteGames.includes(gameName)) return prev;
+      if (prev.favoriteGames.length >= 10) {
+        alert('즐겨찾기는 최대 10개까지만 등록할 수 있습니다.');
+        return prev;
+      }
+      return { ...prev, favoriteGames: [...prev.favoriteGames, gameName] };
     });
   };
 
+  const removeFavoriteGame = (gameName: string) => {
+    setFilter((prev) => ({
+      ...prev,
+      favoriteGames: prev.favoriteGames.filter((g) => g !== gameName),
+    }));
+  };
+
+  // 💡 최근 검색어 추가 (중복 제거 후 최신순 최대 5개 제한)
   const addRecentGame = (gameName: string) => {
     if (!gameName.trim()) return;
     setFilter((prev) => {
-      const filtered = prev.recentGames.filter((g) => g !== gameName.trim());
-      const updated = { ...prev, recentGames: [gameName.trim(), ...filtered].slice(0, 5) };
-      localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(updated));
-      return updated;
+      const filtered = (prev.recentGames || []).filter((g: string) => g !== gameName.trim());
+      const updatedList = [gameName.trim(), ...filtered].slice(0, 5); // 최근 검색 5개 제한
+      const updatedState = { ...prev, recentGames: updatedList };
+      localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(updatedState));
+      return updatedState;
     });
   };
 

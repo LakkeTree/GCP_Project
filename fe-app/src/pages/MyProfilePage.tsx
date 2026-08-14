@@ -55,6 +55,31 @@ export default function MyProfilePage() {
   const [gameSearchInput, setGameSearchInput] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
 
+  // 키보드 방향키 탐색용 인덱스 상태
+  const [selectedIndex, setSelectedIndex] = useState<number>(-1);
+
+  // 키보드(↓, ↑, Enter, Esc) 핸들러
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!isSearchFocused || suggestedGames.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedIndex((prev) => (prev < suggestedGames.length - 1 ? prev + 1 : 0));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedIndex((prev) => (prev > 0 ? prev - 1 : suggestedGames.length - 1));
+    } else if (e.key === 'Enter') {
+      if (selectedIndex >= 0 && selectedIndex < suggestedGames.length) {
+        e.preventDefault();
+        handleSelectGame(suggestedGames[selectedIndex].name);
+        setSelectedIndex(-1);
+      }
+    } else if (e.key === 'Escape') {
+      setIsSearchFocused(false);
+      setSelectedIndex(-1);
+    }
+  };
+
   // 3. 게임 DB 목록 로드
   useEffect(() => {
     fetch('http://127.0.0.1:8000/games')
@@ -465,21 +490,26 @@ export default function MyProfilePage() {
                   onChange={(e) => {
                     setGameSearchInput(e.target.value);
                     setIsSearchFocused(true);
+                    setSelectedIndex(-1);
                   }}
+                  onKeyDown={handleKeyDown}
                   onFocus={() => setIsSearchFocused(true)}
                   className="w-full px-4 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-800 focus:outline-none focus:border-cyan-500 h-[48px]"
                 />
 
-                {/* 드롭다운 */}
+                {/* 키보드 탐색 지원 드롭다운 */}
                 {isSearchFocused && gameSearchInput.trim().length > 0 && (
                   <div className="absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-56 overflow-y-auto z-30 py-1.5 border-t-2 border-t-cyan-500 animate-in fade-in slide-in-from-top-1">
                     {suggestedGames.length > 0 ? (
-                      suggestedGames.map((gameItem) => (
+                      suggestedGames.map((gameItem, idx) => (
                         <button
                           key={gameItem.id || gameItem.name}
                           type="button"
                           onClick={() => handleSelectGame(gameItem.name)}
-                          className="w-full text-left px-4 py-2 hover:bg-cyan-50/70 transition-colors cursor-pointer flex items-center justify-between border-b border-slate-50 last:border-0"
+                          onMouseEnter={() => setSelectedIndex(idx)}
+                          className={`w-full text-left px-4 py-2 transition-colors cursor-pointer flex items-center justify-between border-b border-slate-50 last:border-0 ${
+                            idx === selectedIndex ? 'bg-cyan-100/90 font-black' : 'hover:bg-cyan-50/70'
+                          }`}
                         >
                           <div className="flex items-center gap-3">
                             {gameItem.icon_url ? (
@@ -490,12 +520,12 @@ export default function MyProfilePage() {
                                 className="w-8 h-8 rounded-lg object-cover border border-slate-200 shrink-0 shadow-2xs"
                                 onError={(e) => {
                                   e.currentTarget.onerror = null;
-                                  e.currentTarget.src = 'https://via.placeholder.com/32?text=🎮';
+                                  e.currentTarget.style.display = 'none';
                                 }}
                               />
                             ) : (
-                              <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-xs shrink-0">
-                                🎮
+                              <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-[10px] font-black text-slate-400 shrink-0">
+                                GAME
                               </div>
                             )}
 
