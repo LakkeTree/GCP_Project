@@ -14,7 +14,7 @@ from google import genai
 from google.genai import types
 from pydantic import BaseModel
 
-MODEL_NAME = "gemini-3.5-flash"
+MODEL_NAME = "gemini-3.6-flash"
 
 SYSTEM_PROMPT = """당신은 카드사/판매처 혜택 페이지에서 "모바일 게임 결제(인앱결제)"와
 직접 관련된 혜택만 골라 정해진 스키마로 구조화하는 데이터 추출기입니다.
@@ -73,12 +73,19 @@ class PaymentMethodRestriction(str, Enum):
     CARD_ONLY = "CARD_ONLY"
     CASH_ONLY = "CASH_ONLY"
     POINT_ONLY = "POINT_ONLY"
+    # telecom_data 통신사 휴대폰결제 정액제 부가서비스(SKT 휴대폰결제멤버십, KT
+    # 콘텐츠페이 등)처럼 "휴대폰 소액결제로 결제해야만" 적용되는 혜택 전용.
+    # engine/calculator.py는 이 필드를 실제 필터링에 쓰지 않으므로(주석 참고,
+    # POINT_ONLY 회귀 버그 이후 의도적으로 미사용) 값을 추가해도 계산 로직에는
+    # 영향 없음 — 원문 조건을 정확히 표현하기 위한 값이다.
+    PHONE_BILLING_ONLY = "PHONE_BILLING_ONLY"
 
 
 class StackingLayer(str, Enum):
+    STORE_COUPON = "STORE_COUPON"
+    PAYMENT_PG = "PAYMENT_PG"
     PAYMENT_E_PAY = "PAYMENT_E_PAY"
     CARD_ISSUER = "CARD_ISSUER"
-    STORE_COUPON = "STORE_COUPON"
     GIFT_CARD = "GIFT_CARD"
 
 
@@ -110,13 +117,27 @@ class PaymentRouteType(str, Enum):
     INDIRECT_CONVERSION = "INDIRECT_CONVERSION"
 
 
-class CardCategory(str, Enum):
+class BenefitCategory(str, Enum):
+    """Kyungtae 브랜치 common/schema.py의 분류를 그대로 채택한다 — engine/calculator.py가
+    category=="GIFT_CARD"/"VOUCHER_PURCHASE" 문자열을 직접 참조하므로, 값을 새로
+    만들지 않고 그쪽 taxonomy에 맞춘다."""
+
+    REWARD_E_PAY = "REWARD_E_PAY"
     CARD = "CARD"
+    VOUCHER_PURCHASE = "VOUCHER_PURCHASE"
+    GIFT_CARD = "GIFT_CARD"
+    SUMMARY_STORE_TIER_REWARD_RATES = "SUMMARY_STORE_TIER_REWARD_RATES"
+    DISCOUNT_STORE = "DISCOUNT_STORE"
+    DISCOUNT_TELECOM = "DISCOUNT_TELECOM"
+    DISCOUNT_E_PAY = "DISCOUNT_E_PAY"
     DISCOUNT_CARD = "DISCOUNT_CARD"
+    REWARD_TELECOM = "REWARD_TELECOM"
+    DISCOUNT_PG = "DISCOUNT_PG"
+    REWARD_STORE = "REWARD_STORE"
 
 
 class BenefitExtraction(BaseModel):
-    category: CardCategory
+    category: BenefitCategory
     item_or_event_name: str
     target_platform: TargetPlatform
     target_game: str
@@ -159,13 +180,26 @@ def _client() -> genai.Client:
         # 있으면 그쪽을 우선 사용한다(다른 도구가 잡아둔 무관한 키일 수 있음).
         # 이 프로세스 안에서만 지워서 우리가 지정한 GEMINI_API_KEY가 항상 쓰이게 한다.
         os.environ.pop("GOOGLE_API_KEY", None)
-        _CLIENT = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+        # GEMINI_API_KEY에 Vertex AI Express Mode API 키를 넣어 쓴다 — 무료 등급
+        # (하루 20건) 대신 GCP 프로젝트 할당량을 쓰기 위함. vertexai=True + api_key만
+        # 넘기면 project/location 없이도 Express Mode로 인증된다(google-genai
+        # _api_client.py의 "Handle when to use Vertex AI in express mode" 분기 참고).
+        _CLIENT = genai.Client(vertexai=True, api_key=os.environ["GEMINI_API_KEY"])
     return _CLIENT
 
 
-def extract_benefits(page_text: str, *, provider_name: str) -> list[BenefitExtraction]:
-    """혜택 페이지 원문 텍스트에서 모바일 게임 결제 혜택만 구조화해서 뽑아낸다."""
+def extract_benefits(
+    page_text: str, *, provider_name: str, extra_hint: str = ""
+) -> list[BenefitExtraction]:
+    """혜택 페이지 원문 텍스트에서 모바일 게임 결제 혜택만 구조화해서 뽑아낸다.
+
+    extra_hint: 페이지별 고정값 지시(예: "target_platform=ONE_STORE로 고정")나
+    포맷 규칙처럼 SYSTEM_PROMPT의 일반 규칙만으로는 부족한 경우 scrapers/*.py가
+    채워 넣는 추가 지침. 없으면 일반 규칙만으로 추출한다.
+    """
     prompt = f"카드사/판매처: {provider_name}\n\n페이지 원문:\n{page_text}"
+    if extra_hint:
+        prompt = f"{extra_hint}\n\n{prompt}"
     client = _client()
     response = client.models.generate_content(
         model=MODEL_NAME,

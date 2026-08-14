@@ -28,6 +28,7 @@ def scrape() -> list[dict]:
     return [
         normalize.to_row(
             item,
+            id_domain="CARD",
             id_prefix=PROVIDER_CODE,
             provider_or_retailer=PROVIDER_OR_RETAILER,
             source_file=SOURCE_FILE,

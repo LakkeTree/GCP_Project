@@ -42,10 +42,10 @@ def _dedupe_hash(id_prefix: str, item: BenefitExtraction) -> str:
     return hashlib.sha256(material.encode("utf-8")).hexdigest()[:8]
 
 
-def to_row(item: BenefitExtraction, *, id_prefix: str, provider_or_retailer: str,
+def to_row(item: BenefitExtraction, *, id_domain: str, id_prefix: str, provider_or_retailer: str,
            source_file: str, source_url: str) -> dict:
-    """id_prefix 예: 'KB' → benefit_id는 BNF_CARD_KB_{해시8자리}."""
-    benefit_id = f"BNF_CARD_{id_prefix}_{_dedupe_hash(id_prefix, item)}"
+    """id_domain 예: 'CARD', id_prefix 예: 'KB' → benefit_id는 BNF_CARD_KB_{해시8자리}."""
+    benefit_id = f"BNF_{id_domain}_{id_prefix}_{_dedupe_hash(id_prefix, item)}"
     return {
         "benefit_id": benefit_id,
         "source_file": source_file,
