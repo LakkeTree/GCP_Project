@@ -34,11 +34,17 @@ export default function SupportedPaymentPage() {
         
         {/* [좌측 10열] 메인 연동 결제 수단 */}
         <div className="lg:col-span-10 space-y-6">
-          <header className="space-y-2">
-            <span className="px-2.5 py-1 bg-cyan-100 text-cyan-800 font-extrabold text-xs rounded border border-cyan-200">
-              💳 결제 수단 가이드
-            </span>
-            <h2 className="text-2xl font-black text-slate-900">호갱탈출 연동 결제 수단</h2>
+          <header className="space-y-3">
+            {/* 지원 게임 목록처럼 타이틀과 가이드 배지를 수평 양끝 정렬 */}
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">
+                호갱탈출 연동 결제 수단
+              </h2>
+              <span className="text-xs font-black text-cyan-800 bg-cyan-50 px-3 py-1 rounded-full border border-cyan-200 shadow-2xs">
+                💳 결제 수단 가이드
+              </span>
+            </div>
+
             <p className="text-xs text-slate-500">
               실시간 최저가 연산에 자동 조합되어 적용되는 스토어별 간편결제, 통신사, 카드사, 우회 상품권 목록입니다.
             </p>

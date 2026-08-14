@@ -1,15 +1,30 @@
-import { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom'; // 👈 useNavigate 추가
 import LoginModal from './LoginModal';
 
 export default function Header() {
   const location = useLocation();
+  const navigate = useNavigate(); // 👈 navigate 사용 함수 정의
 
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [loggedInUser, setLoggedInUser] = useState<string | null>(null);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
 
-  // 스크롤 감지 및 여유 임계값 적용 (덜컹거림 완벽 방지)
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // 외부 클릭 시 드롭다운 닫기
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsProfileMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // 스크롤 감지
   useEffect(() => {
     let ticking = false;
 
@@ -35,10 +50,8 @@ export default function Header() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // 5대 핵심 메뉴 (최저가 검색 탭 독립 신설)
   const navItems = [
     { name: '오늘의 최고할인', path: '/' },
-    { name: '게임랭킹', path: '/rank' },
     { name: '지원하는 게임', path: '/supported-games' },
     { name: '지원하는 결제수단', path: '/supported-payment' },
     { name: '최저가 검색', path: '/search' },
@@ -53,10 +66,8 @@ export default function Header() {
       >
         <div className="max-w-[1400px] mx-auto px-4 md:px-6 space-y-2.5 transition-all duration-300">
           
-          {/* 1행: [로고 (좌측 끝)] ------------------ [로그인 버튼 (우측 끝)] */}
           <div className="flex items-center justify-between gap-4">
             
-            {/* 브랜드 로고 */}
             <Link
               to="/"
               className={`font-black text-cyan-600 tracking-tight shrink-0 flex items-center gap-2 transition-all duration-300 ${
@@ -67,38 +78,138 @@ export default function Header() {
               <span>호갱탈출</span>
             </Link>
 
-            {/* 우측 로그인 / 프로필 버튼 */}
             <div className="shrink-0">
               {loggedInUser ? (
-                <div className="flex items-center space-x-2">
-                  <span className="text-xs font-bold text-slate-700 max-w-[120px] truncate">
-                    👤 {loggedInUser.split('@')[0]}님
-                  </span>
+                <div className="relative" ref={dropdownRef}>
                   <button
                     type="button"
-                    onClick={() => setLoggedInUser(null)}
-                    className="px-3 py-1.5 border border-slate-300 text-slate-600 hover:bg-slate-100 font-bold text-xs rounded-lg transition-all cursor-pointer"
+                    onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+                    className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-full pl-1.5 pr-3 py-1 shadow-sm hover:bg-slate-100 hover:border-slate-300 transition-all cursor-pointer"
                   >
-                    로그아웃
+                    <div className="w-8 h-8 rounded-full bg-slate-300 flex items-center justify-center text-slate-600 font-bold overflow-hidden border border-slate-200 shrink-0">
+                      <svg className="w-5 h-5 text-slate-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+
+                    <div className="flex flex-col text-left">
+                      <span className="text-xs font-bold text-slate-800 leading-tight">
+                        {loggedInUser.split('@')[0]}님
+                      </span>
+                      <span className="text-[10px] text-slate-400 leading-tight">
+                        {loggedInUser.includes('@') ? loggedInUser : '일반 계정'}
+                      </span>
+                    </div>
+
+                    <svg
+                      className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${
+                        isProfileMenuOpen ? 'rotate-180' : ''
+                      }`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
                   </button>
+
+                  {/* 프로필 클릭 시 나타나는 드롭다운 메뉴 */}
+                  {isProfileMenuOpen && (
+                    <div className="absolute right-0 mt-2 w-60 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                      <div className="px-4 py-2 border-b border-slate-100">
+                        <p className="text-[11px] font-semibold text-slate-400">접속 계정</p>
+                        <p className="text-xs font-bold text-slate-800 truncate">{loggedInUser}</p>
+                      </div>
+
+                      <div className="py-1">
+                        {/* 1. 개인 정보 & 즐겨찾기 */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsProfileMenuOpen(false);
+                            navigate('/profile?tab=profile');
+                          }}
+                          className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-cyan-600 flex items-center gap-2.5 transition-colors cursor-pointer"
+                        >
+                          <span className="text-sm">👤</span>
+                          <span>본인 정보 & 즐겨찾기</span>
+                        </button>
+
+                        {/* 2. 계정 보안 & 비밀번호 (신규 추가!) */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsProfileMenuOpen(false);
+                            navigate('/profile?tab=security');
+                          }}
+                          className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-cyan-600 flex items-center gap-2.5 transition-colors cursor-pointer"
+                        >
+                          <span className="text-sm">🔒</span>
+                          <span>계정 보안 & 비밀번호</span>
+                        </button>
+
+                        {/* 3. 저장한 검색 조건 필터링 */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsProfileMenuOpen(false);
+                            navigate('/profile?tab=filter');
+                          }}
+                          className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-cyan-600 flex items-center gap-2.5 transition-colors cursor-pointer"
+                        >
+                          <span className="text-sm">🔖</span>
+                          <span>저장한 검색 조건 필터링</span>
+                        </button>
+                      </div>
+
+                      {/* 4. 로그아웃 */}
+                      <div className="border-t border-slate-100 pt-1 mt-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsProfileMenuOpen(false);
+                            setLoggedInUser(null);
+                            navigate('/');
+                          }}
+                          className="w-full text-left px-4 py-2 text-xs font-bold text-red-500 hover:bg-red-50 flex items-center gap-2.5 transition-colors cursor-pointer"
+                        >
+                          <span className="text-sm">🚪</span>
+                          <span>로그아웃</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => setIsLoginModalOpen(true)}
-                  className={`border-2 border-cyan-500 text-cyan-600 hover:bg-cyan-50 font-black rounded-lg transition-all duration-300 shadow-sm cursor-pointer ${
-                    isScrolled
-                      ? 'px-3.5 py-1 text-xs'
-                      : 'px-4.5 py-1.5 text-sm'
-                  }`}
-                >
-                  로그인
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setLoggedInUser('dev_user@example.com')}
+                    className={`bg-amber-500 hover:bg-amber-600 text-white font-black rounded-lg transition-all duration-300 shadow-sm cursor-pointer ${
+                      isScrolled
+                        ? 'px-3 py-1 text-xs'
+                        : 'px-3.5 py-1.5 text-sm'
+                    }`}
+                  >
+                    ⚡ 개발자 로그인
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsLoginModalOpen(true)}
+                    className={`border-2 border-cyan-500 text-cyan-600 hover:bg-cyan-50 font-black rounded-lg transition-all duration-300 shadow-sm cursor-pointer ${
+                      isScrolled
+                        ? 'px-3.5 py-1 text-xs'
+                        : 'px-4.5 py-1.5 text-sm'
+                    }`}
+                  >
+                    로그인
+                  </button>
+                </div>
               )}
             </div>
           </div>
 
-          {/* 2행: 네비게이션 메뉴 탭 (5개 메뉴 구성) */}
           <nav
             className={`flex items-center justify-start border-t border-slate-100 space-x-6 md:space-x-8 overflow-x-auto no-scrollbar transition-all duration-300 ${
               isScrolled ? 'pt-1' : 'pt-2'
@@ -123,11 +234,10 @@ export default function Header() {
               );
             })}
           </nav>
- 
+
         </div>
       </header>
 
-      {/* 로그인 모달 */}
       <LoginModal
         isOpen={isLoginModalOpen}
         onClose={() => setIsLoginModalOpen(false)}
