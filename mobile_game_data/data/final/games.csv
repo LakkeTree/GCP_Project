@@ -1,0 +1,126 @@
+﻿game_id,game_name,google_play,google_play_id,google_play_url,app_store,app_store_id,app_store_url,galaxy_store,one_store
+1,Whiteout Survival,True,com.gof.global,https://play.google.com/store/apps/details?id=com.gof.global,True,6443575749,https://apps.apple.com/kr/app/id6443575749,False,False
+2,SOL: enchant,True,com.netmarble.sol,https://play.google.com/store/apps/details?id=com.netmarble.sol,False,,,False,False
+3,Kingshot,True,com.run.tower.defense,https://play.google.com/store/apps/details?id=com.run.tower.defense,True,6739554056,https://apps.apple.com/kr/app/id6739554056,False,False
+4,CookieRun: Crumble - Idle RPG,True,com.devsisters.cc,https://play.google.com/store/apps/details?id=com.devsisters.cc,True,6749251466,https://apps.apple.com/kr/app/id6749251466,False,False
+5,리니지M,True,com.ncsoft.lineagem19,https://play.google.com/store/apps/details?id=com.ncsoft.lineagem19,False,,,False,False
+6,Gossip Harbor: Merge & Story,True,com.mergegames.gossipharbor,https://play.google.com/store/apps/details?id=com.mergegames.gossipharbor,True,1623318294,https://apps.apple.com/kr/app/id1623318294,False,False
+7,Last War:Survival Game,True,com.fun.lastwar.gp,https://play.google.com/store/apps/details?id=com.fun.lastwar.gp,False,,,False,False
+8,Roblox,True,com.roblox.client,https://play.google.com/store/apps/details?id=com.roblox.client,False,,,False,False
+9,Royal Match,True,com.dreamgames.royalmatch,https://play.google.com/store/apps/details?id=com.dreamgames.royalmatch,True,1482155847,https://apps.apple.com/kr/app/id1482155847,False,False
+10,열혈강호: 넥스트,True,com.rxjhglkr.gp,https://play.google.com/store/apps/details?id=com.rxjhglkr.gp,False,,,False,False
+11,MapleStory : Idle RPG,True,com.nexon.ma,https://play.google.com/store/apps/details?id=com.nexon.ma,False,,,False,False
+12,오딘: 발할라 라이징,True,com.kakaogames.odin,https://play.google.com/store/apps/details?id=com.kakaogames.odin,False,,,False,False
+13,한게임포커 클래식 : 7포커 홀덤 섯다 훌라 슬롯,True,com.nhnent.pokerclassic,https://play.google.com/store/apps/details?id=com.nhnent.pokerclassic,False,,,False,False
+14,한게임 포커,True,com.nhnent.Qpoker,https://play.google.com/store/apps/details?id=com.nhnent.Qpoker,False,,,False,False
+15,GODDESS OF VICTORY: NIKKE,True,com.proximabeta.nikke,https://play.google.com/store/apps/details?id=com.proximabeta.nikke,True,1585915174,https://apps.apple.com/kr/app/id1585915174,False,False
+16,Zenless Zone Zero - Anniv.,True,com.HoYoverse.Nap,https://play.google.com/store/apps/details?id=com.HoYoverse.Nap,True,1606356401,https://apps.apple.com/kr/app/id1606356401,False,False
+17,Lucky Defense,True,com.percent.aos.luckydefense,https://play.google.com/store/apps/details?id=com.percent.aos.luckydefense,True,6482291732,https://apps.apple.com/kr/app/id6482291732,False,False
+18,Wuthering Waves - To Xuanfang,True,com.kurogame.wutheringwaves.global,https://play.google.com/store/apps/details?id=com.kurogame.wutheringwaves.global,True,6475033368,https://apps.apple.com/kr/app/id6475033368,False,False
+19,Last Asylum: Plague,True,com.phs.global,https://play.google.com/store/apps/details?id=com.phs.global,True,6756989323,https://apps.apple.com/kr/app/id6756989323,False,False
+20,Last Z: Survival Shooter,True,com.readygo.barrel.gp,https://play.google.com/store/apps/details?id=com.readygo.barrel.gp,False,,,False,False
+21,Tasty Travels: Merge Game,True,com.fatmerge.global,https://play.google.com/store/apps/details?id=com.fatmerge.global,True,6471045672,https://apps.apple.com/kr/app/id6471045672,False,False
+22,FC 모바일,True,com.nexon.fmk,https://play.google.com/store/apps/details?id=com.nexon.fmk,False,,,False,False
+23,Gardenscapes,True,com.playrix.gardenscapes,https://play.google.com/store/apps/details?id=com.playrix.gardenscapes,True,1105855019,https://apps.apple.com/kr/app/id1105855019,False,False
+24,Seaside Escape®: Merge & Story,True,com.gamedots.seasideescape,https://play.google.com/store/apps/details?id=com.gamedots.seasideescape,True,6443755785,https://apps.apple.com/kr/app/id6443755785,False,False
+25,Brawl Stars,True,com.supercell.brawlstars,https://play.google.com/store/apps/details?id=com.supercell.brawlstars,True,1229016807,https://apps.apple.com/kr/app/id1229016807,False,False
+26,메이플스토리M,True,com.nexon.nsc.maplem,https://play.google.com/store/apps/details?id=com.nexon.nsc.maplem,False,,,False,False
+27,Royal Kingdom,True,com.dreamgames.royalkingdom,https://play.google.com/store/apps/details?id=com.dreamgames.royalkingdom,False,,,False,False
+28,마비노기 모바일,True,com.nexon.devcat.mm,https://play.google.com/store/apps/details?id=com.nexon.devcat.mm,False,,,False,False
+29,뱀피르,True,com.netmarble.thered,https://play.google.com/store/apps/details?id=com.netmarble.thered,False,,,False,False
+30,트릭컬 리바이브,True,com.epidgames.trickcalrevive,https://play.google.com/store/apps/details?id=com.epidgames.trickcalrevive,False,,,False,False
+31,Pmang Poker : Casino Royal,True,com.neowiz.games.poker,https://play.google.com/store/apps/details?id=com.neowiz.games.poker,False,,,False,False
+32,hololive Dreams,True,game.qualiarts.hololive.dreams.com,https://play.google.com/store/apps/details?id=game.qualiarts.hololive.dreams.com,False,,,False,False
+33,Lineage W,True,com.ncsoft.lineagew,https://play.google.com/store/apps/details?id=com.ncsoft.lineagew,False,,,False,False
+34,킹덤2: 타오르는 전장,True,com.fowgames.kingdom2,https://play.google.com/store/apps/details?id=com.fowgames.kingdom2,False,,,False,False
+35,컴투스프로야구V26,True,com.com2us.futurecpb.android.google.global.normal,https://play.google.com/store/apps/details?id=com.com2us.futurecpb.android.google.global.normal,True,1458848044,https://apps.apple.com/kr/app/id1458848044,False,False
+36,한게임 섯다&맞고,True,com.NHNEnt.MSudda,https://play.google.com/store/apps/details?id=com.NHNEnt.MSudda,False,,,False,False
+37,Honkai: Star Rail,True,com.HoYoverse.hkrpgoversea,https://play.google.com/store/apps/details?id=com.HoYoverse.hkrpgoversea,True,1599719154,https://apps.apple.com/kr/app/id1599719154,False,False
+38,Zombie High School,True,net.kernys.aooni,https://play.google.com/store/apps/details?id=net.kernys.aooni,True,898986747,https://apps.apple.com/kr/app/id898986747,False,False
+39,RF ONLINE NEXT,True,com.netmarble.rfnext,https://play.google.com/store/apps/details?id=com.netmarble.rfnext,False,,,False,False
+40,Seven Knights Re:BIRTH,True,com.netmarble.tskgb,https://play.google.com/store/apps/details?id=com.netmarble.tskgb,True,6479595079,https://apps.apple.com/kr/app/id6479595079,False,False
+41,Candy Crush Saga,True,com.king.candycrushsaga,https://play.google.com/store/apps/details?id=com.king.candycrushsaga,True,553834731,https://apps.apple.com/kr/app/id553834731,False,False
+42,Coop TD: Together,True,com.percent.aos.cooptd,https://play.google.com/store/apps/details?id=com.percent.aos.cooptd,True,6503702666,https://apps.apple.com/kr/app/id6503702666,False,False
+43,EA SPORTS FC Online M,True,com.nexon.fo4m,https://play.google.com/store/apps/details?id=com.nexon.fo4m,False,,,False,False
+44,PUBG Mobile,True,com.pubg.krmobile,https://play.google.com/store/apps/details?id=com.pubg.krmobile,False,,,False,False
+45,Flambé®: Merge & Cook,True,com.cola.game,https://play.google.com/store/apps/details?id=com.cola.game,False,,,False,False
+46,Mystery Town: Merge Games,True,com.cedargames.mysterytown,https://play.google.com/store/apps/details?id=com.cedargames.mysterytown,False,,,False,False
+47,Homescapes,True,com.playrix.homescapes,https://play.google.com/store/apps/details?id=com.playrix.homescapes,False,,,False,False
+48,I9: 인페르노 나인,True,com.kr.firegp,https://play.google.com/store/apps/details?id=com.kr.firegp,False,,,False,False
+49,AION2,True,com.ncsoft.aion2,https://play.google.com/store/apps/details?id=com.ncsoft.aion2,False,,,False,False
+50,라그나로크M: Classic,True,com.gravity.romkrzeny.aos,https://play.google.com/store/apps/details?id=com.gravity.romkrzeny.aos,False,,,False,False
+51,GIRLS' FRONTLINE 2: EXILIUM,True,com.haoplay.game.and.exilium,https://play.google.com/store/apps/details?id=com.haoplay.game.and.exilium,False,,,False,False
+52,삼국지: 천하결전,True,com.bhk.newslgkr,https://play.google.com/store/apps/details?id=com.bhk.newslgkr,False,,,False,False
+53,Genshin Impact,True,com.miHoYo.GenshinImpact,https://play.google.com/store/apps/details?id=com.miHoYo.GenshinImpact,False,,,False,False
+54,Hollywood Merge,True,com.hollywood.merge,https://play.google.com/store/apps/details?id=com.hollywood.merge,True,6755455500,https://apps.apple.com/kr/app/id6755455500,False,False
+55,뮤 모나크2,True,com.webzen.mumonarch2.google,https://play.google.com/store/apps/details?id=com.webzen.mumonarch2.google,False,,,False,False
+56,Township,True,com.playrix.township,https://play.google.com/store/apps/details?id=com.playrix.township,True,638689075,https://apps.apple.com/kr/app/id638689075,False,False
+57,State of Survival: Zombie War,True,com.kingsgroup.sos,https://play.google.com/store/apps/details?id=com.kingsgroup.sos,False,,,False,False
+58,eFootballTM,True,jp.konami.pesam,https://play.google.com/store/apps/details?id=jp.konami.pesam,True,1117270703,https://apps.apple.com/kr/app/id1117270703,False,False
+59,토이 삼국,True,com.jsjskr.google,https://play.google.com/store/apps/details?id=com.jsjskr.google,False,,,False,False
+60,Dark War Survival,True,com.readygo.dark.gp,https://play.google.com/store/apps/details?id=com.readygo.dark.gp,True,6670441558,https://apps.apple.com/kr/app/id6670441558,False,False
+61,Arknights: Endfield,True,com.gryphline.endfield.gp,https://play.google.com/store/apps/details?id=com.gryphline.endfield.gp,True,6752642477,https://apps.apple.com/kr/app/id6752642477,False,False
+62,한게임 신맞고 : 대한민국 원조 고스톱,True,com.NHNEnt.NDuelgo,https://play.google.com/store/apps/details?id=com.NHNEnt.NDuelgo,False,,,False,False
+63,피망 뉴맞고: 고스톱 대표 맞고 게임,True,com.neowiz.games.newmatgo,https://play.google.com/store/apps/details?id=com.neowiz.games.newmatgo,False,,,False,False
+64,Pokémon GO,True,com.nianticlabs.pokemongo,https://play.google.com/store/apps/details?id=com.nianticlabs.pokemongo,True,1094591345,https://apps.apple.com/kr/app/id1094591345,False,False
+65,Disney Solitaire,True,com.superplaystudios.disneysolitairedreams,https://play.google.com/store/apps/details?id=com.superplaystudios.disneysolitairedreams,False,,,False,False
+66,냥코 대전쟁,True,jp.co.ponos.battlecatskr,https://play.google.com/store/apps/details?id=jp.co.ponos.battlecatskr,False,,,False,False
+67,Limbus Company,True,com.ProjectMoon.LimbusCompany,https://play.google.com/store/apps/details?id=com.ProjectMoon.LimbusCompany,False,,,False,False
+68,리니지2M,True,com.ncsoft.lineage2m19,https://play.google.com/store/apps/details?id=com.ncsoft.lineage2m19,False,,,False,False
+69,Travel Town - Merge Adventure,True,io.randomco.travel,https://play.google.com/store/apps/details?id=io.randomco.travel,True,1521236603,https://apps.apple.com/kr/app/id1521236603,False,False
+70,Merge Cooking®,True,com.merge.cooking.theme.restaurant.food,https://play.google.com/store/apps/details?id=com.merge.cooking.theme.restaurant.food,True,1643509748,https://apps.apple.com/kr/app/id1643509748,False,False
+71,시티 데몬헌터즈: 각성자들,True,com.dlw.kr.google,https://play.google.com/store/apps/details?id=com.dlw.kr.google,False,,,False,False
+72,"WPL:Texas Hold'em, MTT, Sit&Go",True,com.zempot.wplpoker,https://play.google.com/store/apps/details?id=com.zempot.wplpoker,False,,,False,False
+73,Dragon Village 3,True,com.highbrow.games.dvo,https://play.google.com/store/apps/details?id=com.highbrow.games.dvo,True,6499562253,https://apps.apple.com/kr/app/id6499562253,False,False
+74,임진왜란: 조선의 반격,True,com.joycity.im,https://play.google.com/store/apps/details?id=com.joycity.im,False,,,False,False
+75,Yu-Gi-Oh! Master Duel,True,jp.konami.masterduel,https://play.google.com/store/apps/details?id=jp.konami.masterduel,False,,,False,False
+76,NBAダンクシティ,True,com.netease.dunkcdjp,https://play.google.com/store/apps/details?id=com.netease.dunkcdjp,False,,,False,False
+77,한게임 로얄 홀덤,True,com.nhn.AApoker,https://play.google.com/store/apps/details?id=com.nhn.AApoker,False,,,False,False
+78,컴투스프로야구2026,True,com.com2us.probaseball3d.normal.freefull.google.global.android.common,https://play.google.com/store/apps/details?id=com.com2us.probaseball3d.normal.freefull.google.global.android.common,False,,,False,False
+79,Tiles Survive!,True,com.funplus.ts.global,https://play.google.com/store/apps/details?id=com.funplus.ts.global,False,,,False,False
+80,Rogue Legend - Roguelike RPG,True,com.pockethaven.roguelegend,https://play.google.com/store/apps/details?id=com.pockethaven.roguelegend,False,,,False,False
+81,Merge Teahouse,True,com.mhclyxpb.gatja,https://play.google.com/store/apps/details?id=com.mhclyxpb.gatja,True,6749302379,https://apps.apple.com/kr/app/id6749302379,False,False
+82,Dragon Traveler,True,com.gametree.lhlr.gp,https://play.google.com/store/apps/details?id=com.gametree.lhlr.gp,True,6751086804,https://apps.apple.com/kr/app/id6751086804,False,False
+83,Legend of Avatar,True,com.billionairegames.serares,https://play.google.com/store/apps/details?id=com.billionairegames.serares,False,,,False,False
+84,Forge Master,True,com.hariwn.legendofcivilizations,https://play.google.com/store/apps/details?id=com.hariwn.legendofcivilizations,False,,,False,False
+85,NTE: Neverness to Everness,True,com.hottagames.nte,https://play.google.com/store/apps/details?id=com.hottagames.nte,False,,,False,False
+86,페이트/그랜드 오더,True,com.netmarble.fgok,https://play.google.com/store/apps/details?id=com.netmarble.fgok,False,,,False,False
+87,리버스: 1999,True,kr.haoplay.game.and.reverse,https://play.google.com/store/apps/details?id=kr.haoplay.game.and.reverse,False,,,False,False
+88,Fishdom,True,com.playrix.fishdomdd.gplay,https://play.google.com/store/apps/details?id=com.playrix.fishdomdd.gplay,True,664575829,https://apps.apple.com/kr/app/id664575829,False,False
+89,리니지2 레볼루션,True,com.netmarble.lineageII,https://play.google.com/store/apps/details?id=com.netmarble.lineageII,False,,,False,False
+90,추노 키우기,True,com.dwgames.chunorpg,https://play.google.com/store/apps/details?id=com.dwgames.chunorpg,False,,,False,False
+91,CookieRun: Kingdom,True,com.devsisters.ck,https://play.google.com/store/apps/details?id=com.devsisters.ck,True,1509450845,https://apps.apple.com/kr/app/id1509450845,False,False
+92,RAVEN2,True,com.netmarble.raven2,https://play.google.com/store/apps/details?id=com.netmarble.raven2,False,,,False,False
+93,갓깨비 키우기-999뽑기 증정,True,com.zzsjkr.google,https://play.google.com/store/apps/details?id=com.zzsjkr.google,False,,,False,False
+94,히간: 이루실,True,com.nexon.he,https://play.google.com/store/apps/details?id=com.nexon.he,False,,,False,False
+95,나이트 크로우,True,com.wemade.nightcrows,https://play.google.com/store/apps/details?id=com.wemade.nightcrows,False,,,False,False
+96,X 클래시,True,com.xman.kr.gp,https://play.google.com/store/apps/details?id=com.xman.kr.gp,False,,,False,False
+97,KartRider Rush+,True,com.nexon.kart,https://play.google.com/store/apps/details?id=com.nexon.kart,True,1466736988,https://apps.apple.com/kr/app/id1466736988,False,False
+98,Merge Restyle,True,com.play.merge.restyle,https://play.google.com/store/apps/details?id=com.play.merge.restyle,False,,,False,False
+99,Cell Survivor,True,defense.roguelike.cell.shoot.survivor,https://play.google.com/store/apps/details?id=defense.roguelike.cell.shoot.survivor,False,,,False,False
+100,Domino DreamsTM,True,com.screenshake.dominodreams,https://play.google.com/store/apps/details?id=com.screenshake.dominodreams,False,,,False,False
+101,Last War:Survival,False,,,True,6448786147,https://apps.apple.com/kr/app/id6448786147,False,False
+102,Mafia42: Mafia Party Game,False,,,True,947258826,https://apps.apple.com/kr/app/id947258826,False,False
+103,Homescapes: Match 3 Games,False,,,True,1195621598,https://apps.apple.com/kr/app/id1195621598,False,False
+104,StoneAge: Idle Adventure,False,,,True,6737408689,https://apps.apple.com/kr/app/id6737408689,False,False
+105,CookieRun: OvenBreak,False,,,True,963067330,https://apps.apple.com/kr/app/id963067330,False,False
+106,Cell Survivor - Shoot Defense,False,,,True,6746465127,https://apps.apple.com/kr/app/id6746465127,False,False
+107,League of Legends: Wild Rift,False,,,True,1480616990,https://apps.apple.com/kr/app/id1480616990,False,False
+108,Jujutsu Kaisen Phantom Parade,False,,,True,6475925341,https://apps.apple.com/kr/app/id6475925341,False,False
+109,Cat Hero : Idle RPG,False,,,True,6446516059,https://apps.apple.com/kr/app/id6446516059,False,False
+110,Heartopia,False,,,True,6746151928,https://apps.apple.com/kr/app/id6746151928,False,False
+111,Forge Master – Idle RPG,False,,,True,6746636289,https://apps.apple.com/kr/app/id6746636289,False,False
+112,Mobile Legends: Bang Bang,False,,,True,1160056295,https://apps.apple.com/kr/app/id1160056295,False,False
+113,Project Makeover,False,,,True,1483058899,https://apps.apple.com/kr/app/id1483058899,False,False
+114,Minecraft: Play with Friends!,False,,,True,479516143,https://apps.apple.com/kr/app/id479516143,False,False
+115,Hotel Legacy: Merge Game,False,,,True,6752886832,https://apps.apple.com/kr/app/id6752886832,False,False
+116,Clash Royale,False,,,True,1053012308,https://apps.apple.com/kr/app/id1053012308,False,False
+117,Foodstars: Merge & Cook,False,,,True,6753862216,https://apps.apple.com/kr/app/id6753862216,False,False
+118,피망 뉴맞고 : 고스톱으로 대한민국 1등,False,,,True,1458568643,https://apps.apple.com/kr/app/id1458568643,False,False
+119,Toon Blast,False,,,True,1176027022,https://apps.apple.com/kr/app/id1176027022,False,False
+120,Idle Cat Gunner: Shooter RPG,False,,,True,6764201639,https://apps.apple.com/kr/app/id6764201639,False,False
+121,MLB 9 Innings Rivals 26,False,,,True,1580691683,https://apps.apple.com/kr/app/id1580691683,False,False
+122,Age of Origins:Tower Defense,False,,,True,1376515087,https://apps.apple.com/kr/app/id1376515087,False,False
+123,Clash of Clans,False,,,True,529479190,https://apps.apple.com/kr/app/id529479190,False,False
+124,Slayer Legend,False,,,True,1635712706,https://apps.apple.com/kr/app/id1635712706,False,False
+125,Foundation: Galactic Frontier,False,,,True,6737595599,https://apps.apple.com/kr/app/id6737595599,False,False
