@@ -14,7 +14,7 @@ from google import genai
 from google.genai import types
 from pydantic import BaseModel
 
-MODEL_NAME = "gemini-3.6-flash"
+MODEL_NAME = "gemini-3.5-flash"
 
 SYSTEM_PROMPT = """당신은 카드사/판매처 혜택 페이지에서 "모바일 게임 결제(인앱결제)"와
 직접 관련된 혜택만 골라 정해진 스키마로 구조화하는 데이터 추출기입니다.
@@ -155,6 +155,10 @@ def _client() -> genai.Client:
     만들어서 재사용하는 방식으로 우회한다."""
     global _CLIENT
     if _CLIENT is None:
+        # google-genai SDK는 api_key를 명시해도 시스템 환경변수 GOOGLE_API_KEY가
+        # 있으면 그쪽을 우선 사용한다(다른 도구가 잡아둔 무관한 키일 수 있음).
+        # 이 프로세스 안에서만 지워서 우리가 지정한 GEMINI_API_KEY가 항상 쓰이게 한다.
+        os.environ.pop("GOOGLE_API_KEY", None)
         _CLIENT = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
     return _CLIENT
 

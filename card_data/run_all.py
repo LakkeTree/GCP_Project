@@ -26,6 +26,10 @@ DEST_FILENAME = "Card_Benefit_Info_DB.csv"
 
 SCRAPERS = {
     "kb": "card_data.scrapers.kb",
+    "samsung": "card_data.scrapers.samsung",
+    "hana": "card_data.scrapers.hana",
+    "shinhan": "card_data.scrapers.shinhan",
+    "nh": "card_data.scrapers.nh",
 }
 
 
