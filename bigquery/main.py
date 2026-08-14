@@ -13,6 +13,7 @@ Eventarc GCS 트리거는 오브젝트 경로 접두사로 필터링할 수 없�
   Store_Benefit_Info_DB.csv        → benefit_info (동일 스키마, store_data/ 크롤러 전용 파일명)
   Epay_Benefit_Info_DB.csv         → benefit_info (동일 스키마, epay_data/ 크롤러 전용 파일명)
   Voucher_Benefit_Info_DB.csv      → benefit_info (동일 스키마, voucher_data/ 크롤러 전용 파일명)
+  Telecom_Benefit_Info_DB.csv      → benefit_info (동일 스키마, telecom_data/ 크롤러 전용 파일명)
   Total_Platform_Connection_DB.csv → platform_connection (전체 truncate)
 그 외 파일명은 검증 없이 바로 quarantine/로 이동한다.
 
@@ -41,6 +42,7 @@ TARGETS = {
     "Store_Benefit_Info_DB.csv": (clean_benefit_info_rows, load_benefit_info),
     "Epay_Benefit_Info_DB.csv": (clean_benefit_info_rows, load_benefit_info),
     "Voucher_Benefit_Info_DB.csv": (clean_benefit_info_rows, load_benefit_info),
+    "Telecom_Benefit_Info_DB.csv": (clean_benefit_info_rows, load_benefit_info),
     "Total_Platform_Connection_DB.csv": (clean_platform_connection_rows, load_platform_connection),
 }
 
