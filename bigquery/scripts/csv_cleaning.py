@@ -5,6 +5,15 @@ CSV 행(dict) → BigQuery 적재용 dict로 정제하는 공용 로직.
 Cloud Run Function(GCS에서 받은 CSV를 메모리에서 바로 정제) 양쪽에서 재사용한다.
 """
 
+try:
+    # Cloud Run Function(main.py)은 이 모듈을 scripts.csv_cleaning으로 패키지
+    # 임포트하므로 상대 임포트가 필요함.
+    from .payment_method_icons import PAYMENT_METHOD_ICON_URLS
+except ImportError:
+    # 로컬 CLI(local_csv_to_jsonl.py 등)는 스크립트 파일을 직접 실행해
+    # bigquery/scripts가 sys.path에 바로 잡히므로 절대 임포트로 동작함.
+    from payment_method_icons import PAYMENT_METHOD_ICON_URLS
+
 # 원본 CSV에서 "빈 값"으로 취급할 문자열 모음 ("", "NULL", "nan" 등이 섞여 있음)
 NULL_TOKENS = {"", "null", "nan", "none"}
 
@@ -115,11 +124,12 @@ def clean_benefit_info_rows(rows: list) -> list:
             raise ValueError(f"[{ctx}] benefit_id 중복: {bid}")
         seen_ids.add(bid)
 
+        provider = row["provider_or_retailer"].strip()
         cleaned.append({
             "benefit_id": bid,
             "source_file": row["source_file"].strip(),
             "category": row["category"].strip(),
-            "provider_or_retailer": row["provider_or_retailer"].strip(),
+            "provider_or_retailer": provider,
             "item_or_event_name": row["item_or_event_name"].strip(),
             "target_platform": row["target_platform"].strip(),
             "target_game": row["target_game"].strip(),
@@ -147,6 +157,7 @@ def clean_benefit_info_rows(rows: list) -> list:
             "end_date": to_date_or_none(row["end_date"]),
             "source_url": to_str_or_none(row["source_url"]),
             "condition_raw_text": row["condition_raw_text"].strip(),
+            "payment_method_icon_url": PAYMENT_METHOD_ICON_URLS.get(provider),
             # 팀원 크롤링 CSV 전용 컬럼. 우리 CSV에는 없는 컬럼이라 row.get()으로 조회해서
             # 없으면 빈 문자열 취급 → 아래 함수들이 NULL로 변환한다.
             "content_hash": to_str_or_none(row.get("content_hash", "")),

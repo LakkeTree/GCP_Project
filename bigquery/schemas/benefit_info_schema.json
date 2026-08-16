@@ -30,6 +30,7 @@
   { "name": "end_date", "type": "DATE", "mode": "NULLABLE", "description": "혜택 적용 종료일 (상시 혜택은 NULL)" },
   { "name": "source_url", "type": "STRING", "mode": "NULLABLE", "description": "혜택 상세/출처 URL" },
   { "name": "condition_raw_text", "type": "STRING", "mode": "REQUIRED", "description": "원본 조건 설명 원문 텍스트" },
+  { "name": "payment_method_icon_url", "type": "STRING", "mode": "NULLABLE", "description": "결제수단(카드사/간편결제/게임스토어/통신사/상품권판매처) 아이콘 이미지 URL. provider_or_retailer 매핑표 기준, 매핑 없으면 NULL" },
   { "name": "content_hash", "type": "STRING", "mode": "NULLABLE", "description": "크롤링 원본 콘텐츠 해시 (팀원 크롤링 CSV 전용, 우리 CSV는 NULL)" },
   { "name": "crawled_at", "type": "TIMESTAMP", "mode": "NULLABLE", "description": "크롤링 시각 (팀원 크롤링 CSV 전용, 우리 CSV는 NULL)" },
   { "name": "updated_at", "type": "TIMESTAMP", "mode": "NULLABLE", "description": "크롤링 데이터 갱신 시각 (팀원 크롤링 CSV 전용, 우리 CSV는 NULL)" },
