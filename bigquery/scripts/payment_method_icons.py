@@ -40,4 +40,39 @@ PAYMENT_METHOD_ICON_URLS: dict[str, str] = {
     # www.cultureland.co.kr은 302 리다이렉트 후 빈 응답이라 모바일 사이트
     # (m.cultureland.co.kr)의 favicon 사용.
     "CULTURELAND_CASH": "https://m.cultureland.co.kr/favicon.png",
+
+    # --- 2026-08-17 legacy_manual_db import 추가분 (구 수기 정리본에만 있던 provider) ---
+    # 간편결제
+    "TOSS_PAY": "https://play-lh.googleusercontent.com/0UWkqvnwbmgyuho59qN9LQDT-w5CN-Jj3R2oK-Vh9ZIJwhzjrjtAcYxYIuSvl-mlZwmntoGemfVkGoRYLK9G",
+    "SAMSUNG_PAY": "https://play-lh.googleusercontent.com/Oy8bbVOACpQsG-1SVj1KgA_6hL1mGS8iI1zy9Z0NgK2Kz_dLyDNfpDFDY0BmKN52x9Y4vvHfcQYF8wVeW5K5zQ",
+    "KAKAO_PAY": "https://play-lh.googleusercontent.com/hOXXHuezGl0ur3l7EWTdwEAyybjZQn6ayMokEL_XMV3UJuvLfUrefgovyrngh2UTsT4TvdniwYkqDTkVaBqywv4",
+    # Apple Pay 자체 마크. 공식 Apple 배포본은 로그인이 필요해 확보 못해,
+    # 위키미디어 커먼즈의 공식 마크 SVG로 대체(LGU_PLUS와 동일한 사유).
+    "APPLE_PAY": "https://upload.wikimedia.org/wikipedia/commons/b/b0/Apple_Pay_logo.svg",
+    # Apple 기프트카드 전용 아트워크는 없어(디자인이 다양함) Apple 브랜드 자체를
+    # 나타내는 공식 로고(위키미디어 커먼즈)로 대체.
+    "APPLE_GIFTCARD": "https://upload.wikimedia.org/wikipedia/commons/f/fa/Apple_logo_black.svg",
+    # QUICK_BANK_TRANSFER(퀵계좌이체)는 특정 브랜드가 아니라 결제 방식 자체라
+    # 매핑하지 않음 — 프론트엔드에서 icon_url NULL일 때 기본 아이콘 처리.
+
+    # 기프트카드/스토어 - 이미 매핑된 동일 브랜드 아이콘 재사용
+    "GALAXY_STORE_GIFTCARD": "https://images.seeklogo.com/logo-png/43/1/samsung-galaxy-store-logo-png_seeklogo-438253.png",
+    "GOOGLE_PLAY_GIFTCARD": "https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png",
+    "ONESTORE_GIFTCARD": "https://onestorecorp.com/assets/img/onestore/bi_summary.png",
+
+    # 상품권/기프트카드 판매처 (오픈마켓·편의점)
+    "11STREET": "https://play-lh.googleusercontent.com/aEHnF2BiJxPv_M2wdZ14NVNQMOKZpb_nwluorAKgaP86fZD9fo5I8N3my0UOynHqhJIohRSKx_kRXDspQrDj6A",
+    "GMARKET": "https://play-lh.googleusercontent.com/i5kzQ11TDpzF4XaVep1G2_Ev6is1j06L6spF1SKYgcAT0l2jcxZRkzOL9jQXeBBlq2pnQLPfmm8blZRqHrmkkQ",
+    "SSG_COM": "https://play-lh.googleusercontent.com/CPwGWWRrCQEmf_3j-FhZwFlz6tkXFVuTLV6MUUO6JCJIpqpZVp7f7y_tlpWKW-T3ym8BYw09P0unft3gFvCgetM",
+    "CU_CONVENIENCE_STORE": "https://play-lh.googleusercontent.com/BrsA4goInqyz4gCt94UWc2eaJdCGamjAnBpPVSSFXcPPaTf1xWgfYB2-5e_-1YYV4MtfJdqa--DKwz1raQkN",
+    # "네이버스토어 결제"로 파는 구글플레이 상품권 — 가장 근접한 공식 앱인
+    # 네이버플러스 스토어 아이콘 사용.
+    "GOOGLE_PLAY_NAVER_STORE": "https://play-lh.googleusercontent.com/ZnBEwqQaoz4m149EEwyDWeceJqqTSh1ODIaKzjea74e7jDw5Ehc69LBzo5fRI76K3kvMmcARCx1A7ymDw2E2",
+    "BOOKNLIFE_VOUCHER": "https://play-lh.googleusercontent.com/oJrwd4NRJV-2MC_uxO0OjrPWikkaujVYPllG5PkeJh2eYXECTLzs4MhRMQtwxS8I373PLioPB-nVkTV3j4WKWw",
+    # 컬쳐랜드 브랜드 동일 — 기존 CULTURELAND_CASH 아이콘 재사용.
+    "CULTURELAND_VOUCHER": "https://m.cultureland.co.kr/favicon.png",
+    "CULTURELAND_BYPASS": "https://m.cultureland.co.kr/favicon.png",
+
+    # PG사 (계좌이체형)
+    "KCP_BANK_ACCOUNT": "https://kcp.co.kr/_nuxt/img/icon_logo.7b1a1c0.svg",
 }
