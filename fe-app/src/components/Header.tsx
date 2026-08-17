@@ -1,19 +1,95 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import LoginModal from './LoginModal';
+import { GoogleLogin } from '@react-oauth/google';
+
+const parseGoogleToken = (token: string) => {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(jsonPayload);
+  } catch (e) {
+    return null;
+  }
+};
 
 export default function Header() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
-  const [loggedInUser, setLoggedInUser] = useState<string | null>(null);
+  const [user, setUser] = useState<any>(null);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // 외부 클릭 시 드롭다운 닫기
+  const fetchUserProfile = async (token: string) => {
+    try {
+      const googleData = parseGoogleToken(token);
+      const googleNick = googleData?.given_name || googleData?.name || '유저';
+
+      const res = await fetch('http://127.0.0.1:8000/user/profile', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (res.ok) {
+        const result = await res.json();
+        setUser({
+          email: result.data?.email || googleData?.email || '이메일 없음',
+          nickname: result.data?.nickname || googleNick,
+          picture: googleData?.picture || null,
+          provider: 'GOOGLE',
+        });
+      } else {
+        setUser({
+          email: googleData?.email || '이메일 없음',
+          nickname: googleNick,
+          picture: googleData?.picture || null,
+          provider: 'GOOGLE',
+        });
+      }
+    } catch (error) {
+      console.error("백엔드 서버 연동 실패:", error);
+    }
+  };
+
+  useEffect(() => {
+    const token = localStorage.getItem('google_token');
+    if (token) {
+      fetchUserProfile(token);
+    }
+
+    const handleProfileUpdate = () => {
+      const currentToken = localStorage.getItem('google_token');
+      if (currentToken) {
+        fetchUserProfile(currentToken);
+      }
+    };
+
+    window.addEventListener('user_profile_updated', handleProfileUpdate);
+    return () => window.removeEventListener('user_profile_updated', handleProfileUpdate);
+  }, []);
+
+  const handleGoogleSuccess = (credentialResponse: any) => {
+    if (credentialResponse.credential) {
+      const idToken = credentialResponse.credential;
+      localStorage.setItem('google_token', idToken);
+      fetchUserProfile(idToken);
+    }
+  };
+
+  const handleLogout = () => {
+    setIsProfileMenuOpen(false);
+    localStorage.removeItem('google_token');
+    setUser(null);
+    navigate('/');
+  };
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -24,229 +100,212 @@ export default function Header() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // 스크롤 감지
   useEffect(() => {
     let ticking = false;
-
     const handleScroll = () => {
       if (!ticking) {
         window.requestAnimationFrame(() => {
           const currentScrollY = window.scrollY;
-
           setIsScrolled((prev) => {
             if (!prev && currentScrollY > 50) return true;
             if (prev && currentScrollY < 10) return false;
             return prev;
           });
-
           ticking = false;
         });
-
         ticking = true;
       }
     };
-
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // 5대 핵심 메뉴
   const navItems = [
     { name: '오늘의 최고할인', path: '/' },
-    { name: '게임랭킹', path: '/rank' },
     { name: '지원하는 게임', path: '/supported-games' },
     { name: '지원하는 결제수단', path: '/supported-payment' },
     { name: '최저가 검색', path: '/search' },
   ];
 
   return (
-    <>
-      <header
-        className={`bg-white border-b border-slate-200 sticky top-0 z-50 transition-all duration-300 ${
-          isScrolled ? 'shadow-md py-2' : 'shadow-sm py-3.5'
-        }`}
-      >
-        <div className="max-w-[1400px] mx-auto px-4 md:px-6 space-y-2.5 transition-all duration-300">
+    <header
+      className={`bg-slate-900 border-b border-slate-800 sticky top-0 z-50 transition-all duration-300 ${
+        isScrolled ? 'shadow-xl py-2.5' : 'shadow-lg py-4'
+      }`}
+    >
+      <div className="max-w-[1400px] mx-auto px-4 md:px-6 space-y-3 transition-all duration-300">
+        <div className="flex items-center justify-between gap-4">
           
-          {/* 1행: 로고 & 프로필/로그인 버튼 */}
-          <div className="flex items-center justify-between gap-4">
-            
-            {/* 브랜드 로고 */}
-            <Link
-              to="/"
-              className={`font-black text-cyan-600 tracking-tight shrink-0 flex items-center gap-2 transition-all duration-300 ${
-                isScrolled ? 'text-xl' : 'text-2xl md:text-3xl'
-              }`}
-            >
-              <span className={isScrolled ? 'text-xl' : 'text-3xl'}>🛡️</span>
-              <span>호갱탈출</span>
-            </Link>
+          {/* 브랜드 로고 (그라데이션 타이틀 텍스트 적용) */}
+          <Link
+            to="/"
+            className="group shrink-0 flex items-center gap-3 transition-transform duration-200 active:scale-95"
+          >
+            <div className="w-12 h-12 md:w-13 md:h-13 bg-gradient-to-br from-[#00D2B8]/15 to-[#00E5FF]/15 border border-[#00D2B8]/40 rounded-md flex items-center justify-center text-[#00D2B8] shadow-md group-hover:border-[#00D2B8] transition-all p-2">
+              <svg
+                className="w-8 h-8 md:w-9 md:h-9 stroke-[2.2]"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"
+                />
+              </svg>
+            </div>
 
-            {/* 우측 회원 영역 */}
-            <div className="shrink-0">
-              {loggedInUser ? (
-                /* 로그인 완료 시: 프로필 버튼 & 드롭다운 */
-                <div className="relative" ref={dropdownRef}>
-                  <button
-                    type="button"
-                    onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-                    className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-full pl-1.5 pr-3 py-1 shadow-sm hover:bg-slate-100 hover:border-slate-300 transition-all cursor-pointer"
-                  >
-                    <div className="w-8 h-8 rounded-full bg-slate-300 flex items-center justify-center text-slate-600 font-bold overflow-hidden border border-slate-200 shrink-0">
-                      <svg className="w-5 h-5 text-slate-500" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                      </svg>
-                    </div>
+            <span className="font-black text-xl md:text-2xl bg-gradient-to-r from-[#00D2B8] to-[#00E5FF] bg-clip-text text-transparent tracking-tight">
+              호갱탈출
+            </span>
+          </Link>
 
-                    <div className="flex flex-col text-left">
-                      <span className="text-xs font-bold text-slate-800 leading-tight">
-                        {loggedInUser.split('@')[0]}님
-                      </span>
-                      <span className="text-[10px] text-slate-400 leading-tight">
-                        {loggedInUser.includes('@') ? loggedInUser : '일반 계정'}
-                      </span>
-                    </div>
-
-                    <svg
-                      className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${
-                        isProfileMenuOpen ? 'rotate-180' : ''
-                      }`}
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-
-                  {/* 마이페이지 메뉴와 1:1 매핑된 드롭다운 */}
-                  {isProfileMenuOpen && (
-                    <div className="absolute right-0 mt-2 w-60 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
-                      <div className="px-4 py-2 border-b border-slate-100">
-                        <p className="text-[11px] font-semibold text-slate-400">접속 계정</p>
-                        <p className="text-xs font-bold text-slate-800 truncate">{loggedInUser}</p>
-                      </div>
-
-                      <div className="py-1">
-                        {/* 1. 개인 정보 & 즐겨찾기 */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsProfileMenuOpen(false);
-                            navigate('/profile?tab=profile');
-                          }}
-                          className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-cyan-600 flex items-center gap-2.5 transition-colors cursor-pointer"
-                        >
-                          <span className="text-sm">👤</span>
-                          <span>본인 정보 & 즐겨찾기</span>
-                        </button>
-
-                        {/* 2. 계정 보안 & 비밀번호 */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsProfileMenuOpen(false);
-                            navigate('/profile?tab=security');
-                          }}
-                          className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-cyan-600 flex items-center gap-2.5 transition-colors cursor-pointer"
-                        >
-                          <span className="text-sm">🔒</span>
-                          <span>계정 보안 & 비밀번호</span>
-                        </button>
-
-                        {/* 3. 저장한 검색 조건 필터링 */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsProfileMenuOpen(false);
-                            navigate('/profile?tab=filter');
-                          }}
-                          className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-cyan-600 flex items-center gap-2.5 transition-colors cursor-pointer"
-                        >
-                          <span className="text-sm">🔖</span>
-                          <span>저장한 검색 조건 필터링</span>
-                        </button>
-                      </div>
-
-                      {/* 4. 로그아웃 */}
-                      <div className="border-t border-slate-100 pt-1 mt-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsProfileMenuOpen(false);
-                            setLoggedInUser(null);
-                            navigate('/');
-                          }}
-                          className="w-full text-left px-4 py-2 text-xs font-bold text-red-500 hover:bg-red-50 flex items-center gap-2.5 transition-colors cursor-pointer"
-                        >
-                          <span className="text-sm">🚪</span>
-                          <span>로그아웃</span>
-                        </button>
-                      </div>
+          {/* 프로필 및 구글 로그인 버튼 */}
+          <div className="shrink-0 flex items-center gap-2">
+            {user ? (
+              <div className="relative" ref={dropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+                  className="flex items-center gap-2.5 bg-slate-800 border border-slate-700 rounded-md pl-1.5 pr-3 py-1.5 shadow-sm hover:bg-slate-750 transition-all cursor-pointer"
+                >
+                  {user.picture ? (
+                    <img
+                      src={user.picture}
+                      alt="프로필"
+                      referrerPolicy="no-referrer"
+                      className="w-7 h-7 rounded object-cover border border-slate-600 shrink-0"
+                    />
+                  ) : (
+                    <div className="w-7 h-7 rounded bg-gradient-to-r from-[#00D2B8] to-[#00E5FF] flex items-center justify-center text-slate-950 font-black overflow-hidden shrink-0 text-xs">
+                      {user.nickname ? user.nickname[0] : '👤'}
                     </div>
                   )}
-                </div>
-              ) : (
-                /* 비로그인 상태 */
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setLoggedInUser('dev_user@example.com')}
-                    className={`bg-amber-500 hover:bg-amber-600 text-white font-black rounded-lg transition-all duration-300 shadow-sm cursor-pointer ${
-                      isScrolled ? 'px-3 py-1 text-xs' : 'px-3.5 py-1.5 text-sm'
-                    }`}
-                  >
-                    ⚡ 개발자 로그인
-                  </button>
 
-                  <button
-                    type="button"
-                    onClick={() => setIsLoginModalOpen(true)}
-                    className={`border-2 border-cyan-500 text-cyan-600 hover:bg-cyan-50 font-black rounded-lg transition-all duration-300 shadow-sm cursor-pointer ${
-                      isScrolled ? 'px-3.5 py-1 text-xs' : 'px-4.5 py-1.5 text-sm'
+                  <div className="flex flex-col text-left">
+                    <div className="flex items-center gap-0.5 text-xs font-extrabold text-slate-100 leading-tight">
+                      <span className="truncate max-w-[70px] sm:max-w-[90px] inline-block">{user.nickname}</span>
+                      <span>님</span>
+                    </div>
+                    <span className="text-[10px] bg-gradient-to-r from-[#00D2B8] to-[#00E5FF] bg-clip-text text-transparent font-black leading-tight">
+                      GOOGLE
+                    </span>
+                  </div>
+
+                  <svg
+                    className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${
+                      isProfileMenuOpen ? 'rotate-180' : ''
                     }`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
                   >
-                    로그인
-                  </button>
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+
+                {/* 프로필 드롭다운 패널 */}
+                {isProfileMenuOpen && (
+                  <div className="absolute right-0 mt-3 w-70 bg-slate-950 rounded-lg shadow-[0_20px_50px_rgba(0,0,0,0.6)] border border-[#00D2B8]/50 p-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150 space-y-1.5">
+                    <div className="absolute -top-1.5 right-6 w-3 h-3 bg-slate-950 border-l border-t border-[#00D2B8]/50 rotate-45 z-10" />
+
+                    <div className="relative z-20 p-3 bg-slate-800 border border-slate-700/80 rounded-md flex items-center gap-3 shadow-sm">
+                      {user.picture ? (
+                        <img
+                          src={user.picture}
+                          alt="프로필"
+                          referrerPolicy="no-referrer"
+                          className="w-9 h-9 rounded object-cover border border-[#00D2B8]/60 shrink-0"
+                        />
+                      ) : (
+                        <div className="w-9 h-9 rounded bg-gradient-to-r from-[#00D2B8] to-[#00E5FF] flex items-center justify-center text-slate-950 font-black shrink-0 text-xs shadow-xs">
+                          {user.nickname ? user.nickname[0] : '👤'}
+                        </div>
+                      )}
+                      <div className="truncate">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-black text-white truncate">{user.nickname}</span>
+                          <span className="text-[9.5px] font-black text-slate-950 bg-gradient-to-r from-[#00D2B8] to-[#00E5FF] px-1.5 py-0.2 rounded shrink-0">
+                            GOOGLE
+                          </span>
+                        </div>
+                        <p className="text-[11px] font-medium text-slate-300 truncate mt-0.5">{user.email}</p>
+                      </div>
+                    </div>
+
+                    <div className="relative z-20">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsProfileMenuOpen(false);
+                          navigate('/profile?tab=profile');
+                        }}
+                        className="w-full text-left p-3 bg-slate-800 hover:bg-slate-750 border border-slate-700/80 hover:border-[#00D2B8] rounded-md text-xs font-extrabold text-slate-100 hover:text-[#00D2B8] flex items-center gap-2.5 transition-all cursor-pointer shadow-sm"
+                      >
+                        <span className="text-sm">👤</span>
+                        <span>개인 정보 & 즐겨찾기</span>
+                      </button>
+                    </div>
+
+                    <div className="relative z-20">
+                      <button
+                        type="button"
+                        onClick={handleLogout}
+                        className="w-full text-left p-3 bg-slate-800 hover:bg-rose-950/50 border border-slate-700/80 hover:border-rose-500/50 rounded-md text-xs font-extrabold text-rose-400 flex items-center gap-2.5 transition-all cursor-pointer shadow-sm"
+                      >
+                        <span className="text-sm">🚪</span>
+                        <span>로그아웃</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="relative overflow-hidden rounded-md">
+                <div className="bg-gradient-to-r from-[#00D2B8] to-[#00E5FF] hover:brightness-105 text-slate-950 font-black transition-all duration-200 shadow-md flex items-center gap-2.5 pointer-events-none pl-2.5 pr-4 py-1.5 text-xs md:text-sm">
+                  <div className="bg-slate-950 rounded p-1 flex items-center justify-center shrink-0 shadow-xs">
+                    <svg className="w-4 h-4" viewBox="0 0 24 24">
+                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                    </svg>
+                  </div>
+                  <span>구글 로그인</span>
                 </div>
-              )}
-            </div>
+
+                <div className="absolute inset-0 opacity-0 cursor-pointer scale-150">
+                  <GoogleLogin
+                    onSuccess={handleGoogleSuccess}
+                    onError={() => alert('구글 로그인 중 오류가 발생했습니다.')}
+                  />
+                </div>
+              </div>
+            )}
           </div>
-
-          {/* 2행: 네비게이션 바 */}
-          <nav
-            className={`flex items-center justify-start border-t border-slate-100 space-x-6 md:space-x-8 overflow-x-auto no-scrollbar transition-all duration-300 ${
-              isScrolled ? 'pt-1' : 'pt-2'
-            }`}
-          >
-            {navItems.map((item) => {
-              const isActive = location.pathname === item.path;
-              return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={`font-bold whitespace-nowrap transition-all border-b-2 ${
-                    isScrolled ? 'py-1 text-xs' : 'py-1.5 text-sm'
-                  } ${
-                    isActive
-                      ? 'text-cyan-600 border-cyan-500 font-black'
-                      : 'text-slate-600 border-transparent hover:text-cyan-600 hover:border-slate-300'
-                  }`}
-                >
-                  {item.name}
-                </Link>
-              );
-            })}
-          </nav>
-
         </div>
-      </header>
 
-      <LoginModal
-        isOpen={isLoginModalOpen}
-        onClose={() => setIsLoginModalOpen(false)}
-        onLoginSuccess={(email) => setLoggedInUser(email)}
-      />
-    </>
+        {/* 네비게이션 메뉴 (활성 탭 그라데이션 텍스트 적용) */}
+        <nav className="flex items-center justify-start border-t border-slate-800 space-x-6 overflow-x-auto no-scrollbar pt-2">
+          {navItems.map((item) => {
+            const isSelected = location.pathname === item.path;
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={`font-bold text-sm whitespace-nowrap pb-1.5 border-b-2 transition-all ${
+                  isSelected
+                    ? 'bg-gradient-to-r from-[#00D2B8] to-[#00E5FF] bg-clip-text text-transparent border-[#00D2B8] font-black'
+                    : 'text-slate-400 border-transparent hover:text-[#00D2B8]'
+                }`}
+              >
+                {item.name}
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
+    </header>
   );
 }

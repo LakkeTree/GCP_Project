@@ -32,8 +32,8 @@ develop에서 가져온 것:
     비정상 값이면 조용히 제외한다(없는 권종을 임의 기본값으로 지어내지 않는다).
 ===============================================================================
 """
-
 import itertools
+import re
 
 PAYMENT_LAYER_ORDER = ["STORE_COUPON", "PAYMENT_PG", "PAYMENT_E_PAY", "CARD_ISSUER"]
 CALCULABLE_TYPES = {"DISCOUNT", "REWARD", "CASHBACK", "FEE"}
@@ -75,6 +75,27 @@ TIER_MAP = {
 # =============================================================================
 # [호환성 검증] platform_connection 데이터로 "이 플랫폼에서 쓸 수 있는 수단인지" 확인
 # =============================================================================
+def _normalize_game_string(s):
+    """게임명의 언더바, 공백, 특수문자를 제거하고 대문자로 정규화"""
+    if not s or str(s).strip().upper() == "ALL":
+        return "ALL"
+    cleaned = re.sub(r'[^A-Za-z0-9가-힣]', '', str(s))
+    return cleaned.upper()
+
+# [추가] DB의 다양한 stacking_layer 표기를 표준 레이어로 변환
+def _normalize_layer(layer_str):
+    if not layer_str:
+        return "STORE_COUPON"
+    l = str(layer_str).upper().strip()
+    if l in ("STORE_COUPON", "COUPON", "STORE"):
+        return "STORE_COUPON"
+    if l in ("PAYMENT_PG", "PG", "CARRIER", "TELECOM"):
+        return "PAYMENT_PG"
+    if l in ("PAYMENT_E_PAY", "E_PAY", "PAY", "E_PAYMENT"):
+        return "PAYMENT_E_PAY"
+    if l in ("CARD_ISSUER", "CARD", "CARD_DISCOUNT"):
+        return "CARD_ISSUER"
+    return l
 
 def build_compatibility_index(platform_rows):
     return {
@@ -123,28 +144,53 @@ def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
         # 아니라 "스토어 이름"이 들어있어 별도 처리한다. GIFT_CARD/VOUCHER_PURCHASE는
         # 문화상품권 등 우회 보유 수단(컬쳐랜드 캐시/상품권, 각종 상품권 판매처)을
         # 갖고 있어도 적용 가능하다.
-        if b["stacking_layer"] != "STORE_COUPON":
-            if b["category"] in ("GIFT_CARD", "VOUCHER_PURCHASE"):
-                giftcard_held = any(m in held_methods for m in ["GOOGLE_PLAY_GIFTCARD", "ZEROPIN", "GMARKET", "11STREET", "SSG_COM", "CULTURELAND_CASH", "CULTURELAND_VOUCHER"])
-                if not giftcard_held and b["provider_or_retailer"] not in held_methods:
+        # 스토어 관련 제공자(GOOGLE_PLAY, ONE_STORE 등)는 자동으로 보유 수단으로 인정
+        effective_held_methods = set(held_methods) | {platform, "GOOGLE_PLAY", "ONE_STORE", "GALAXY_STORE", "APP_STORE"}
+        
+        provider_code = str(b.get("provider_or_retailer") or "").upper()
+        
+        # 보유 결제수단 검증 (유연 유효 매칭)
+        norm_layer = _normalize_layer(b.get("stacking_layer"))
+        if norm_layer != "STORE_COUPON":
+            if b.get("category") in ("GIFT_CARD", "VOUCHER_PURCHASE"):
+                giftcard_held = any(m in effective_held_methods for m in ["GOOGLE_PLAY_GIFTCARD", "ZEROPIN", "GMARKET", "11STREET", "SSG_COM", "CULTURELAND_CASH", "CULTURELAND_VOUCHER"])
+                if not giftcard_held and provider_code not in effective_held_methods:
                     continue
-            elif b["provider_or_retailer"] not in held_methods:
-                continue
+            else:
+                # 결제수단 코드 상호 포함 여부 검사 (예: NAVER_PAY <-> NAVER)
+                is_held = any(
+                    m in provider_code or provider_code in m 
+                    for m in effective_held_methods
+                )
+                if not is_held:
+                    continue
         else:
-            provider_platform = STORE_PROVIDER_TO_PLATFORM.get(b["provider_or_retailer"])
-            if provider_platform is not None and provider_platform != platform:
+            provider_platform = STORE_PROVIDER_TO_PLATFORM.get(provider_code, provider_code)
+            if provider_platform not in ("ALL", platform):
                 continue
 
         if b.get("requires_pre_app") and not has_pre_applied:
             continue
 
-        # 게임 전용 혜택 옵션 필터링
+        # ✅ 새로 넣을 코드 (121개 전체 게임 100% 동적 매칭)
+        b_target_norm = _normalize_game_string(b.get("target_game"))
+        req_game_norm = _normalize_game_string(game)
+
         if not use_game_benefits:
-            if b["target_game"] != "ALL":
+            # 게임 전용 혜택 옵션을 끈 경우: 공통(ALL) 혜택만 포함
+            if b_target_norm != "ALL":
                 continue
         else:
-            if b["target_game"] != "ALL" and b["target_game"] != game:
-                continue
+            # 게임 전용 혜택 옵션을 켠 경우: DB의 target_game이 ALL이 아닐 때 동적 대조
+            if b_target_norm != "ALL":
+                # 특수문자/공백/언더바가 제거된 정규화 문자열 간 순수 동적 매칭 (완전일치 또는 부분포함)
+                is_matched = (
+                    b_target_norm == req_game_norm or
+                    b_target_norm in req_game_norm or
+                    req_game_norm in b_target_norm
+                )
+                if not is_matched:
+                    continue
 
         if amount < b["min_spend_krw"]:
             continue
@@ -393,15 +439,11 @@ def build_voucher_charge_routes(voucher_benefits, platform, target_amount):
 # =============================================================================
 
 def generate_combinations(benefits):
-    """
-    계층별 '적용/미적용' 모든 경우의 수를 생성하되, [간편결제/통신사
-    (PAYMENT_E_PAY / PAYMENT_PG)]와 [카드사 자체 혜택 (CARD_ISSUER)]은 단일 결제 시
-    동시 적용이 불가능하므로 둘 중 하나만 선택되도록 상호 배타 규칙을 적용한다.
-    """
     by_layer = {layer: [] for layer in PAYMENT_LAYER_ORDER}
     for b in benefits:
-        if b["stacking_layer"] in by_layer:
-            by_layer[b["stacking_layer"]].append(b)
+        norm_l = _normalize_layer(b.get("stacking_layer"))
+        if norm_l in by_layer:
+            by_layer[norm_l].append(b)
 
     choices = [[None] + by_layer[layer] for layer in PAYMENT_LAYER_ORDER]
     all_combos = list(itertools.product(*choices))

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import type { OsType } from '../constants/searchOptions';
+import { getGameCode } from '../constants/gameMapping';
 import {
   ANDROID_STORE_OPTIONS,
   CARRIER_OPTIONS,
@@ -13,9 +14,72 @@ import {
   LAYER_NAME_MAP,
   REVERSE_PAYMENT_MAP,
   BACKEND_API_URL,
-  getGameIcon,
-  getGameStores,
 } from '../constants/searchOptions';
+
+const formatMethodName = (text: string) => {
+  if (!text) return '';
+  return text
+    .replace(/갤럭시 스토어\s*\d+월 모바일 게임 월간 할인 쿠폰 이벤트\s*-\s*/g, '갤스 월간 쿠폰 ')
+    .replace(/한여름 쿠폰 WAVE,\s*팔팔한 혜택이 밀려온다\s*-\s*/g, '갤스 한여름 WAVE ')
+    .replace(/혜택은 서포트,\s*게임은 퍼펙트\s*갤럭시 스토어\s*/g, '갤스 ')
+    .replace(/스토어별 첫 결제 혜택\s*-\s*/g, '첫 결제 ')
+    .replace(/CU_CONVENIENCE_STORE/g, 'CU 편의점')
+    .replace(/GOOGLE_PLAY_Giftcard\/Voucher/g, '구글 기프트카드 할인')
+    .replace(/GOOGLE_PLAY_Giftcard/g, '구글 기프트카드')
+    .replace(/Giftcard\/Voucher/g, '기프트카드 할인')
+    .replace(/GOOGLE_PLAY_NAVER_STORE/g, '네이버 스토어')
+    .replace(/ZEROPIN/g, '제로핀')
+    .replace(/GOOGLE_PLAY/g, '구글 플레이')
+    .replace(/GALAXY_STORE/g, '갤럭시 스토어')
+    .replace(/ONE_STORE/g, '원스토어')
+    .replace(/APP_STORE/g, '앱스토어')
+    .replace(/SAMSUNG_PAY/g, '삼성페이')
+    .replace(/KAKAO_PAY/g, '카카오페이')
+    .replace(/TOSS_PAY/g, '토스페이')
+    .replace(/NAVER_PAY/g, '네이버페이');
+};
+
+const getUsageGuide = (pathText: string) => {
+  const text = pathText.toUpperCase();
+
+  if (text.includes('CU')) {
+    return '결제 경로 가이드: CU 편의점/Pocket CU 앱에서 구글 기프트카드 구매 ➔ 영수증/카드 핀번호(코드) 입력 ➔ 구글 스토어 충전 후 결제';
+  }
+  if (text.includes('ZEROPIN') || text.includes('제로핀')) {
+    return '결제 경로 가이드: 제로핀 공식몰에서 기프트코드 할인 구매 ➔ 발급된 핀번호 입력 및 스토어 충전 ➔ 인앱 결제 진행';
+  }
+  if (text.includes('CULTURELAND') || text.includes('컬쳐랜드') || text.includes('북앤라이프')) {
+    return '결제 경로 가이드: 문화상품권 할인 구매 ➔ 해당 컬쳐캐시/상품권 핀번호 입력 충전 ➔ 스토어 우회 결제 적용';
+  }
+  if (text.includes('NAVER') && (text.includes('STORE') || text.includes('스토어'))) {
+    return '결제 경로 가이드: 네이버 스마트스토어 공식 판매처 구매 ➔ 문자/알림톡 기프트코드 핀번호 입력 ➔ 스토어 등록 후 결제';
+  }
+  if (text.includes('삼성페이') || text.includes('SAMSUNG_PAY')) {
+    return '결제 경로 가이드: 스토어 쿠폰함에서 할인 쿠폰 받기 ➔ 게임 결제창 접속 ➔ 삼성페이 선택하여 즉시 결제';
+  }
+  if (text.includes('갤럭시') || text.includes('GALAXY')) {
+    return '결제 경로 가이드: 갤럭시 스토어 [쿠폰함] 쿠폰 다운로드 ➔ 게임 결제창에서 쿠폰 적용 후 선택 결제 수단으로 결제';
+  }
+  if (text.includes('원스토어') || text.includes('ONE_STORE')) {
+    return '결제 경로 가이드: 원스토어 [혜택/쿠폰함] 쿠폰 및 T멤버십 할인 선택 ➔ 결제 수단 최종 확인 후 결제';
+  }
+  if (text.includes('구글') || text.includes('GOOGLE')) {
+    return '결제 경로 가이드: 구글 플레이 [혜택] 탭 쿠폰 적용 확인 ➔ 게임 인앱 결제창에서 보유 수단으로 진행';
+  }
+  
+  return '결제 경로 가이드: 해당 스토어 쿠폰함에서 이벤트 쿠폰 적용 ➔ 지정된 결제 수단 선택 후 최종 결제 진행';
+};
+
+const getInitialGames = (): { id: string; name: string; company: string; icon_url: string; stores?: string[] }[] => {
+  try {
+    const localData = localStorage.getItem('cached_games_list');
+    if (localData) {
+      const parsed = JSON.parse(localData);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {}
+  return [];
+};
 
 export interface RouteStep {
   layer: string;
@@ -87,9 +151,8 @@ const formatEventTitle = (title: string): string => {
   return title
     .replace(/^\(더미\)\s*/, '')
     .replace(/^스토어별 첫 결제 혜택 -\s*/, '')
-    // 💡 갤럭시 스토어 긴 홍보 문구 정제 추가
     .replace(/^혜택은 서포트,\s*게임은 퍼펙트\s*갤럭시 스토어\s*/, '')
-    .replace(/<[^>]+>\s*이벤트\s*-\s*/, '')      // <8월 월간 쿠폰> 이벤트 - 부분 제거
+    .replace(/<[^>]+>\s*이벤트\s*-\s*/, '')
     .replace(/할인 쿠폰$/, '쿠폰')
     .trim();
 };
@@ -98,14 +161,26 @@ export default function SearchResultPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  // URL 쿼리 파라미터 파싱
   const initialGame = searchParams.get('game') || '쿠키런: 킹덤';
   const initialAmount = Number(searchParams.get('amount')) || 150000;
   const initialOs = (searchParams.get('os') as OsType) || 'ANDROID';
   const initialStores = searchParams.get('stores') ? searchParams.get('stores')!.split(',') : ANDROID_STORE_OPTIONS;
-  const initialCarriers = searchParams.get('carriers') ? searchParams.get('carriers')!.split(',') : [];
-  const initialPays = searchParams.get('pays') ? searchParams.get('pays')!.split(',') : PAY_OPTIONS;
-  const initialVouchers = searchParams.get('vouchers') ? searchParams.get('vouchers')!.split(',') : VOUCHER_OPTIONS;
+
+  const rawCarriers = searchParams.get('carriers');
+  const initialCarriers = rawCarriers !== null 
+    ? (rawCarriers.trim() ? rawCarriers.split(',') : []) 
+    : [];
+
+  const rawPays = searchParams.get('pays');
+  const initialPays = rawPays !== null 
+    ? (rawPays.trim() ? rawPays.split(',') : PAY_OPTIONS) 
+    : PAY_OPTIONS;
+
+  const rawVouchers = searchParams.get('vouchers');
+  const initialVouchers = rawVouchers !== null 
+    ? (rawVouchers.trim() ? rawVouchers.split(',') : []) 
+    : VOUCHER_OPTIONS;
+
   const initialSpecialCard = searchParams.get('specialCard') || 'NONE';
   const initialHasPrevSpend = searchParams.get('hasPrevSpend') === 'true';
 
@@ -117,14 +192,85 @@ export default function SearchResultPage() {
   const initialHasPreApplied = searchParams.get('hasPreApplied') === 'true';
   const initialIsFirstPayment = searchParams.get('isFirstPayment') !== 'false';
 
-  // 우측 필터 폼 상태
   const [gameTitle, setGameTitle] = useState(initialGame);
+  const [activeGameTitle, setActiveGameTitle] = useState(initialGame);
+
   const [payAmount, setPayAmount] = useState<number>(initialAmount);
   const [osType, setOsType] = useState<OsType>(initialOs);
   const [androidStores, setAndroidStores] = useState<string[]>(initialStores);
 
-  const [googlePlayTier] = useState(initialGoogleTier);
-  const [galaxyStoreTier] = useState(initialGalaxyTier);
+  const [favoriteGames, setFavoriteGames] = useState<string[]>([]);
+
+  useEffect(() => {
+    const savedFilter = localStorage.getItem('user_filter_settings');
+    if (savedFilter) {
+      try {
+        const parsed = JSON.parse(savedFilter);
+        if (parsed.favoriteGames) setFavoriteGames(parsed.favoriteGames);
+      } catch (e) {}
+    }
+  }, []);
+
+  const isFavorite = favoriteGames.includes(activeGameTitle);
+
+  const handleToggleFavorite = () => {
+    let updated: string[];
+    if (isFavorite) {
+      updated = favoriteGames.filter((g) => g !== activeGameTitle);
+    } else {
+      if (favoriteGames.length >= 10) {
+        alert('즐겨찾기는 최대 10개까지만 등록할 수 있습니다.');
+        return;
+      }
+      updated = [...favoriteGames, activeGameTitle];
+    }
+
+    setFavoriteGames(updated);
+
+    const savedFilter = localStorage.getItem('user_filter_settings');
+    const parsed = savedFilter ? JSON.parse(savedFilter) : {};
+    parsed.favoriteGames = updated;
+    localStorage.setItem('user_filter_settings', JSON.stringify(parsed));
+
+    const token = localStorage.getItem('google_token');
+    if (token) {
+      fetch('http://127.0.0.1:8000/user/profile', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ favorite_games: updated }),
+      }).catch((err) => console.error('즐겨찾기 저장 에러:', err));
+    }
+  };
+
+  const [selectedIndex, setSelectedIndex] = useState<number>(-1);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showDropdown || suggestedGames.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedIndex((prev) => (prev < suggestedGames.length - 1 ? prev + 1 : 0));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedIndex((prev) => (prev > 0 ? prev - 1 : suggestedGames.length - 1));
+    } else if (e.key === 'Enter') {
+      if (selectedIndex >= 0 && selectedIndex < suggestedGames.length) {
+        e.preventDefault();
+        const selectedGame = suggestedGames[selectedIndex];
+        handleSelectSuggestedGame(selectedGame.name);
+        setSelectedIndex(-1);
+      }
+    } else if (e.key === 'Escape') {
+      setShowDropdown(false);
+      setSelectedIndex(-1);
+    }
+  };
+
+  const [googlePlayTier, setGooglePlayTier] = useState(initialGoogleTier);
+  const [galaxyStoreTier, setGalaxyStoreTier] = useState(initialGalaxyTier);
   const [isPcVersion] = useState(initialIsPcVersion);
 
   const [useTMembership, setUseTMembership] = useState(true);
@@ -136,7 +282,9 @@ export default function SearchResultPage() {
   const [pays, setPays] = useState<string[]>(initialPays);
 
   const [useVoucherBypasses, setUseVoucherBypasses] = useState(initialVouchers.length > 0);
-  const [vouchers] = useState<string[]>(initialVouchers);
+  const [vouchers, setVouchers] = useState<string[]>(
+    initialVouchers.length > 0 ? initialVouchers : VOUCHER_OPTIONS
+  );
 
   const [useSpecialOptions, setUseSpecialOptions] = useState(initialSpecialCard !== 'NONE');
   const [selectedSpecialCard, setSelectedSpecialCard] = useState(initialSpecialCard);
@@ -148,17 +296,14 @@ export default function SearchResultPage() {
 
   const [sortOption, setSortOption] = useState<SortOption>('BEST_PRICE');
 
-  // 로딩, 결과, 에러 상태
   const [loading, setLoading] = useState<boolean>(false);
   const [rawResultsList, setRawResultsList] = useState<OptimizationResult[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // 모달 제어 상태
   const [isCriteriaModalOpen, setIsCriteriaModalOpen] = useState<boolean>(false);
   const [isCompareModalOpen, setIsCompareModalOpen] = useState<boolean>(false);
   const [selectedResultForDetail, setSelectedResultForDetail] = useState<OptimizationResult | null>(null);
 
-  // 배열 항목 토글 처리 헬퍼 함수
   const handleToggleArray = (
     setter: React.Dispatch<React.SetStateAction<string[]>>,
     item: string
@@ -168,11 +313,11 @@ export default function SearchResultPage() {
     );
   };
 
-  // 백엔드 API 연동 함수
-  const fetchBackendData = useCallback(async () => {
+  const fetchBackendData = useCallback(async (targetGameName?: string) => {
     setLoading(true);
     setError(null);
 
+    const gameToQuery = targetGameName || activeGameTitle;
     const selectedProviders: string[] = [];
 
     if (useCarriers) {
@@ -217,7 +362,7 @@ export default function SearchResultPage() {
           amount: amountNum,
           is_first_pay: isFirstPayment,
           payment_methods: selectedProviders,
-          game: gameTitle === '쿠키런: 킹덤' ? 'COOKIERUN_KINGDOM' : 'ALL',
+          game: getGameCode(gameToQuery),
           membership_tier: tier,
           has_subscription: useSpecialOptions,
           has_prev_spend: useSpecialOptions ? hasPrevSpend : false,
@@ -240,13 +385,13 @@ export default function SearchResultPage() {
       combinedRoutes.sort((a, b) => a.net_cost - b.net_cost);
 
       const bonusBadges: string[] = [];
-      if (useGameBenefits) bonusBadges.push('🎮 게임 전용 혜택');
-      if (hasPreApplied) bonusBadges.push('📝 사전 응모 완료');
-      if (isFirstPayment) bonusBadges.push('🎉 첫 결제 대상');
+      if (useGameBenefits) bonusBadges.push('게임 전용 혜택');
+      if (hasPreApplied) bonusBadges.push('사전 응모 완료');
+      if (isFirstPayment) bonusBadges.push('첫 결제 대상');
 
       const converted: OptimizationResult[] = combinedRoutes.map((route, idx) => {
         const routeProviders: string[] = [];
-        let adjustedRewardTotal = 0; // ✅ 보정된 적립 금액 합계 변수
+        let adjustedRewardTotal = 0;
 
         const stepsDetailed: StepDetail[] = route.steps.map((step) => {
           const layerKorean = LAYER_NAME_MAP[step.layer] || step.layer;
@@ -263,25 +408,21 @@ export default function SearchResultPage() {
           const targetGame = step.target_game || 'ALL';
           const isGameSpecific = targetGame !== 'ALL';
 
-          // ✅ 구글 플레이 포인트 10원 단위 절사(버림) 및 금액 보정
           let effectiveAmount = step.applied_amount;
           let formattedText = '';
 
           if (step.type === 'DISCOUNT' || step.type === 'FEE') {
             formattedText = `-${step.applied_amount.toLocaleString()}원 할인`;
           } else if (step.provider === 'GOOGLE_PLAY') {
-            // 구글: 10원당 1pt (100pt = 1,000원)
             const nativePt = Math.floor(step.applied_amount / 10);
             effectiveAmount = nativePt * 10;
             adjustedRewardTotal += effectiveAmount;
             formattedText = `+${nativePt.toLocaleString()}pt (${effectiveAmount.toLocaleString()}원)`;
           } else {
-            // 원스토어/네이버페이 등 1:1 적립: (870pt = 870원)
             adjustedRewardTotal += step.applied_amount;
             formattedText = `+${step.applied_amount.toLocaleString()}pt (${step.applied_amount.toLocaleString()}원)`;
           }
 
-          // 이름 중복 정리 (예: "스토어 등급별 적립률 - 적립률" -> "스토어 등급별 적립률")
           let rawEventName = step.item_or_event_name && step.item_or_event_name.trim() !== ''
             ? step.item_or_event_name
             : `${providerKorean} ${layerKorean}`;
@@ -290,9 +431,7 @@ export default function SearchResultPage() {
             rawEventName = rawEventName.replace(' 적립률 - 적립률', ' 적립률');
           }
 
-          // 💡 정제 헬퍼 함수를 실제로 적용!
           const realEventName = formatEventTitle(rawEventName);
-
           const realConditionText = step.condition_raw_text && step.condition_raw_text.trim() !== ''
             ? step.condition_raw_text
             : '상세 조건은 해당 스토어/결제사 이벤트를 확인하세요.';
@@ -320,10 +459,9 @@ export default function SearchResultPage() {
         const actualPaymentPrice = route.final_paid_amount;
         const immediateDiscountTotal = Math.max(0, amountNum - actualPaymentPrice);
         
-        // ✅ 1,000원 정확 보정 적용
         const rewardPointTotal = adjustedRewardTotal; 
-        const netCost = actualPaymentPrice - rewardPointTotal; // 77,000 - 1,000 = 76,000원
-        const totalBenefitAmount = immediateDiscountTotal + rewardPointTotal; // 23,000 + 1,000 = 24,000원
+        const netCost = actualPaymentPrice - rewardPointTotal;
+        const totalBenefitAmount = immediateDiscountTotal + rewardPointTotal;
         const discountRate = amountNum > 0 ? Math.round((totalBenefitAmount / amountNum) * 1000) / 10 : 0;
 
         const discountRatePercent = amountNum > 0 ? Math.round((immediateDiscountTotal / amountNum) * 1000) / 10 : 0;
@@ -341,11 +479,11 @@ export default function SearchResultPage() {
           displayPlatform = androidStores[0];
         }
 
-        let storeIcon = '🛍️';
-        if (displayPlatform.includes('구글')) storeIcon = '🤖';
-        if (displayPlatform.includes('갤럭시')) storeIcon = '🌌';
-        if (displayPlatform.includes('원스토어')) storeIcon = '🛍️';
-        if (osType === 'IOS' || displayPlatform.includes('앱스토어')) storeIcon = '🍎';
+        let storeIcon = 'GOOGLE';
+        if (displayPlatform.includes('구글')) storeIcon = 'GOOGLE';
+        if (displayPlatform.includes('갤럭시')) storeIcon = 'GALAXY';
+        if (displayPlatform.includes('원스토어')) storeIcon = 'ONE';
+        if (osType === 'IOS' || displayPlatform.includes('앱스토어')) storeIcon = 'APPLE';
 
         const routeTitle = routeProviders.length > 0
           ? `[${routeProviders.slice(0, 2).join(' + ')}] 최적 조합`
@@ -394,14 +532,84 @@ export default function SearchResultPage() {
     osType, androidStores, payAmount, isFirstPayment, useCarriers, carriers,
     usePays, pays, useVoucherBypasses, vouchers, useSpecialOptions,
     selectedSpecialCard, googlePlayTier, galaxyStoreTier, hasPrevSpend,
-    hasPreApplied, useGameBenefits, gameTitle
+    hasPreApplied, useGameBenefits, activeGameTitle
   ]);
+
+  const [allGames, setAllGames] = useState(getInitialGames);
+  const [showDropdown, setShowDropdown] = useState(false);
+
+  useEffect(() => {
+    fetch('http://127.0.0.1:8000/games')
+      .then((res) => res.json())
+      .then((result) => {
+        if (result.status === 'ok' && Array.isArray(result.data)) {
+          setAllGames(result.data);
+          localStorage.setItem('cached_games_list', JSON.stringify(result.data));
+        }
+      })
+      .catch((err) => console.error('게임 DB 수집 실패:', err));
+  }, []);
+
+  const currentGameObj = allGames.find((g) => g.name === activeGameTitle);
+
+  const isStoreSupported = (storeName: string, supportedStores?: string[]) => {
+    if (!supportedStores || supportedStores.length === 0) return true;
+    return supportedStores.some((s) => {
+      const normS = s.trim().toLowerCase();
+      const normStore = storeName.trim().toLowerCase();
+      if (normStore.includes('구글') && (normS.includes('구글') || normS.includes('google'))) return true;
+      if (normStore.includes('원스') && (normS.includes('원스') || normS.includes('one'))) return true;
+      if (normStore.includes('갤럭시') && (normS.includes('갤스') || normS.includes('갤럭시') || normS.includes('galaxy'))) return true;
+      if ((normStore.includes('앱스토어') || normStore.includes('ios')) && (normS.includes('앱스토어') || normS.includes('ios') || normS.includes('애플') || normS.includes('apple'))) return true;
+      return normS.includes(normStore) || normStore.includes(normS);
+    });
+  };
+
+  useEffect(() => {
+    if (currentGameObj?.stores && currentGameObj.stores.length > 0) {
+      setAndroidStores((prev) => prev.filter((st) => isStoreSupported(st, currentGameObj.stores)));
+    }
+  }, [activeGameTitle, currentGameObj]);
+
+  const suggestedGames = gameTitle.trim()
+    ? allGames.filter(
+        (g) =>
+          g.name.toLowerCase().includes(gameTitle.toLowerCase()) ||
+          g.company.toLowerCase().includes(gameTitle.toLowerCase())
+      )
+    : [];
 
   useEffect(() => {
     fetchBackendData();
-  }, [fetchBackendData]);
+  }, []);
 
-  // 정렬 탭 선택에 따른 결과 동적 재정렬
+  const handleSelectSuggestedGame = (selectedGameName: string) => {
+    setGameTitle(selectedGameName);
+    setActiveGameTitle(selectedGameName);
+    setShowDropdown(false);
+
+    const params = new URLSearchParams({
+      game: selectedGameName,
+      amount: String(payAmount),
+      os: osType,
+      stores: osType === 'IOS' ? '앱스토어' : androidStores.join(','),
+      googleTier: googlePlayTier,
+      galaxyTier: galaxyStoreTier,
+      isPcVersion: String(isPcVersion),
+      useGameBenefits: String(useGameBenefits),
+      hasPreApplied: String(hasPreApplied),
+      isFirstPayment: String(isFirstPayment),
+      carriers: useCarriers ? carriers.join(',') : '',
+      pays: usePays ? pays.join(',') : '',
+      vouchers: useVoucherBypasses ? vouchers.join(',') : '',
+      specialCard: selectedSpecialCard,
+      hasPrevSpend: String(hasPrevSpend),
+    });
+
+    navigate(`/search-result?${params.toString()}`);
+    fetchBackendData(selectedGameName);
+  };
+
   const resultsList = useMemo(() => {
     const list = [...rawResultsList];
     if (sortOption === 'BEST_PRICE') {
@@ -414,7 +622,6 @@ export default function SearchResultPage() {
     return list.map((item, index) => ({ ...item, rank: index + 1 }));
   }, [rawResultsList, sortOption]);
 
-  // 실시간 스토어별 1위 최저가 집계 연산
   const storeComparisonData = useMemo(() => {
     const map: Record<string, { minPrice: number; originalPrice: number; discountRate: number; routeTitle: string; icon: string }> = {};
 
@@ -443,6 +650,8 @@ export default function SearchResultPage() {
       return;
     }
 
+    setActiveGameTitle(gameTitle);
+
     const params = new URLSearchParams({
       game: gameTitle,
       amount: String(payAmount),
@@ -462,782 +671,956 @@ export default function SearchResultPage() {
     });
 
     navigate(`/search-result?${params.toString()}`);
-    fetchBackendData();
+    fetchBackendData(gameTitle);
   };
 
-const isOneStoreSelected = osType === 'ANDROID' && androidStores.includes('원스토어');
+  const isOneStoreSelected = osType === 'ANDROID' && androidStores.includes('원스토어');
+  const isGoogleSelected = osType === 'ANDROID' && androidStores.includes('구글 플레이 스토어');
+  const isGalaxySelected = osType === 'ANDROID' && androidStores.includes('갤럭시 스토어');
 
   return (
-    <div className="max-w-[1400px] mx-auto px-4 py-6 space-y-6">
+    <div className="bg-[#F8FAFC] min-h-screen py-6 md:py-8 relative">
       
-      {/* 12열 레이아웃 */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        
-        {/* [좌측 8열] 메인 검색 타이틀 & 연산 카드 리스트 */}
-        <main className="lg:col-span-8 space-y-5">
+      {/* 수직 연속 SVG 다층 기하학 모듈 */}
+      <div className="absolute top-0 right-0 w-[550px] h-[550px] pointer-events-none opacity-[0.05] z-0">
+        <svg viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="120,20 480,80 380,420 40,300" fill="#00D2B8" />
+          <polygon points="480,80 380,420 490,480" fill="#0F172A" />
+        </svg>
+      </div>
+
+      <div className="absolute top-[20%] -left-16 w-[500px] h-[500px] pointer-events-none opacity-[0.04] z-0 rotate-12">
+        <svg viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="50,50 450,120 300,450 100,380" fill="#00D2B8" />
+          <polygon points="450,120 300,450 480,320" fill="#00E5FF" />
+        </svg>
+      </div>
+
+      <div className="absolute top-[45%] -right-20 w-[600px] h-[600px] pointer-events-none opacity-[0.05] z-0 -rotate-15">
+        <svg viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="80,100 420,30 350,480 60,320" fill="#00E5FF" />
+          <polygon points="420,30 350,480 490,250" fill="#0F172A" />
+        </svg>
+      </div>
+
+      <div className="absolute top-[70%] -left-20 w-[550px] h-[550px] pointer-events-none opacity-[0.04] z-0 rotate-45">
+        <svg viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="100,40 460,150 280,460 50,300" fill="#00D2B8" />
+        </svg>
+      </div>
+
+      <div className="absolute bottom-10 right-0 w-[500px] h-[500px] pointer-events-none opacity-[0.05] z-0">
+        <svg viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="150,30 450,100 390,450 80,350" fill="#00E5FF" />
+        </svg>
+      </div>
+
+      <div className="max-w-[1400px] mx-auto px-4 md:px-6 relative z-10 space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           
-          {/* 상단 타이틀 배너 */}
-          <div className="bg-slate-100 rounded-xl border border-slate-200 p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="space-y-3">
-              <div>
-                <span className="text-[11px] font-black text-cyan-800 bg-cyan-100 px-2.5 py-1 rounded border border-cyan-200">
-                  실시간 최저가 연산 완료
-                </span>
-              </div>
-
-              <div className="flex items-center space-x-3 flex-wrap gap-y-2">
-                <span className="text-4xl shrink-0 leading-none">
-                  {getGameIcon(gameTitle)}
-                </span>
-
-                <div className="flex items-center flex-wrap gap-1.5">
-                  <input
-                    type="text"
-                    value={gameTitle}
-                    onChange={(e) => setGameTitle(e.target.value)}
-                    style={{ width: `${Math.max(gameTitle.length * 1.5 + 2, 7)}rem` }}
-                    className="text-2xl md:text-3xl font-black text-cyan-600 bg-transparent border-b-2 border-cyan-400 focus:outline-none focus:border-cyan-600 px-1 py-0.5 max-w-[280px] md:max-w-[360px]"
-                    placeholder="게임명 입력"
-                  />
-                  <span className="text-2xl md:text-3xl font-black text-slate-900 whitespace-nowrap">
-                    에 관한 검색 결과
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3 text-xs pt-0.5">
-                <div className="flex items-center space-x-1 text-slate-500 font-bold">
-                  <span>기준 결제 금액:</span>
-                  <span className="text-slate-800 font-black">{payAmount.toLocaleString()}원</span>
+          <main className="lg:col-span-8 space-y-5">
+            
+            {/* 상단 타이틀 배너 */}
+            <div className="bg-white rounded-lg border border-slate-200/90 p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-3">
+                <div>
+                  <button
+                    type="button"
+                    onClick={handleToggleFavorite}
+                    className="inline-flex items-center gap-1.5 py-1 text-xs font-bold text-slate-700 hover:text-slate-900 transition-all cursor-pointer group select-none"
+                  >
+                    <svg
+                      className={`w-5 h-5 transition-transform duration-200 group-active:scale-125 ${
+                        isFavorite
+                          ? 'fill-amber-400 stroke-amber-400'
+                          : 'fill-none stroke-amber-400 hover:fill-amber-100'
+                      }`}
+                      viewBox="0 0 24 24"
+                      strokeWidth="2"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"
+                      />
+                    </svg>
+                    <span className="font-extrabold text-slate-800">즐겨찾기</span>
+                  </button>
                 </div>
 
-                <div className="h-3 w-[1px] bg-slate-300 hidden sm:block" />
+                <div className="flex items-center space-x-3 flex-wrap gap-y-2">
+                  {currentGameObj?.icon_url ? (
+                    <img
+                      src={currentGameObj.icon_url}
+                      alt={activeGameTitle}
+                      referrerPolicy="no-referrer"
+                      className="w-10 h-10 md:w-12 md:h-12 rounded-lg object-cover border border-slate-200 shrink-0 shadow-2xs"
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  ) : (
+                    <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-400 shrink-0 border border-slate-200">
+                      GAME
+                    </div>
+                  )}
 
-                <div className="flex items-center space-x-1.5">
-                  <span className="text-slate-400 font-bold text-[11px]">지원 스토어:</span>
-                  <div className="flex flex-wrap gap-1">
-                    {getGameStores(gameTitle).map((store) => (
-                      <span
-                        key={store}
-                        className="text-[10px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded border border-slate-200 shadow-2xs"
-                      >
-                        {store}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
+                  <div className="flex items-center flex-wrap gap-1.5 relative">
+                    <div className="relative inline-block">
+                      <input
+                        type="text"
+                        value={gameTitle}
+                        onChange={(e) => {
+                          setGameTitle(e.target.value);
+                          setShowDropdown(true);
+                          setSelectedIndex(-1);
+                        }}
+                        onKeyDown={handleKeyDown}
+                        onFocus={() => setShowDropdown(true)}
+                        onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
+                        style={{
+                          fontSize:
+                            gameTitle.length > 20
+                              ? '1.15rem'
+                              : gameTitle.length > 12
+                              ? '1.4rem'
+                              : '1.875rem',
+                          width: `${Math.max(
+                            (gameTitle || '게임명 입력')
+                              .split('')
+                              .reduce((acc, char) => acc + (char.charCodeAt(0) > 128 ? 1.8 : 0.95), 0) + 0.4,
+                            4
+                          )}ch`,
+                          lineHeight: '1.35',
+                          paddingBottom: '6px',
+                        }}
+                        className="font-black bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] bg-clip-text text-transparent border-b-2 border-[#00D2B8] focus:outline-none px-1 max-w-[300px] sm:max-w-[420px] md:max-w-[550px] transition-all"
+                        placeholder="게임명 입력"
+                      />
 
-            <div className="flex items-center space-x-2 shrink-0">
-              <button
-                type="button"
-                onClick={(e) => handleReSearch(e)}
-                className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs rounded-xl shadow-sm transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap"
-              >
-                <span>🔄</span>
-                <span>다시 검색 (재연산)</span>
-              </button>
-            </div>
-          </div>
+                      {showDropdown && suggestedGames.length > 0 && (
+                        <ul className="absolute left-0 top-full mt-1.5 z-50 w-72 bg-white border border-slate-200 rounded-lg shadow-xl max-h-52 overflow-y-auto divide-y divide-slate-100">
+                          {suggestedGames.map((game, idx) => (
+                            <li
+                              key={game.id}
+                              onMouseDown={() => handleSelectSuggestedGame(game.name)}
+                              onMouseEnter={() => setSelectedIndex(idx)}
+                              className={`p-2.5 cursor-pointer flex items-center space-x-2.5 transition-colors ${
+                                idx === selectedIndex ? 'bg-gradient-to-r from-[#00D2B8]/15 to-[#00F5FF]/15 font-black' : 'hover:bg-slate-50'
+                              }`}
+                            >
+                              {game.icon_url ? (
+                                <img
+                                  src={game.icon_url}
+                                  alt={game.name}
+                                  referrerPolicy="no-referrer"
+                                  className="w-7 h-7 rounded object-cover border border-slate-200 shrink-0"
+                                />
+                              ) : (
+                                <div className="w-7 h-7 rounded bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-400 shrink-0">
+                                  GAME
+                                </div>
+                              )}
+                              <div className="min-w-0 flex-1 text-left">
+                                <p className="text-xs font-bold text-slate-900 truncate">{game.name}</p>
+                                <p className="text-[10px] font-medium text-slate-400 truncate">{game.company}</p>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
 
-          {/* 정렬 탭 바 & 환산 기준 모달 / 스토어별 비교 버튼 */}
-          <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-            <div className="flex items-center space-x-3">
-              <span className="text-xs font-bold text-slate-500">
-                총 <strong className="text-cyan-600">{resultsList.length}개</strong>의 추천 결제 경로
-              </span>
-              <button
-                type="button"
-                onClick={() => setIsCriteriaModalOpen(true)}
-                className="text-xs font-semibold text-slate-500 hover:text-cyan-600 underline cursor-pointer"
-              >
-                [환산 기준 보기]
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsCompareModalOpen(true)}
-                className="text-xs font-extrabold text-cyan-700 bg-cyan-50 hover:bg-cyan-100 px-2 py-0.5 rounded border border-cyan-300 transition-all cursor-pointer flex items-center gap-1 shadow-2xs"
-              >
-                <span>📊</span>
-                <span>스토어별 최저가 비교</span>
-              </button>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              {(
-                [
-                  { id: 'BEST_PRICE', label: '최적 체감가 순' },
-                  { id: 'POINT_FIRST', label: '최대 적립 순' },
-                  { id: 'DISCOUNT_RATE', label: '최대 할인율 순' },
-                ] as const
-              ).map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setSortOption(tab.id)}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
-                    sortOption === tab.id
-                      ? 'bg-slate-900 text-white shadow-sm'
-                      : 'bg-slate-100 text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-{/* 로딩 스켈레톤 (실제 결과 카드 뼈대 연출) */}
-          {loading && (
-            <div className="space-y-3">
-              {/* 상단 로딩 상태 안내 문구 (점 애니메이션 연출) */}
-              <div className="p-3 bg-cyan-50/90 border border-cyan-200 rounded-xl flex items-center justify-between shadow-2xs">
-                <div className="flex items-center space-x-2">
-                  <span className="text-xs font-black text-cyan-950 tracking-wide flex items-center gap-1">
-                    <span>최저가 연산 중</span>
-                    <span className="inline-flex items-center space-x-0.5 ml-0.5">
-                      <span className="animate-bounce font-black text-cyan-600" style={{ animationDelay: '0ms' }}>.</span>
-                      <span className="animate-bounce font-black text-cyan-600" style={{ animationDelay: '150ms' }}>.</span>
-                      <span className="animate-bounce font-black text-cyan-600" style={{ animationDelay: '300ms' }}>.</span>
+                    <span className="text-2xl md:text-3xl font-black text-slate-900 whitespace-nowrap ml-1">
+                      에 관한 검색 결과
                     </span>
-                  </span>
+                  </div>
                 </div>
-                <span className="text-[10px] font-extrabold text-cyan-800 bg-white px-2.5 py-0.5 rounded-full border border-cyan-200 shadow-2xs">
-                  실시간 계산 중 ⚡
-                </span>
+
+                <div className="flex flex-col gap-2 text-xs pt-0.5">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex items-center space-x-1 text-slate-500 font-bold">
+                      <span>기준 결제 금액:</span>
+                      <span className="text-slate-900 font-black">{payAmount.toLocaleString()}원</span>
+                    </div>
+
+                    <div className="h-3 w-[1px] bg-slate-300 hidden sm:block" />
+
+                    <div className="flex items-center space-x-1.5">
+                      <span className="text-slate-400 font-bold text-[11px]">지원 스토어:</span>
+                      <div className="flex flex-wrap gap-1">
+                        {(currentGameObj?.stores || ['구글', '원스', '갤스', '앱스토어']).map((store) => (
+                          <span
+                            key={store}
+                            className="text-[10px] font-bold text-slate-700 bg-slate-50 px-2 py-0.5 rounded border border-slate-200 shadow-2xs"
+                          >
+                            {store}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {favoriteGames.length > 0 && (
+                    <div className="flex items-center space-x-1.5 pt-1">
+                      <span className="text-amber-500 font-bold text-[11px] shrink-0 flex items-center gap-0.5">
+                        ★ 즐겨찾기:
+                      </span>
+                      <div className="flex flex-wrap gap-1.5 overflow-x-auto no-scrollbar">
+                        {favoriteGames.map((favGame) => (
+                          <button
+                            key={favGame}
+                            type="button"
+                            onClick={() => handleSelectSuggestedGame(favGame)}
+                            className={`text-[10.5px] font-extrabold px-2.5 py-0.5 rounded border transition-all cursor-pointer whitespace-nowrap ${
+                              favGame === activeGameTitle
+                                ? 'bg-amber-400 text-slate-950 border-amber-500 shadow-2xs'
+                                : 'bg-white text-slate-700 border-slate-200 hover:border-amber-400 hover:bg-amber-50'
+                            }`}
+                          >
+                            {favGame}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {(() => {
+                    let recentList: string[] = [];
+                    try {
+                      const localFilter = localStorage.getItem('user_filter_settings');
+                      if (localFilter) {
+                        const parsed = JSON.parse(localFilter);
+                        if (Array.isArray(parsed.recentSearches)) {
+                          recentList = parsed.recentSearches.filter((g: string) => g !== activeGameTitle);
+                        }
+                      }
+                    } catch (e) {}
+
+                    if (recentList.length === 0) return null;
+
+                    return (
+                      <div className="flex items-center space-x-1.5">
+                        <span className="text-slate-400 font-bold text-[11px] shrink-0">
+                          최근 검색:
+                        </span>
+                        <div className="flex flex-wrap gap-1.5 overflow-x-auto no-scrollbar">
+                          {recentList.slice(0, 5).map((recGame) => (
+                            <button
+                              key={recGame}
+                              type="button"
+                              onClick={() => handleSelectSuggestedGame(recGame)}
+                              className="text-[10.5px] font-extrabold text-slate-600 bg-white hover:bg-slate-50 hover:text-[#00A896] px-2 py-0.5 rounded border border-slate-200 transition-all cursor-pointer whitespace-nowrap shadow-2xs"
+                            >
+                              {recGame}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
               </div>
 
-              {/* 스켈레톤 카드 3개 연속 출력 */}
-              {[1, 2, 3].map((skeletonIdx) => (
-                <div
-                  key={skeletonIdx}
-                  className="rounded-xl border border-slate-200 bg-white grid grid-cols-1 md:grid-cols-12 overflow-hidden shadow-xs animate-pulse"
+              <div className="flex items-center space-x-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={(e) => handleReSearch(e)}
+                  className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-black text-xs rounded transition-all shadow-xs cursor-pointer flex items-center gap-1.5 whitespace-nowrap"
                 >
-                  {/* [좌측 3열] 등수 & 스토어 뼈대 */}
-                  <div className="md:col-span-3 p-5 bg-slate-50/80 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-between space-y-4">
-                    <div className="w-16 h-6 bg-slate-200 rounded-md"></div>
-                    <div className="space-y-1.5">
-                      <div className="w-12 h-3 bg-slate-200 rounded"></div>
-                      <div className="flex items-center space-x-2">
-                        <div className="w-7 h-7 bg-slate-300 rounded-full shrink-0"></div>
-                        <div className="w-24 h-5 bg-slate-300 rounded"></div>
-                      </div>
-                    </div>
-                  </div>
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  <span>다시 검색 (재연산)</span>
+                </button>
+              </div>
+            </div>
 
-                  {/* [중앙 6열] 결제 경로 & 이벤트 태그 뼈대 */}
-                  <div className="md:col-span-6 p-5 flex flex-col justify-between space-y-4">
-                    <div className="space-y-2">
-                      <div className="w-28 h-3 bg-slate-200 rounded"></div>
-                      <div className="flex items-center space-x-2">
-                        <div className="w-20 h-6 bg-slate-200 rounded"></div>
-                        <div className="w-4 h-3 bg-slate-200 rounded"></div>
-                        <div className="w-24 h-6 bg-slate-200 rounded"></div>
-                      </div>
-                    </div>
+            <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+              <div className="flex items-center space-x-3">
+                <span className="text-xs font-bold text-slate-500">
+                  총 <strong className="text-[#00A896]">{resultsList.length}개</strong>의 추천 결제 경로
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsCriteriaModalOpen(true)}
+                  className="text-xs font-semibold text-slate-500 hover:text-[#00A896] underline cursor-pointer"
+                >
+                  [환산 기준 보기]
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsCompareModalOpen(true)}
+                  className="text-xs font-black text-[#00A896] bg-gradient-to-r from-[#00D2B8]/15 to-[#00F5FF]/15 hover:bg-[#00D2B8]/25 px-2.5 py-1 rounded border border-[#00D2B8]/30 transition-all cursor-pointer flex items-center gap-1 shadow-2xs"
+                >
+                  <span>스토어별 최저가 비교</span>
+                </button>
+              </div>
 
-                    <div className="pt-2 border-t border-slate-100 space-y-2">
-                      <div className="flex space-x-2">
-                        <div className="w-28 h-5 bg-red-100 rounded"></div>
-                        <div className="w-28 h-5 bg-emerald-100 rounded"></div>
-                      </div>
-                      <div className="w-3/4 h-3 bg-slate-200 rounded"></div>
-                    </div>
-                  </div>
+              <div className="flex items-center space-x-2">
+                {(
+                  [
+                    { id: 'BEST_PRICE', label: '최적 체감가 순' },
+                    { id: 'POINT_FIRST', label: '최대 적립 순' },
+                    { id: 'DISCOUNT_RATE', label: '최대 할인율 순' },
+                  ] as const
+                ).map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setSortOption(tab.id)}
+                    className={`px-3.5 py-1.5 rounded text-xs font-black transition-all cursor-pointer ${
+                      sortOption === tab.id
+                        ? 'bg-slate-900 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-                  {/* [우측 3열] 할인율 & 가격 뼈대 */}
-                  <div className="md:col-span-3 p-5 bg-rose-50/30 border-t md:border-t-0 md:border-l border-rose-100 flex flex-col justify-between items-end text-right space-y-4">
-                    <div className="w-20 h-6 bg-red-200/70 rounded"></div>
-                    <div className="space-y-1.5 text-right w-full flex flex-col items-end">
-                      <div className="w-16 h-3 bg-slate-200 rounded"></div>
-                      <div className="w-28 h-6 bg-slate-300 rounded"></div>
-                    </div>
-                  </div>
+            {loading && (
+              <div className="relative min-h-[420px] w-full rounded-lg border border-slate-200 bg-white/60 overflow-hidden shadow-xs flex flex-col items-center justify-center p-8 select-none">
+                <div className="absolute inset-0 p-4 space-y-3 filter blur-md opacity-40 pointer-events-none">
+                  {[1, 2, 3].map((idx) => (
+                    <div key={idx} className="h-28 bg-slate-200 rounded" />
+                  ))}
                 </div>
-              ))}
-            </div>
-          )}
 
-          {/* 에러 상태 */}
-          {!loading && error && (
-            <div className="p-8 bg-rose-50 rounded-xl border border-rose-200 text-center space-y-2">
-              <p className="text-xs font-bold text-rose-700">{error}</p>
-              <p className="text-[11px] text-slate-500">백엔드 서버(`main.py`)가 8000번 포트에서 실행 중인지 확인해주세요.</p>
-            </div>
-          )}
-
-          {/* 실시간 BigQuery DB 연산 결과 카드 리스트 */}
-          {!loading && !error && (
-            <div className="space-y-3">
-              {resultsList.length === 0 ? (
-                <div className="p-8 md:p-12 bg-white rounded-2xl border-2 border-dashed border-slate-200 text-center space-y-4 shadow-2xs">
-                  <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center text-3xl mx-auto border border-slate-200">
-                    🔍
+                <div className="relative z-10 flex flex-col items-center justify-center space-y-4 text-center">
+                  <div className="relative flex items-center justify-center">
+                    <div className="w-16 h-16 border-4 border-slate-200 border-t-[#00D2B8] rounded-full animate-spin shadow-md" />
+                    <div className="absolute w-8 h-8 border-4 border-slate-100 border-b-[#00F5FF] rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.8s' }} />
                   </div>
-                  <div className="space-y-1.5 max-w-sm mx-auto">
-                    <h4 className="text-base font-black text-slate-800">
-                      조건에 맞는 최저가 경로가 없습니다
-                    </h4>
-                    <p className="text-xs text-slate-500 leading-relaxed font-medium">
-                      보유하신 결제 수단이나 이용 스토어가 모두 해제되어 있을 수 있습니다. 우측 필터에서 조건(페이, 문화상품권 등)을 추가해 보세요!
+
+                  <div className="space-y-1">
+                    <h3 className="text-xl font-black text-slate-900 tracking-wider animate-pulse">
+                      최저가 연산 실행 중...
+                    </h3>
+                    <p className="text-xs font-bold text-slate-500">
+                      실시간 스토어 혜택 및 결제 조합 경로를 계산하고 있습니다.
                     </p>
                   </div>
-                  
-                  <div className="pt-2 flex flex-wrap justify-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setUsePays(true);
-                        setUseVoucherBypasses(true);
-                        setUseCarriers(true);
-                      }}
-                      className="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 text-white font-extrabold text-xs rounded-xl shadow-sm transition-all cursor-pointer"
-                    >
-                      ⚡ 주요 결제 수단 한 번에 모두 켜기
-                    </button>
-                  </div>
                 </div>
-              ) : (
-                resultsList.map((item) => {
-                  let cardStyle = 'border-slate-200 bg-white';
-                  let rankStyle = 'bg-slate-700 text-white';
+              </div>
+            )}
 
-                  if (item.rank === 1) {
-                    cardStyle = 'border-cyan-400 ring-2 ring-cyan-400/30 bg-white shadow-sm';
-                    rankStyle = 'bg-amber-500 text-white';
-                  } else if (item.rank === 2) {
-                    cardStyle = 'border-slate-300 ring-1 ring-slate-300 bg-white shadow-sm';
-                    rankStyle = 'bg-slate-600 text-white';
-                  } else if (item.rank === 3) {
-                    cardStyle = 'border-amber-700/40 ring-1 ring-amber-600/20 bg-white shadow-sm';
-                    rankStyle = 'bg-amber-700 text-white';
-                  }
+            {!loading && error && (
+              <div className="p-8 bg-rose-50 rounded-lg border border-rose-200 text-center space-y-2">
+                <p className="text-xs font-bold text-rose-700">{error}</p>
+                <p className="text-[11px] text-slate-500">백엔드 서버가 8000번 포트에서 실행 중인지 확인해주세요.</p>
+              </div>
+            )}
 
-                  return (
-                    <div
-                      key={item.rank}
-                      onClick={() => setSelectedResultForDetail(item)}
-                      className={`rounded-2xl border transition-all hover:shadow-lg grid grid-cols-1 md:grid-cols-12 overflow-hidden cursor-pointer ${cardStyle}`}
-                    >
-                      {/* 1. [좌측 2.5열] 등수 배지 + 스토어 (세로 공간 밀도 있게 채움) */}
-                      <div className="md:col-span-3 lg:col-span-2.5 p-4 md:p-5 bg-slate-50/90 border-b md:border-b-0 md:border-r border-slate-200/80 flex flex-col justify-center space-y-3 shrink-0">
-                        <div className="flex items-center space-x-2">
-                          <span className={`px-2.5 py-1 rounded-lg text-xs md:text-sm font-black shadow-2xs ${rankStyle}`}>
-                            {item.rank}등
-                          </span>
+            {!loading && !error && (
+              <div className="space-y-3">
+                {resultsList.length === 0 ? (
+                  <div className="p-8 md:p-12 bg-white rounded-lg border-2 border-dashed border-slate-200 text-center space-y-4 shadow-2xs">
+                    <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 mx-auto border border-slate-200">
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                    </div>
+                    <div className="space-y-1.5 max-w-sm mx-auto">
+                      <h4 className="text-base font-black text-slate-800">
+                        조건에 맞는 최저가 경로가 없습니다
+                      </h4>
+                      <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                        보유하신 결제 수단이나 이용 스토어가 모두 해제되어 있을 수 있습니다. 우측 필터에서 조건을 추가해 보세요!
+                      </p>
+                    </div>
+                    
+                    <div className="pt-2 flex flex-wrap justify-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUsePays(true);
+                          setUseVoucherBypasses(true);
+                          setUseCarriers(true);
+                        }}
+                        className="px-4 py-2 bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] hover:brightness-105 text-slate-950 font-black text-xs rounded shadow-2xs transition-all cursor-pointer"
+                      >
+                        주요 결제 수단 한 번에 모두 켜기
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  resultsList.map((item) => {
+                    let cardStyle = 'border-slate-200 bg-white';
+                    let rankStyle = 'bg-slate-200 text-slate-700';
 
-                          {item.rank === 1 && (
-                            <span className="text-[10px] font-extrabold text-amber-800 bg-amber-100/90 px-2 py-0.5 rounded-md border border-amber-300 shadow-2xs whitespace-nowrap">
-                              최고 추천 👍
-                            </span>
-                          )}
-                        </div>
+                    if (item.rank === 1) {
+                      cardStyle = 'border-2 border-[#00D2B8] shadow-[0_4px_14px_rgba(0,210,184,0.35)] bg-white';
+                      rankStyle = 'bg-amber-400 text-slate-950 font-black';
+                    } else if (item.rank === 2) {
+                      cardStyle = 'border-sky-300 bg-sky-50/30 shadow-2xs';
+                      rankStyle = 'bg-sky-500 text-white font-black';
+                    } else if (item.rank === 3) {
+                      cardStyle = 'border-purple-300 bg-purple-50/30 shadow-2xs';
+                      rankStyle = 'bg-purple-500 text-white font-black';
+                    }
 
-                        {/* 사용 스토어 박스 */}
-                        <div className="p-3 bg-white rounded-xl border border-slate-200/70 shadow-2xs space-y-1">
-                          <span className="text-[10px] text-slate-400 font-extrabold block tracking-tight">
-                            결제 추천 스토어
-                          </span>
+                    return (
+                      <div
+                        key={item.rank}
+                        onClick={() => setSelectedResultForDetail(item)}
+                        className={`rounded-lg border transition-all hover:shadow-md grid grid-cols-1 md:grid-cols-12 overflow-hidden cursor-pointer items-stretch ${cardStyle}`}
+                      >
+                        <div className="md:col-span-3 lg:col-span-2.5 p-3 bg-slate-50/90 border-b md:border-b-0 md:border-r border-slate-200/80 flex flex-col justify-between space-y-2 shrink-0">
                           <div className="flex items-center space-x-1.5">
-                            <span className="text-xl md:text-2xl shrink-0 leading-none">
-                              {item.storeIcon}
+                            <span className={`px-2 py-0.5 rounded text-xs shadow-2xs ${rankStyle}`}>
+                              {item.rank}등
                             </span>
-                            <span className="font-black text-slate-900 text-xs sm:text-sm md:text-base whitespace-nowrap tracking-tight">
-                              {item.platform}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* 2. [중앙 6.5열] 정렬된 쿠폰 및 적립 혜택 레이아웃 */}
-                      <div className="md:col-span-6 lg:col-span-6.5 p-4 md:p-5 flex flex-col justify-between space-y-3 min-w-0">
-                        {/* 결제 경로 및 보너스 태그 */}
-                        <div className="space-y-1.5">
-                          <span className="text-[10px] text-slate-400 font-extrabold block">
-                            결제 진행 수단 및 경로
-                          </span>
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            {item.paymentRoute.map((step: string, idx: number) => (
-                              <React.Fragment key={idx}>
-                                <span className="px-2.5 py-1 bg-slate-100 text-slate-700 font-bold text-xs rounded-lg border border-slate-200/80">
-                                  {step}
-                                </span>
-                                {idx < item.paymentRoute.length - 1 && (
-                                  <span className="text-slate-300 font-bold text-xs">➔</span>
-                                )}
-                              </React.Fragment>
-                            ))}
-                          </div>
-
-                          {item.appliedBonusBadges && item.appliedBonusBadges.length > 0 && (
-                            <div className="flex flex-wrap gap-1 pt-1">
-                              {item.appliedBonusBadges.map((badge, bIdx) => (
-                                <span
-                                  key={bIdx}
-                                  className="text-[10px] font-extrabold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200/70"
-                                >
-                                  {badge}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* 적용 쿠폰 & 적립 혜택 (정렬 및 여백 균형 조정) */}
-                        <div className="pt-2.5 border-t border-slate-100 space-y-2">
-                          <div className="flex items-start text-xs font-bold">
-                            <span className="w-20 shrink-0 text-slate-500 font-extrabold flex items-center gap-1">
-                              <span>🎫</span>
-                              <span>적용 쿠폰</span>
-                            </span>
-                            <div className="flex-1 flex flex-wrap gap-1">
-                              {item.discount_steps.length > 0 ? (
-                                item.discount_steps.map((dStep, dIdx) => (
-                                  <span
-                                    key={dIdx}
-                                    className="inline-flex items-center gap-1.5 bg-rose-50/90 text-rose-800 px-2.5 py-1 rounded-lg border border-rose-200/80 text-[10.5px] font-extrabold max-w-[280px] sm:max-w-[340px] md:max-w-[400px] overflow-hidden"
-                                  >
-                                    {/* 텍스트가 너무 길면 말줄임표(...) 처리되며 우측 영역 침범 불가 */}
-                                    <span className="truncate min-w-0 flex-1">
-                                      {dStep.eventName}
-                                    </span>
-                                    <span className="text-rose-600 font-black shrink-0 whitespace-nowrap">
-                                      (-{dStep.amount.toLocaleString()}원)
-                                    </span>
-                                  </span>
-                                ))
-                              ) : (
-                                <span className="text-slate-400 font-medium text-[11px]">
-                                  쿠폰 미적용 (기존 인앱결제)
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="flex items-start text-xs font-bold">
-                            <span className="w-20 shrink-0 text-slate-500 font-extrabold flex items-center gap-1">
-                              <span>🎁</span>
-                              <span>적립 혜택</span>
-                            </span>
-                            <div className="flex-1 flex flex-wrap gap-1.5">
-                              {item.reward_steps.length > 0 ? (
-                                item.reward_steps.map((rStep, rIdx) => (
-                                  <span
-                                    key={rIdx}
-                                    className="inline-flex flex-wrap items-center gap-1 bg-emerald-50/90 text-emerald-800 px-2.5 py-1 rounded-lg border border-emerald-200/80 text-[10.5px] font-extrabold leading-tight"
-                                  >
-                                    <span>{rStep.eventName}</span>
-                                    <span className="text-emerald-700 font-black whitespace-nowrap">
-                                      ({rStep.formattedAmountText})
-                                    </span>
-                                  </span>
-                                ))
-                              ) : (
-                                <span className="text-slate-400 font-medium text-[11px]">
-                                  적립 포인트 없음
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* 요약 태그 바 */}
-                          <div className="flex items-center space-x-2 text-[11px] font-black pt-1">
-                            {item.discountRatePercent > 0 && (
-                              <span className="text-rose-700 bg-rose-50/90 px-2 py-0.5 rounded-md border border-rose-200/60">
-                                총 할인 {item.discountRatePercent}% (-{item.immediate_discount_total.toLocaleString()}원)
+                            {item.rank === 1 && (
+                              <span className="text-[10px] font-black text-slate-950 bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] px-1.5 py-0.5 rounded shadow-2xs whitespace-nowrap">
+                                최고 추천
                               </span>
                             )}
-                              {item.rewardRatePercent > 0 && (
-                                <span className="text-emerald-800 bg-emerald-50/90 px-2 py-0.5 rounded-md border border-emerald-200/60">
-                                  총 적립 {item.rewardRatePercent}% (+{item.reward_point.toLocaleString()}원 상당)
-                                </span>
-                              )}
+                          </div>
+
+                          <div className="flex-1 flex flex-col items-center justify-center text-center p-2.5 bg-white rounded border border-slate-200/80 shadow-2xs space-y-1">
+                            <span className="text-[9.5px] text-slate-400 font-extrabold block tracking-tight">
+                              결제 추천 스토어
+                            </span>
+                            <h4 className="font-black text-slate-900 text-xs sm:text-sm truncate max-w-full px-1">
+                              {item.platform}
+                            </h4>
                           </div>
                         </div>
-                      </div>
 
-                      {/* 3. [우측 3열] 톤다운 가격 수치 */}
-                      <div className="md:col-span-3 lg:col-span-3 p-4 md:p-5 bg-slate-50/40 border-t md:border-t-0 md:border-l border-slate-200/80 flex flex-col justify-between items-end text-right space-y-3 shrink-0">
-                        <div className="text-right space-y-1.5 w-full">
-                          <div className="flex items-center justify-end">
-                            <span className="px-2.5 py-1 bg-rose-600 text-white font-black text-xs rounded-md shadow-2xs">
-                              실질 {item.discount_rate}% OFF
+                        <div className="md:col-span-6 lg:col-span-6.5 p-3 md:p-3.5 flex flex-col justify-between space-y-2 min-w-0">
+                          <div className="space-y-1">
+                            <span className="text-[9.5px] text-slate-400 font-extrabold block">
+                              결제 진행 수단 및 경로
                             </span>
-                          </div>
+                            <div className="flex flex-wrap items-center gap-1">
+                              {item.paymentRoute.map((step: string, idx: number) => (
+                                <React.Fragment key={idx}>
+                                  <span className="px-2 py-0.5 bg-slate-100 text-slate-700 font-bold text-[11px] rounded border border-slate-200/80">
+                                    {formatMethodName(step)}
+                                  </span>
+                                  {idx < item.paymentRoute.length - 1 && (
+                                    <span className="text-slate-300 font-bold text-[10px]">➔</span>
+                                  )}
+                                </React.Fragment>
+                              ))}
+                            </div>
 
-                          <div className="space-y-1 pt-1 text-[11px]">
-                            {item.immediate_discount_total > 0 && (
-                              <div className="flex justify-between items-center text-rose-700 font-extrabold bg-rose-50/80 px-2 py-0.5 rounded border border-rose-100">
-                                <span>즉시할인</span>
-                                <span>-{item.immediate_discount_total.toLocaleString()}원</span>
+                            <div className="pt-0.5">
+                              <span className="inline-flex items-center gap-1 text-[10px] font-black text-[#00A896] bg-gradient-to-r from-[#00D2B8]/15 to-[#00F5FF]/15 hover:bg-[#00D2B8]/25 px-2 py-0.5 rounded border border-[#00D2B8]/30 transition-all cursor-pointer shadow-2xs">
+                                <span>추천 결제 가이드 & 적립 상세 보기 ➔</span>
+                              </span>
+                            </div>
+
+                            {item.appliedBonusBadges && item.appliedBonusBadges.length > 0 && (
+                              <div className="flex flex-wrap gap-1 pt-0.5">
+                                {item.appliedBonusBadges.map((badge, bIdx) => (
+                                  <span
+                                    key={bIdx}
+                                    className="text-[9.5px] font-extrabold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200/70"
+                                  >
+                                    {badge}
+                                  </span>
+                                ))}
                               </div>
                             )}
+                          </div>
 
-                            {item.reward_steps.length > 0 ? (
-                              item.reward_steps.map((rStep, rIdx) => {
+                          <div className="pt-2 border-t border-slate-100 space-y-1">
+                            <div className="flex items-center text-[11px] font-bold min-h-[22px]">
+                              <span className="w-12 shrink-0 text-slate-500 font-extrabold">
+                                할인
+                              </span>
+                              <div className="flex-1 flex flex-wrap items-center gap-1">
+                                {item.discount_steps.length > 0 ? (
+                                  item.discount_steps.map((dStep, dIdx) => (
+                                    <span
+                                      key={dIdx}
+                                      className="inline-flex items-center gap-1 bg-rose-50/90 text-rose-800 px-1.5 py-0.5 rounded border border-rose-200/80 text-[10px] font-extrabold max-w-[220px] overflow-hidden"
+                                    >
+                                      <span className="truncate">{formatMethodName(dStep.eventName)}</span>
+                                      <span className="text-rose-600 font-black shrink-0">(-{dStep.amount.toLocaleString()}원)</span>
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="text-slate-400 font-medium text-[10.5px]">할인 미적용</span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center text-[11px] font-bold min-h-[22px]">
+                              <span className="w-12 shrink-0 text-slate-500 font-extrabold">
+                                적립
+                              </span>
+                              <div className="flex-1 flex flex-wrap items-center gap-1">
+                                {item.reward_steps.length > 0 ? (
+                                  item.reward_steps.map((rStep, rIdx) => (
+                                    <span
+                                      key={rIdx}
+                                      className="inline-flex items-center gap-1 bg-emerald-50/90 text-emerald-800 px-1.5 py-0.5 rounded border border-emerald-200/80 text-[10px] font-extrabold"
+                                    >
+                                      <span>{formatMethodName(rStep.eventName)}</span>
+                                      <span className="text-emerald-700 font-black">({rStep.formattedAmountText})</span>
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="text-slate-400 font-medium text-[10.5px]">적립 없음</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 💡 [수정 포인트 1] 오른쪽 최종 결과창에 시선 강화를 위해 은은한 민트-시안 그라데이션 패널 및 보더 적용 */}
+                        <div className="md:col-span-3 lg:col-span-3 p-3 md:p-3.5 bg-gradient-to-br from-[#00D2B8]/10 via-cyan-50/60 to-[#00F5FF]/10 border-t md:border-t-0 md:border-l border-[#00D2B8]/40 flex flex-col justify-between items-end text-right space-y-2 shrink-0">
+                          <div className="text-right space-y-1 w-full">
+                            <div className="flex items-center justify-end">
+                              <span className="px-2 py-0.5 bg-rose-600 text-white font-black text-[11px] rounded shadow-2xs">
+                                실질 {item.discount_rate}% OFF
+                              </span>
+                            </div>
+
+                            <div className="space-y-1 pt-0.5 w-full">
+                              {item.immediate_discount_total > 0 && (
+                                <div className="flex justify-between items-center text-rose-800 font-black bg-rose-100/90 px-1.5 py-0.5 rounded border border-rose-200 text-[10px]">
+                                  <span>총 할인 ({item.discountRatePercent}%)</span>
+                                  <span>-{item.immediate_discount_total.toLocaleString()}원</span>
+                                </div>
+                              )}
+
+                              {item.discount_steps.map((dStep, dIdx) => (
+                                <div
+                                  key={dIdx}
+                                  className="flex justify-between items-center text-rose-700 font-bold bg-white/80 px-1.5 py-0.5 rounded text-[9px] border border-rose-100/80 leading-tight"
+                                >
+                                  <span className="truncate max-w-[95px] text-left">└ {formatMethodName(dStep.eventName)}</span>
+                                  <span className="shrink-0 font-black">-{dStep.amount.toLocaleString()}원</span>
+                                </div>
+                              ))}
+
+                              {item.reward_point > 0 && (
+                                <div className="flex justify-between items-center text-emerald-900 font-black bg-emerald-100/90 px-1.5 py-0.5 rounded border border-emerald-200 text-[10px] mt-1">
+                                  <span>총 적립 ({item.rewardRatePercent}%)</span>
+                                  <span>+{item.reward_point.toLocaleString()}원 상당</span>
+                                </div>
+                              )}
+
+                              {item.reward_steps.map((rStep, rIdx) => {
                                 const isGoogle = rStep.providerName.includes('GOOGLE') || rStep.providerName.includes('구글');
                                 const nativePt = isGoogle ? Math.floor(rStep.amount / 10) : rStep.amount;
-                                const cashVal = isGoogle ? nativePt * 10 : rStep.amount;
-
-                                // 우측 박스 폭에 맞춰 '포인트' 단어 제거 (네이버페이 포인트 -> 네이버페이)
-                                let nameLabel = isGoogle
-                                  ? '구글'
-                                  : rStep.providerName.replace(/ P$/, '').replace(/ 포인트$/, '');
+                                const labelName = formatMethodName(rStep.providerName);
 
                                 return (
                                   <div
                                     key={rIdx}
-                                    className="flex justify-between items-center text-emerald-800 font-extrabold bg-emerald-50/80 px-2 py-0.5 rounded border border-emerald-100 gap-1 text-[10px] sm:text-[10.5px]"
+                                    className="flex justify-between items-center text-emerald-800 font-bold bg-white/80 px-1.5 py-0.5 rounded text-[9px] border border-emerald-100/80 leading-tight gap-1"
                                   >
-                                    <span className="shrink-0 font-bold whitespace-nowrap">{nameLabel}</span>
-                                    <span className="text-right whitespace-nowrap font-black">
-                                      +{nativePt.toLocaleString()}pt ({cashVal.toLocaleString()}원)
+                                    <span className="truncate max-w-[90px] text-left">└ {labelName}</span>
+                                    <span className="shrink-0 font-black whitespace-nowrap">
+                                      +{nativePt.toLocaleString()}pt
                                     </span>
                                   </div>
                                 );
-                              })
-                            ) : (
-
-
-                              item.reward_point > 0 && (
-                                <div className="flex justify-between items-center text-emerald-800 font-extrabold bg-emerald-50/80 px-2 py-0.5 rounded border border-emerald-100">
-                                  <span>포인트 적립</span>
-                                  <span>+{item.reward_point.toLocaleString()}P</span>
-                                </div>
-                              )
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="w-full pt-2 border-t border-slate-200/80 text-right space-y-1">
-                          <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold">
-                            <span>정가</span>
-                            <span className="line-through">{payAmount.toLocaleString()}원</span>
+                              })}
+                            </div>
                           </div>
 
-                          <div className="flex justify-between items-center text-xs font-black text-slate-800">
-                            <span>💳 실제 결제액</span>
-                            <span>{item.actual_payment_price.toLocaleString()}원</span>
-                          </div>
+                          <div className="w-full pt-1.5 border-t border-[#00D2B8]/30 text-right space-y-0.5">
+                            <div className="flex justify-between items-center text-[9.5px] text-slate-400 font-bold">
+                              <span>정가</span>
+                              <span className="line-through">{payAmount.toLocaleString()}원</span>
+                            </div>
 
-                          <div className="flex justify-between items-center pt-1.5 border-t border-slate-200">
-                            <span className="text-xs font-black text-cyan-950">🎉 실질 체감가</span>
-                            <span className="text-xl font-black text-cyan-600">
-                              {item.final_price.toLocaleString()}원
-                            </span>
+                            <div className="flex justify-between items-center text-[11px] font-black text-slate-800">
+                              <span>실제 결제액</span>
+                              <span>{item.actual_payment_price.toLocaleString()}원</span>
+                            </div>
+
+                            <div className="flex justify-between items-center pt-1 border-t border-[#00D2B8]/40">
+                              <span className="text-[11px] font-black text-[#00A896]">실질 체감가</span>
+                              <span className="text-lg font-black text-[#00A896]">
+                                {item.final_price.toLocaleString()}원
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          )}
-
-        </main>
-
-        {/* [우측 4열] 스티키 사이드바 */}
-        <aside className="lg:col-span-4 h-full space-y-5">
-          
-{/* 1. 모바일 대응 우측 필터 카드 */}
-          <form
-            onSubmit={handleReSearch}
-            className="bg-white rounded-2xl border border-slate-200 p-4 md:p-5 shadow-sm space-y-4"
-          >
-            <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
-              <h3 className="text-sm md:text-base font-black text-slate-900 flex items-center gap-1.5">
-                <span>🎛️</span>
-                <span>실시간 필터 조절</span>
-              </h3>
-              <span className="text-[10px] text-cyan-600 bg-cyan-50 font-bold px-2 py-0.5 rounded border border-cyan-200">
-                실시간 연산
-              </span>
-            </div>
-
-            {/* 스마트폰 OS (모바일 터치 크기 확대) */}
-            <div className="space-y-1.5">
-              <span className="text-xs font-bold text-slate-800 block">스마트폰 OS</span>
-              <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1.5 rounded-xl border border-slate-200 text-xs font-bold">
-                <button
-                  type="button"
-                  onClick={() => setOsType('ANDROID')}
-                  className={`py-2.5 rounded-lg transition-all cursor-pointer text-xs md:text-sm min-h-[44px] flex items-center justify-center ${
-                    osType === 'ANDROID'
-                      ? 'bg-slate-900 text-white font-black shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  안드로이드
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setOsType('IOS')}
-                  className={`py-2.5 rounded-lg transition-all cursor-pointer text-xs md:text-sm min-h-[44px] flex items-center justify-center ${
-                    osType === 'IOS'
-                      ? 'bg-slate-900 text-white font-black shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  iOS
-                </button>
-              </div>
-            </div>
-
-            {/* 결제 금액 수정 (모바일 패딩 확대) */}
-            <div className="space-y-1.5">
-              <span className="text-xs font-bold text-slate-800 block">결제 금액 수정</span>
-              <div className="relative flex items-center">
-                <input
-                  type="number"
-                  value={payAmount}
-                  onChange={(e) => setPayAmount(Number(e.target.value))}
-                  className="w-full px-3.5 py-2.5 text-xs md:text-sm rounded-xl border border-slate-300 bg-slate-50 font-black text-slate-900 focus:outline-none focus:bg-white transition-all pr-8 min-h-[44px]"
-                />
-                <span className="absolute right-3 text-xs font-bold text-slate-400">원</span>
-              </div>
-            </div>
-
-            {/* 이용 스토어 필터 태그 (터치 영역 확보) */}
-            {osType === 'ANDROID' && (
-              <div className="space-y-2 pt-2 border-t border-slate-100">
-                <span className="text-xs font-bold text-slate-800 block">이용 스토어 필터</span>
-                <div className="flex flex-wrap gap-2">
-                  {ANDROID_STORE_OPTIONS.map((st: string) => {
-                    const selected = androidStores.includes(st);
-                    return (
-                      <button
-                        key={st}
-                        type="button"
-                        onClick={() => handleToggleArray(setAndroidStores, st)}
-                        className={`px-3 py-2 rounded-xl text-xs md:text-sm font-bold border transition-all cursor-pointer min-h-[40px] flex items-center ${
-                          selected
-                            ? 'bg-cyan-500 text-white border-cyan-500 shadow-sm'
-                            : 'bg-slate-50 text-slate-600 border-slate-200'
-                        }`}
-                      >
-                        {selected ? '✓ ' : '+ '}{st}
-                      </button>
                     );
-                  })}
-                </div>
-
-                {isOneStoreSelected && (
-                  <div className="pt-1 animate-fadeIn">
-                    <label className="flex items-center space-x-2.5 p-2.5 bg-slate-50 rounded-xl border border-slate-200 cursor-pointer min-h-[44px]">
-                      <input
-                        type="checkbox"
-                        checked={useTMembership}
-                        onChange={(e) => setUseTMembership(e.target.checked)}
-                        className="w-4 h-4 text-cyan-600 rounded border-slate-300 shrink-0"
-                      />
-                      <span className="text-xs font-bold text-slate-800">T멤버십 이용 중 (원스토어 10% 할인)</span>
-                    </label>
-                  </div>
+                  })
                 )}
               </div>
             )}
 
-            {/* 보유 결제 수단 필터 (통신사/간편결제/상품권 모바일 터치 대응) */}
-            <div className="space-y-3 pt-2 border-t border-slate-100">
-              <span className="text-xs font-black text-slate-900 block">보유 결제 수단 필터</span>
+          </main>
 
-              {/* 통신사 토글 */}
-              <div className="space-y-2">
-                <label className="flex items-center space-x-2.5 p-2.5 bg-slate-50 rounded-xl border border-slate-200 cursor-pointer min-h-[44px]">
-                  <input
-                    type="checkbox"
-                    id="resCarriersToggle"
-                    checked={useCarriers}
-                    onChange={(e) => setUseCarriers(e.target.checked)}
-                    className="w-4 h-4 text-cyan-600 rounded border-slate-300 shrink-0 cursor-pointer"
-                  />
-                  <span className="text-xs md:text-sm font-extrabold text-slate-800 select-none">
-                    통신사 할인 사용하기
-                  </span>
-                </label>
-                
-                <div className={`flex flex-wrap gap-1.5 pl-1 transition-all ${useCarriers ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
-                  {CARRIER_OPTIONS.map((c: string) => {
-                    const selected = carriers.includes(c);
-                    return (
-                      <button
-                        key={c}
-                        type="button"
-                        disabled={!useCarriers}
-                        onClick={() => handleToggleArray(setCarriers, c)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all min-h-[36px] ${
-                          selected && useCarriers
-                            ? 'bg-cyan-500 text-white border-cyan-500 cursor-pointer'
-                            : 'bg-slate-50 text-slate-600 border-slate-200 cursor-pointer'
-                        }`}
-                      >
-                        {selected ? '✓ ' : '+ '}{c}
-                      </button>
-                    );
-                  })}
+          {/* 우측 스티키 사이드바 및 폼 */}
+          <aside className="lg:col-span-4 sticky top-36 space-y-3.5">
+            <form onSubmit={handleReSearch} className="space-y-3">
+              <div className="bg-white rounded-lg border border-slate-200/90 p-3.5 shadow-2xs space-y-3">
+                <div className="space-y-1.5">
+                  <span className="text-xs font-bold text-slate-800 block">스마트폰 OS</span>
+                  <div className="grid grid-cols-2 gap-2 bg-slate-50 p-1 rounded border border-slate-200 text-xs font-bold">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOsType('ANDROID');
+                        if (androidStores.length === 0) {
+                          const supported = ANDROID_STORE_OPTIONS.filter((st) =>
+                            isStoreSupported(st, currentGameObj?.stores)
+                          );
+                          setAndroidStores(supported.length > 0 ? [supported[0]] : ['구글 플레이 스토어']);
+                        }
+                      }}
+                      className={`py-2 rounded transition-all cursor-pointer text-xs flex items-center justify-center ${
+                        osType === 'ANDROID'
+                          ? 'bg-slate-900 text-white font-black shadow-2xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      안드로이드
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOsType('IOS')}
+                      className={`py-2 rounded transition-all cursor-pointer text-xs flex items-center justify-center ${
+                        osType === 'IOS'
+                          ? 'bg-slate-900 text-white font-black shadow-2xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      iOS
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 pt-1 border-t border-slate-200/60">
+                  <span className="text-xs font-black text-slate-800 block">결제 금액 수정</span>
+                  <div className="relative flex items-center">
+                    <input
+                      type="number"
+                      value={payAmount}
+                      onChange={(e) => setPayAmount(Number(e.target.value))}
+                      className="w-full px-3 py-2 text-xs rounded border border-slate-300 bg-white font-black text-slate-900 focus:outline-none transition-all pr-8 h-[38px]"
+                    />
+                    <span className="absolute right-3 text-xs font-bold text-slate-400">원</span>
+                  </div>
                 </div>
               </div>
 
-              {/* 간편결제 토글 */}
-              <div className="space-y-2 pt-1 border-t border-slate-100">
-                <label className="flex items-center space-x-2.5 p-2.5 bg-slate-50 rounded-xl border border-slate-200 cursor-pointer min-h-[44px]">
-                  <input
-                    type="checkbox"
-                    id="resPaysToggle"
-                    checked={usePays}
-                    onChange={(e) => setUsePays(e.target.checked)}
-                    className="w-4 h-4 text-cyan-600 rounded border-slate-300 shrink-0 cursor-pointer"
-                  />
-                  <span className="text-xs md:text-sm font-extrabold text-slate-800 select-none">
-                    사용 간편결제 (페이) 선택
-                  </span>
-                </label>
+              {osType === 'ANDROID' && (
+                <div className="bg-white rounded-lg border border-slate-200/90 p-3.5 shadow-2xs space-y-2.5">
+                  <span className="text-xs font-black text-slate-800 block">이용 스토어 필터</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {ANDROID_STORE_OPTIONS.map((st: string) => {
+                      const isSupported = isStoreSupported(st, currentGameObj?.stores);
+                      const selected = androidStores.includes(st);
+                      return (
+                        /* 💡 [수정 포인트 2] 클릭 시 강한 민트 칠하기 대신 화이트 바탕 + 민트 보더 + 민트 그라데이션 글로우 구현 */
+                        <button
+                          key={st}
+                          type="button"
+                          disabled={!isSupported}
+                          onClick={() => {
+                            if (isSupported) {
+                              handleToggleArray(setAndroidStores, st);
+                            }
+                          }}
+                          className={`px-2.5 py-1.5 rounded text-xs transition-all ${
+                            selected
+                              ? 'bg-gradient-to-r from-[#00D2B8]/15 via-cyan-50/90 to-[#00F5FF]/15 text-slate-950 font-black border-2 border-[#00D2B8] shadow-[0_2px_8px_rgba(0,210,184,0.25)] cursor-pointer'
+                              : 'bg-slate-50 text-slate-600 font-bold border border-slate-200 cursor-pointer hover:border-[#00D2B8]/60'
+                          }`}
+                        >
+                          {!isSupported ? '✕ ' : selected ? '✓ ' : '+ '}{st}
+                        </button>
+                      );
+                    })}
+                  </div>
 
-                <div className={`flex flex-wrap gap-1.5 pl-1 transition-all ${usePays ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
-                  {PAY_OPTIONS.map((p: string) => {
-                    const selected = pays.includes(p);
-                    return (
-                      <button
-                        key={p}
-                        type="button"
-                        disabled={!usePays}
-                        onClick={() => handleToggleArray(setPays, p)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all min-h-[36px] ${
-                          selected && usePays
-                            ? 'bg-cyan-500 text-white border-cyan-500 cursor-pointer'
-                            : 'bg-slate-50 text-slate-600 border-slate-200 cursor-pointer'
-                        }`}
-                      >
-                        {selected ? '✓ ' : '+ '}{p}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
+                  {isOneStoreSelected && isStoreSupported('원스토어', currentGameObj?.stores) && (
+                    <div className="pt-1.5 border-t border-slate-200/60">
+                      <label className="flex items-center space-x-2 p-2 bg-slate-50 rounded border border-slate-200 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={useTMembership}
+                          onChange={(e) => setUseTMembership(e.target.checked)}
+                          className="w-4 h-4 text-[#00D2B8] rounded border-slate-300 shrink-0"
+                        />
+                        <span className="text-xs font-bold text-slate-800">T멤버십 이용 중 (원스토어 10% 할인)</span>
+                      </label>
+                    </div>
+                  )}
 
+                  {/* 💡 [수정 포인트 3] 등급 선택 서브 박스에 약한 세로/가로 그라데이션 틴트 적용 */}
+                  {(isGoogleSelected || isGalaxySelected) && (
+                    <div className="p-2.5 bg-gradient-to-r from-[#00D2B8]/10 via-slate-50 to-[#00F5FF]/10 rounded border border-[#00D2B8]/30 space-y-2 mt-2 shadow-2xs">
+                      {isGoogleSelected && (
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-extrabold text-slate-900 block">Google Play Points 등급</label>
+                          <select
+                            value={googlePlayTier}
+                            onChange={(e) => setGooglePlayTier(e.target.value)}
+                            className="w-full px-2 py-1.5 text-xs rounded border border-[#00D2B8]/40 bg-white font-bold text-slate-900 focus:outline-none"
+                          >
+                            <option value="BRONZE">브론즈 (10원당 1pt)</option>
+                            <option value="SILVER">실버 (10원당 1.1pt)</option>
+                            <option value="GOLD">골드 (10원당 1.3pt)</option>
+                            <option value="PLATINUM">플래티넘 (10원당 1.4pt)</option>
+                            <option value="DIAMOND">다이아몬드 (10원당 1.6pt)</option>
+                          </select>
+                        </div>
+                      )}
 
-            {/* 💳 제휴 카드 선택 (옵션) */}
-            <div className="space-y-2 pt-3 border-t border-slate-100">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-slate-900 block">제휴 카드 선택 (옵션)</span>
-                <label className="flex items-center space-x-1.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={useSpecialOptions}
-                    onChange={(e) => setUseSpecialOptions(e.target.checked)}
-                    className="w-3.5 h-3.5 text-cyan-600 rounded border-slate-300 shrink-0"
-                  />
-                  <span className="text-[11px] font-bold text-cyan-700">옵션 {useSpecialOptions ? '열림' : '닫힘'}</span>
-                </label>
-              </div>
-
-              {useSpecialOptions && (
-                <div className="space-y-2 pt-1 animate-fadeIn">
-                  <select
-                    value={selectedSpecialCard}
-                    onChange={(e) => setSelectedSpecialCard(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 bg-slate-50 font-bold text-slate-900 focus:outline-none focus:bg-white transition-all min-h-[40px]"
-                  >
-                    {SPECIAL_CARD_OPTIONS.map((card: { label: string; value: string }) => (
-                      <option key={card.value} value={card.value}>
-                        {card.label}
-                      </option>
-                    ))}
-                  </select>
-
-                  {selectedSpecialCard !== 'NONE' && (
-                    <label className="flex items-center space-x-2.5 p-2 bg-slate-50 rounded-xl border border-slate-200 cursor-pointer min-h-[40px]">
-                      <input
-                        type="checkbox"
-                        checked={hasPrevSpend}
-                        onChange={(e) => setHasPrevSpend(e.target.checked)}
-                        className="w-4 h-4 text-cyan-600 rounded border-slate-300 shrink-0"
-                      />
-                      <span className="text-xs font-bold text-slate-800">카드 전월 실적 충족 (20만~50만원)</span>
-                    </label>
+                      {isGalaxySelected && (
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-extrabold text-slate-900 block">Galaxy Store 멤버십 등급</label>
+                          <select
+                            value={galaxyStoreTier}
+                            onChange={(e) => setGalaxyStoreTier(e.target.value)}
+                            className="w-full px-2 py-1.5 text-xs rounded border border-[#00D2B8]/40 bg-white font-bold text-slate-900 focus:outline-none"
+                          >
+                            <option value="STANDARD">일반 (1% 적립)</option>
+                            <option value="VIP">VIP (2% 적립)</option>
+                            <option value="VVIP">VVIP (3% 적립)</option>
+                            <option value="ROYAL_BLUE">로열블루 (10% 적립)</option>
+                          </select>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               )}
-            </div>
 
-            {/* 기타 혜택 터치 영역 확대 */}
-            <div className="space-y-2 pt-3 border-t border-slate-200">
-              <span className="text-xs font-black text-slate-900 block">기타 혜택</span>
+              <div className="bg-white rounded-lg border border-slate-200/90 p-3.5 shadow-2xs space-y-3">
+                <span className="text-xs font-black text-slate-800 block">보유 결제 수단 필터</span>
 
-              <div className="space-y-2 text-xs md:text-sm font-extrabold text-slate-800">
-                <label className="flex items-center space-x-3 cursor-pointer p-2 rounded-xl hover:bg-slate-50 transition-colors min-h-[40px]">
-                  <input
-                    type="checkbox"
-                    checked={useGameBenefits}
-                    onChange={(e) => setUseGameBenefits(e.target.checked)}
-                    className="w-4 h-4 text-cyan-600 rounded border-slate-300 shrink-0"
-                  />
-                  <span>🎮 게임 전용 혜택 포함</span>
-                </label>
+                <div className="space-y-1.5">
+                  <label className="flex items-center space-x-2 p-2 bg-slate-50 rounded border border-slate-200 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={useCarriers}
+                      onChange={(e) => setUseCarriers(e.target.checked)}
+                      className="w-4 h-4 text-[#00D2B8] rounded border-slate-300 shrink-0 cursor-pointer"
+                    />
+                    <span className="text-xs font-extrabold text-slate-800 select-none">
+                      통신사 할인 사용하기
+                    </span>
+                  </label>
+                  
+                  <div className={`flex flex-wrap gap-1.5 pl-1 transition-all ${useCarriers ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                    {CARRIER_OPTIONS.map((c: string) => {
+                      const selected = carriers.includes(c);
+                      return (
+                        <button
+                          key={c}
+                          type="button"
+                          disabled={!useCarriers}
+                          onClick={() => handleToggleArray(setCarriers, c)}
+                          className={`px-2.5 py-1 rounded text-xs transition-all ${
+                            selected && useCarriers
+                              ? 'bg-white text-slate-900 font-black border-2 border-[#00D2B8] shadow-[0_2px_10px_rgba(0,210,184,0.3)] cursor-pointer'
+                              : 'bg-white text-slate-600 font-bold border border-slate-200 cursor-pointer'
+                          }`}
+                        >
+                          {selected ? '✓ ' : '+ '}{c}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
 
-                <label className="flex items-center space-x-3 cursor-pointer p-2 rounded-xl hover:bg-slate-50 transition-colors min-h-[40px]">
-                  <input
-                    type="checkbox"
-                    checked={hasPreApplied}
-                    onChange={(e) => setHasPreApplied(e.target.checked)}
-                    className="w-4 h-4 text-cyan-600 rounded border-slate-300 shrink-0"
-                  />
-                  <span>📝 사전 응모 완료 혜택</span>
-                </label>
+                <div className="space-y-1.5 pt-2 border-t border-slate-200/60">
+                  <label className="flex items-center space-x-2 p-2 bg-slate-50 rounded border border-slate-200 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={usePays}
+                      onChange={(e) => setUsePays(e.target.checked)}
+                      className="w-4 h-4 text-[#00D2B8] rounded border-slate-300 shrink-0 cursor-pointer"
+                    />
+                    <span className="text-xs font-extrabold text-slate-800 select-none">
+                      사용 간편결제 (페이) 선택
+                    </span>
+                  </label>
 
-                <label className="flex items-center space-x-3 cursor-pointer p-2 rounded-xl hover:bg-slate-50 transition-colors min-h-[40px]">
-                  <input
-                    type="checkbox"
-                    checked={isFirstPayment}
-                    onChange={(e) => setIsFirstPayment(e.target.checked)}
-                    className="w-4 h-4 text-cyan-600 rounded border-slate-300 shrink-0"
-                  />
-                  <span>🎉 첫 결제 이벤트 대상</span>
-                </label>
+                  <div className={`flex flex-wrap gap-1.5 pl-1 transition-all ${usePays ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                    {PAY_OPTIONS.map((p: string) => {
+                      const selected = pays.includes(p);
+                      return (
+                        <button
+                          key={p}
+                          type="button"
+                          disabled={!usePays}
+                          onClick={() => handleToggleArray(setPays, p)}
+                          className={`px-2.5 py-1 rounded text-xs transition-all ${
+                            selected && usePays
+                              ? 'bg-white text-slate-900 font-black border-2 border-[#00D2B8] shadow-[0_2px_10px_rgba(0,210,184,0.3)] cursor-pointer'
+                              : 'bg-white text-slate-600 font-bold border border-slate-200 cursor-pointer'
+                          }`}
+                        >
+                          {selected ? '✓ ' : '+ '}{p}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 pt-2 border-t border-slate-200/60">
+                  <label className="flex items-center space-x-2 p-2 bg-slate-50 rounded border border-slate-200 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={useVoucherBypasses}
+                      onChange={(e) => {
+                        setUseVoucherBypasses(e.target.checked);
+                        if (e.target.checked && vouchers.length === 0) {
+                          setVouchers([...VOUCHER_OPTIONS]);
+                        }
+                      }}
+                      className="w-4 h-4 text-[#00D2B8] rounded border-slate-300 shrink-0 cursor-pointer"
+                    />
+                    <span className="text-xs font-extrabold text-slate-800 select-none">
+                      문화상품권 우회 충전 할인
+                    </span>
+                  </label>
+
+                  <div className={`flex flex-wrap gap-1.5 pl-1 transition-all ${useVoucherBypasses ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                    {VOUCHER_OPTIONS.map((v: string) => {
+                      const selected = vouchers.includes(v);
+                      return (
+                        <button
+                          key={v}
+                          type="button"
+                          disabled={!useVoucherBypasses}
+                          onClick={() => handleToggleArray(setVouchers, v)}
+                          className={`px-2.5 py-1 rounded text-xs transition-all ${
+                            selected && useVoucherBypasses
+                              ? 'bg-white text-slate-900 font-black border-2 border-[#00D2B8] shadow-[0_2px_10px_rgba(0,210,184,0.3)] cursor-pointer'
+                              : 'bg-white text-slate-600 font-bold border border-slate-200 cursor-pointer'
+                          }`}
+                        >
+                          {selected ? '✓ ' : '+ '}{v}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
-            </div>
-          </form>
 
-          {/* 확장된 스티키 광고 */}
-          <div className="sticky top-28 min-h-[550px] p-6 bg-slate-100 rounded-xl border border-slate-200/80 flex flex-col items-center justify-between text-center space-y-6 shadow-inner">
-            <span className="px-3 py-1 bg-slate-800 text-white font-bold text-[10px] rounded tracking-wider">ADVERTISEMENT</span>
-            
-            <div className="space-y-5 my-auto">
-              <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-3xl font-black text-slate-400 shadow-sm border border-slate-200 mx-auto animate-pulse">
-                📢
+              <div className="bg-white rounded-lg border border-slate-200/90 p-3.5 shadow-2xs space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-slate-800 block">제휴 카드 선택 (옵션)</span>
+                  <label className="flex items-center space-x-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={useSpecialOptions}
+                      onChange={(e) => setUseSpecialOptions(e.target.checked)}
+                      className="w-3.5 h-3.5 text-[#00D2B8] rounded border-slate-300 shrink-0"
+                    />
+                    <span className="text-[11px] font-bold text-[#00A896]">옵션 {useSpecialOptions ? '열림' : '닫힘'}</span>
+                  </label>
+                </div>
+
+                {useSpecialOptions && (
+                  <div className="space-y-2 pt-1">
+                    <select
+                      value={selectedSpecialCard}
+                      onChange={(e) => setSelectedSpecialCard(e.target.value)}
+                      className="w-full px-2.5 py-2 text-xs rounded border border-slate-300 bg-white font-bold text-slate-900 focus:outline-none"
+                    >
+                      {SPECIAL_CARD_OPTIONS.map((card: { label: string; value: string }) => (
+                        <option key={card.value} value={card.value}>
+                          {card.label}
+                        </option>
+                      ))}
+                    </select>
+
+                    {selectedSpecialCard !== 'NONE' && (
+                      <label className="flex items-center space-x-2 p-2 bg-slate-50 rounded border border-slate-200 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={hasPrevSpend}
+                          onChange={(e) => setHasPrevSpend(e.target.checked)}
+                          className="w-4 h-4 text-[#00D2B8] rounded border-slate-300 shrink-0"
+                        />
+                        <span className="text-xs font-bold text-slate-800">카드 전월 실적 충족 (20만~50만원)</span>
+                      </label>
+                    )}
+                  </div>
+                )}
               </div>
+
+              <div className="bg-white rounded-lg border border-slate-200/90 p-3.5 shadow-2xs space-y-2.5">
+                <span className="text-xs font-black text-slate-800 block">기타 혜택</span>
+
+                <div className="space-y-1.5 text-xs font-bold text-slate-800">
+                  <label className="flex items-center space-x-2.5 p-2 bg-slate-50 rounded border border-slate-200 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={useGameBenefits}
+                      onChange={(e) => setUseGameBenefits(e.target.checked)}
+                      className="w-4 h-4 text-[#00D2B8] rounded border-slate-300 shrink-0"
+                    />
+                    <span>게임 전용 혜택 포함</span>
+                  </label>
+
+                  <label className="flex items-center space-x-2.5 p-2 bg-slate-50 rounded border border-slate-200 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={hasPreApplied}
+                      onChange={(e) => setHasPreApplied(e.target.checked)}
+                      className="w-4 h-4 text-[#00D2B8] rounded border-slate-300 shrink-0"
+                    />
+                    <span>사전 응모 완료 혜택</span>
+                  </label>
+
+                  <label className="flex items-center space-x-2.5 p-2 bg-slate-50 rounded border border-slate-200 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isFirstPayment}
+                      onChange={(e) => setIsFirstPayment(e.target.checked)}
+                      className="w-4 h-4 text-[#00D2B8] rounded border-slate-300 shrink-0"
+                    />
+                    <span>첫 결제 이벤트 대상</span>
+                  </label>
+                </div>
+              </div>
+            </form>
+
+            {/* 하단 광고 배너 */}
+            <div className="p-6 bg-slate-900 rounded-lg border border-slate-800 h-[500px] w-full flex flex-col items-center justify-between text-center shadow-md">
+              <span className="px-2.5 py-1 bg-slate-800 text-slate-300 font-bold text-[9px] rounded border border-slate-700 tracking-wider">
+                ADVERTISEMENT
+              </span>
               
-              <div className="space-y-2">
-                <h3 className="font-black text-slate-800 text-sm md:text-base">협업 제휴 프로모션</h3>
-                <p className="text-xs text-slate-500 leading-relaxed max-w-[160px] mx-auto font-medium">
-                  게임별 스토어 & 제휴 카드사 전용 특별 혜택 및 광고 영역입니다.
-                </p>
+              <div className="space-y-4 my-auto">
+                <div className="w-14 h-14 bg-slate-800 rounded-lg flex items-center justify-center text-3xl shadow-inner border border-slate-700 mx-auto animate-pulse">
+                  📢
+                </div>
+                
+                <div className="space-y-1.5">
+                  <h3 className="font-black text-white text-sm">협업 제휴 프로모션</h3>
+                  <p className="text-[11px] text-slate-400 leading-relaxed max-w-[150px] mx-auto font-medium">
+                    게임별 스토어 & 제휴 카드사 전용 특별 혜택 및 광고 영역입니다.
+                  </p>
+                </div>
               </div>
 
-              <div className="p-3 bg-white/90 rounded-xl border border-slate-200/80 text-[11px] text-slate-600 font-bold space-y-1">
-                <p>💡 실시간 제휴 입점 문의</p>
-                <p className="text-[10px] text-slate-400 font-normal">맞춤형 타겟팅 배너 게재</p>
-              </div>
+              <button className="w-full py-2.5 bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] hover:brightness-105 text-slate-950 font-black text-xs rounded transition-all shadow-md cursor-pointer">
+                신청하기
+              </button>
             </div>
+          </aside>
 
-            <button className="w-full py-3 bg-cyan-500 hover:bg-cyan-600 text-white font-extrabold text-xs rounded-xl transition-all shadow-md shadow-cyan-500/20 cursor-pointer">
-              신청하기
-            </button>
-          </div>
-
-        </aside>
-
+        </div>
       </div>
 
-      {/* 환산 기준 안내 모달 */}
       {isCriteriaModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-            <h3 className="text-lg font-bold text-slate-800 border-b pb-2">
-              💡 실시간 최저가 연산 기준 안내
+          <div className="bg-white rounded-lg max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <h3 className="text-lg font-bold text-slate-900 border-b pb-2">
+              실시간 최저가 연산 기준 안내
             </h3>
             <div className="text-xs text-slate-600 space-y-2 leading-relaxed">
               <p>• <strong>스토어 멤버십 반영</strong>: 구글 Play Points / 갤럭시 스토어 등급별 적립률이 실시간 연산에 포함됩니다.</p>
@@ -1247,7 +1630,7 @@ const isOneStoreSelected = osType === 'ANDROID' && androidStores.includes('원�
             <button
               type="button"
               onClick={() => setIsCriteriaModalOpen(false)}
-              className="w-full py-2.5 bg-cyan-500 hover:bg-cyan-600 text-white font-bold text-sm rounded-xl transition-all cursor-pointer shadow-md"
+              className="w-full py-2.5 bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] hover:brightness-105 text-slate-950 font-black text-sm rounded transition-all cursor-pointer shadow-md"
             >
               확인 및 닫기
             </button>
@@ -1255,13 +1638,11 @@ const isOneStoreSelected = osType === 'ANDROID' && androidStores.includes('원�
         </div>
       )}
 
-      {/* 스토어별 1위 최저가 비교 모달 */}
       {isCompareModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
-          <div className="bg-white rounded-2xl max-w-xl w-full p-6 space-y-5 shadow-2xl">
+          <div className="bg-white rounded-lg max-w-xl w-full p-6 space-y-5 shadow-2xl">
             <div className="flex items-center justify-between border-b pb-3">
               <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                <span>📊</span>
                 <span>스토어별 1위 최저가 비교표</span>
               </h3>
               <button
@@ -1273,30 +1654,20 @@ const isOneStoreSelected = osType === 'ANDROID' && androidStores.includes('원�
               </button>
             </div>
 
-            <p className="text-xs text-slate-500 font-medium">
-              선택하신 조건 내에서 각 스토어별로 산출된 <strong>1등 최저가 경로</strong> 비교표입니다.
-            </p>
-
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {storeComparisonData.map((store, idx) => (
                 <div
                   key={store.platform}
-                  className={`p-4 rounded-xl border flex flex-col justify-between space-y-2 ${
+                  className={`p-4 rounded border flex flex-col justify-between space-y-2 ${
                     idx === 0
-                      ? 'bg-amber-50/80 border-amber-300 ring-2 ring-amber-400/30'
+                      ? 'bg-amber-50/80 border-amber-300 shadow-2xs'
                       : 'bg-slate-50 border-slate-200'
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-1.5">
-                      <span className="text-xl">{store.icon}</span>
-                      <span className="font-extrabold text-slate-800 text-xs">{store.platform}</span>
+                      <span className="font-extrabold text-slate-900 text-xs">{store.platform}</span>
                     </div>
-                    {idx === 0 && (
-                      <span className="text-[10px] font-black text-amber-800 bg-amber-200 px-2 py-0.5 rounded-full">
-                        전체 1위 스토어 👑
-                      </span>
-                    )}
                   </div>
 
                   <div>
@@ -1306,14 +1677,10 @@ const isOneStoreSelected = osType === 'ANDROID' && androidStores.includes('원�
                     <span className="text-lg font-black text-slate-900">
                       {store.minPrice.toLocaleString()}원
                     </span>
-                    <span className="text-xs font-extrabold text-red-600 ml-2">
+                    <span className="text-xs font-extrabold text-rose-600 ml-2">
                       ({store.discountRate}% 절감)
                     </span>
                   </div>
-
-                  <p className="text-[11px] text-slate-600 font-medium bg-white p-2 rounded border border-slate-100 truncate">
-                    💡 {store.routeTitle}
-                  </p>
                 </div>
               ))}
             </div>
@@ -1321,7 +1688,7 @@ const isOneStoreSelected = osType === 'ANDROID' && androidStores.includes('원�
             <button
               type="button"
               onClick={() => setIsCompareModalOpen(false)}
-              className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-all cursor-pointer shadow-md"
+              className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded transition-all cursor-pointer shadow-md"
             >
               닫기
             </button>
@@ -1329,24 +1696,21 @@ const isOneStoreSelected = osType === 'ANDROID' && androidStores.includes('원�
         </div>
       )}
 
-      {/* 카드 클릭 시 세부 결제 경로 모달 (바깥 회색 배경 클릭 시 바로 닫힘) */}
       {selectedResultForDetail && (
         <div
           onClick={() => setSelectedResultForDetail(null)}
           className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn cursor-pointer"
         >
-          {/* e.stopPropagation()으로 모달 박스 클릭 시 닫히는 현상 방지 */}
           <div
             onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl max-h-[85vh] overflow-y-auto cursor-default"
+            className="bg-white rounded-lg max-w-lg w-full p-6 space-y-5 shadow-2xl max-h-[85vh] overflow-y-auto cursor-default"
           >
-            
             <div className="flex items-center justify-between border-b pb-3">
               <div>
-                <span className="text-xs font-bold text-cyan-600 bg-cyan-50 px-2 py-0.5 rounded-md border border-cyan-200">
+                <span className="text-xs font-black text-[#00A896] bg-gradient-to-r from-[#00D2B8]/15 to-[#00F5FF]/15 px-2 py-0.5 rounded border border-[#00D2B8]/30">
                   {selectedResultForDetail.rank}위 최저가 경로 상세 정보
                 </span>
-                <h3 className="text-base font-extrabold text-slate-800 mt-1">
+                <h3 className="text-base font-extrabold text-slate-900 mt-1">
                   {selectedResultForDetail.title}
                 </h3>
               </div>
@@ -1359,100 +1723,89 @@ const isOneStoreSelected = osType === 'ANDROID' && androidStores.includes('원�
               </button>
             </div>
 
-            {/* 금액 계산서 요약표 */}
-            <div className="bg-cyan-50/80 p-4 rounded-xl border border-cyan-200 space-y-2 text-xs">
+            <div className="bg-gradient-to-r from-[#00D2B8]/10 to-[#00F5FF]/10 p-4 rounded border border-[#00D2B8]/30 space-y-2 text-xs">
               <div className="flex justify-between items-center text-slate-600">
                 <span>정가</span>
                 <span>{selectedResultForDetail.original_price.toLocaleString()}원</span>
               </div>
-              <div className="flex justify-between items-center text-red-600 font-medium">
+              <div className="flex justify-between items-center text-rose-600 font-medium">
                 <span>(-) 즉시 할인 금액 ({selectedResultForDetail.discountRatePercent}%)</span>
                 <span>-{selectedResultForDetail.immediate_discount_total.toLocaleString()}원</span>
               </div>
-              <div className="flex justify-between items-center text-slate-900 font-bold border-t border-cyan-200/80 pt-1.5">
-                <span>💳 실제 결제창 결제액</span>
+              <div className="flex justify-between items-center text-slate-900 font-bold border-t border-[#00D2B8]/20 pt-1.5">
+                <span>실제 결제창 결제액</span>
                 <span className="text-sm">{selectedResultForDetail.actual_payment_price.toLocaleString()}원</span>
               </div>
               <div className="flex justify-between items-center text-emerald-600 font-medium">
                 <span>(-) 결제 후 적립 포인트 ({selectedResultForDetail.rewardRatePercent}%)</span>
                 <span>-{selectedResultForDetail.reward_point.toLocaleString()}원</span>
               </div>
-              <div className="flex justify-between items-center text-cyan-900 font-black border-t border-cyan-300 pt-2 text-sm">
-                <span>🎉 최종 체감가</span>
-                <span className="text-base text-cyan-600">{selectedResultForDetail.final_price.toLocaleString()}원</span>
-              </div>
-              <div className="text-right text-[11px] text-cyan-800 font-bold pt-1">
-                (총 {selectedResultForDetail.total_benefit_amount.toLocaleString()}원 혜택 / 실질 {selectedResultForDetail.discount_rate}% 절감)
+              <div className="flex justify-between items-center text-slate-900 font-black border-t border-[#00D2B8]/30 pt-2 text-sm">
+                <span>최종 체감가</span>
+                <span className="text-base text-[#00A896] font-black">{selectedResultForDetail.final_price.toLocaleString()}원</span>
               </div>
             </div>
 
-            {/* 즉시 할인 단계 */}
+            <div className="p-3 bg-gradient-to-r from-[#00D2B8]/15 to-[#00F5FF]/15 rounded border border-[#00D2B8]/30 text-xs font-extrabold text-slate-900 leading-relaxed shadow-2xs">
+              {getUsageGuide(selectedResultForDetail.paymentRoute.join(' '))}
+            </div>
+
             {selectedResultForDetail.discount_steps.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="text-xs font-extrabold text-slate-700">💳 결제 시 즉시 할인 이벤트</h4>
-                {selectedResultForDetail.discount_steps.map((step, idx) => (
-                  <div key={idx} className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-1.5">
-                        {step.isGameSpecific ? (
-                          <span className="text-[10px] font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-md">
-                            🎮 {step.targetGame} 전용
-                          </span>
-                        ) : (
-                          <span className="text-[10px] font-semibold text-slate-500 bg-slate-200/70 px-2 py-0.5 rounded-md">
-                            🌐 공통 혜택
-                          </span>
-                        )}
-                        <span className="text-xs font-extrabold text-slate-800">{step.eventName}</span>
+              <div className="p-4 bg-rose-50/50 rounded border border-rose-200 space-y-2 text-xs">
+                <h4 className="font-black text-rose-900 flex items-center gap-1.5 text-sm">
+                  <span>결제 시 즉시 할인 이벤트</span>
+                </h4>
+                <div className="space-y-2 pt-1">
+                  {selectedResultForDetail.discount_steps.map((step, idx) => (
+                    <div key={idx} className="p-3 bg-white rounded border border-rose-100 space-y-1.5 shadow-2xs">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                        <div className="flex items-center space-x-1.5 min-w-0 flex-1">
+                          {step.isGameSpecific ? (
+                            <span className="text-[10px] font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded shrink-0">
+                              {step.targetGame} 전용
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded shrink-0">
+                              공통 혜택
+                            </span>
+                          )}
+                          <span className="text-xs font-extrabold text-slate-800 truncate break-keep">{step.eventName}</span>
+                        </div>
+                        <span className="text-xs font-black text-rose-600 shrink-0 self-end sm:self-auto">
+                          -{step.amount.toLocaleString()}원 할인 {step.ratePercent ? `(${step.ratePercent}%)` : ''}
+                        </span>
                       </div>
-                      <span className="text-xs font-bold text-red-600">
-                        -{step.amount.toLocaleString()}원 할인 {step.ratePercent ? `(${step.ratePercent}%)` : ''}
-                      </span>
+                      <p className="text-[11px] text-slate-600 leading-relaxed bg-slate-50/80 p-2 rounded border border-slate-100">
+                        <strong>상세 조건:</strong> {step.conditionText}
+                      </p>
                     </div>
-                    <p className="text-[11px] text-slate-600 leading-relaxed bg-white p-2.5 rounded-lg border border-slate-100">
-                      📝 <strong>상세 조건:</strong> {step.conditionText}
-                    </p>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             )}
 
-            {/* 결제 후 적립 단계 */}
             {selectedResultForDetail.reward_steps.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="text-xs font-extrabold text-slate-700">🎁 결제 후 적립 이벤트</h4>
-                {selectedResultForDetail.reward_steps.map((step, idx) => (
-                  <div key={idx} className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-1.5">
-                        {step.isGameSpecific ? (
-                          <span className="text-[10px] font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-md">
-                            🎮 {step.targetGame} 전용
-                          </span>
-                        ) : (
-                          <span className="text-[10px] font-semibold text-slate-500 bg-slate-200/70 px-2 py-0.5 rounded-md">
-                            🌐 공통 혜택
-                          </span>
-                        )}
-                        <span className="text-xs font-extrabold text-slate-800">{step.eventName}</span>
-                      </div>
-
-                      <span className="text-xs font-bold text-emerald-600">
-                        {step.formattedAmountText}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-600 leading-relaxed bg-white p-2.5 rounded-lg border border-slate-100">
-                      📝 <strong>상세 조건:</strong> {step.conditionText}
-                    </p>
+              <div className="p-4 bg-emerald-50/80 rounded border border-emerald-200 space-y-2 text-xs">
+                <h4 className="font-black text-emerald-900 flex items-center gap-1.5 text-sm">
+                  <span>포인트 적립 세부 내역</span>
+                </h4>
+                <div className="space-y-1.5 pt-1">
+                  {selectedResultForDetail.reward_steps.map((step, idx) => (
+                    <div key={idx} className="flex justify-between items-center gap-2 bg-white p-2.5 rounded border border-emerald-100/90 font-bold shadow-2xs">
+                    <span className="text-slate-700 text-xs truncate min-w-0 flex-1">
+                      • {formatMethodName(step.providerName)} ({step.eventName})
+                    </span>
+                    <span className="text-emerald-700 font-black text-xs shrink-0 whitespace-nowrap">
+                      {step.formattedAmountText}
+                    </span>
                   </div>
-                ))}
+                  ))}
+                </div>
               </div>
             )}
-
           </div>
         </div>
       )}
-
     </div>
   );
 }

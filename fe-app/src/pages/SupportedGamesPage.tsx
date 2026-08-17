@@ -1,110 +1,295 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
+
+export interface GameItem {
+  id: string;
+  name: string;
+  company: string;
+  genre_tags: string[];
+  main_genre: string;
+  description: string;
+  icon_url: string;
+  stores: string[];
+}
+
+const getInitialGames = (): GameItem[] => {
+  try {
+    const localData = localStorage.getItem('cached_games_list');
+    if (localData) {
+      const parsed = JSON.parse(localData);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {}
+  return [];
+};
 
 export default function SupportedGamesPage() {
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedGenre, setSelectedGenre] = useState('전체');
+  
+  const initialData = getInitialGames();
+  const [games, setGames] = useState<GameItem[]>(initialData);
+  const [loading, setLoading] = useState<boolean>(initialData.length === 0);
 
-  const games = [
-    { id: 1, name: '쿠키런: 킹덤', icon: '🍪', category: '수집형 RPG', stores: ['구글', '원스', '갤스', '앱스토어'] },
-    { id: 2, name: '리니지M', icon: '⚔️', category: 'MMORPG', stores: ['구글', '앱스토어'] },
-    { id: 3, name: '오딘: 발할라 라이징', icon: '🛡️', category: 'MMORPG', stores: ['구글', '원스', '앱스토어'] },
-    { id: 4, name: '나 혼자만 레벨업:어라이즈', icon: '🗡️', category: '액션 RPG', stores: ['구글', '갤스', '앱스토어'] },
-    { id: 5, name: '붕괴: 스타레일', icon: '🚀', category: '턴제 RPG', stores: ['구글', '갤스', '앱스토어'] },
-    { id: 6, name: '원신', icon: '✨', category: '오픈월드 RPG', stores: ['구글', '갤스', '앱스토어'] },
-    { id: 7, name: 'AFK : 새로운 여정', icon: '🏹', category: '방치형 RPG', stores: ['구글', '앱스토어'] },
-    { id: 8, name: 'FC 모바일', icon: '⚽', category: '스포츠', stores: ['구글', '앱스토어'] },
-    { id: 9, name: '메이플스토리M', icon: '🍁', category: 'MMORPG', stores: ['구글', '원스', '앱스토어'] },
-    { id: 10, name: '승리의 여신: 니케', icon: '🔫', category: 'TPS 건슈팅', stores: ['구글', '원스', '앱스토어'] },
-    { id: 11, name: '트릭컬 리바이브', icon: '🍰', category: '수집형 RPG', stores: ['구글', '갤스', '원스'] },
-    { id: 12, name: '젠레스 존 제로', icon: '⚡', category: 'ARPG', stores: ['구글', '갤스', '앱스토어'] },
-  ];
+  const [displayCount, setDisplayCount] = useState(24);
+  const observerTargetRef = useRef<HTMLDivElement>(null);
 
-  const filtered = games.filter((g) =>
-    g.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchGames = async () => {
+      try {
+        if (games.length === 0) setLoading(true);
+        const res = await fetch('http://127.0.0.1:8000/games');
+        if (!res.ok) throw new Error('서버 응답 오류');
+        const result = await res.json();
+        
+        if (isMounted && result.status === 'ok' && Array.isArray(result.data)) {
+          setGames(result.data);
+          localStorage.setItem('cached_games_list', JSON.stringify(result.data));
+        }
+      } catch (err) {
+        console.error('게임 데이터 로딩 실패:', err);
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchGames();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    setDisplayCount(24);
+  }, [searchQuery, selectedGenre]);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setDisplayCount((prev) => prev + 24);
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (observerTargetRef.current) {
+      observer.observe(observerTargetRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [games]);
+
+  const genres = ['전체', 'RPG', '캐주얼', '스포츠', '액션', '전략', '시뮬레이션', '서브컬처'];
+
+  const filtered = games.filter((g) => {
+    const matchesSearch =
+      g.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      g.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      g.genre_tags.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase()));
+
+    const matchesGenre =
+      selectedGenre === '전체' ||
+      g.main_genre.includes(selectedGenre) ||
+      g.genre_tags.some((t) => t.includes(selectedGenre));
+
+    return matchesSearch && matchesGenre;
+  });
+
+  const visibleGames = filtered.slice(0, displayCount);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      (e.target as HTMLInputElement).blur();
+    }
+  };
 
   return (
-    <div className="max-w-[1400px] mx-auto px-4 py-6 space-y-6">
+    /* 💡 overflow-hidden 제거하여 스티키 동작 복원 */
+    <div className="bg-[#F8FAFC] min-h-screen py-6 md:py-8 relative">
       
-      {/* 12열 레이아웃 (items-start 필수) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-        
-        {/* [좌측 10열] 메인 게임 영역 */}
-        <div className="lg:col-span-10 space-y-6">
-          <header className="space-y-2">
-            <h2 className="text-2xl font-black text-slate-900">🎮 호갱탈출 지원 게임 목록</h2>
-            <p className="text-xs text-slate-500">실시간 스토어 결제 최적가 연산을 지원하는 게임 리스트입니다.</p>
-            
-            <div className="pt-2">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="지원 게임 이름으로 검색해 보세요..."
-                className="w-full max-w-md px-4 py-2.5 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500 shadow-sm"
-              />
-            </div>
-          </header>
+      {/* 은은한 불규칙 SVG 기하학 레이어 */}
+      <div className="absolute top-0 right-0 w-[550px] h-[550px] pointer-events-none opacity-[0.05] z-0">
+        <svg viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="120,20 480,80 380,420 40,300" fill="#00D2B8" />
+          <polygon points="480,80 380,420 490,480" fill="#0F172A" />
+        </svg>
+      </div>
 
-          {/* 게임 카드 그리드 (세미 샤프 적용) */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-            {filtered.map((g) => (
-              <div
-                key={g.id}
-                className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm hover:border-cyan-400 hover:shadow-md transition-all space-y-3 cursor-pointer"
-              >
-                <div className="text-4xl">{g.icon}</div>
-                <div>
-                  <span className="text-[10px] font-bold text-cyan-800 bg-cyan-50 px-2 py-0.5 rounded border border-cyan-200">
-                    {g.category}
+      <div className="max-w-[1400px] mx-auto px-4 md:px-6 relative z-10 space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+          
+          {/* [좌측 10열] 메인 게임 카탈로그 */}
+          <div className="lg:col-span-10 space-y-6">
+            <header className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">
+                  호갱탈출 지원 게임 목록
+                </h2>
+
+                {!loading && (
+                  <span className="text-xs font-black text-[#00A896] bg-gradient-to-r from-[#00D2B8]/15 to-[#00F5FF]/15 px-3 py-1 rounded border border-[#00D2B8]/30 shadow-2xs">
+                    총 {filtered.length}개 게임 서비스 중
                   </span>
-                  <h3 className="text-sm font-extrabold text-slate-800 mt-1.5">{g.name}</h3>
-                </div>
-                <div className="flex flex-wrap gap-1 border-t border-slate-100 pt-2">
-                  {g.stores.map((s) => (
-                    <span key={s} className="text-[9px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
-                      {s}
-                    </span>
+                )}
+              </div>
+
+              <p className="text-xs text-slate-500 font-medium">
+                실시간 최저가 연산 및 할인 혜택 조회가 가능한 모바일 게임 리스트입니다.
+              </p>
+              
+              <div className="pt-2 space-y-3">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="게임 이름, 개발사 또는 장르(예: 넥슨, RPG)로 검색해보세요..."
+                  className="w-full max-w-md px-4 py-2.5 text-xs rounded border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-[#00D2B8] shadow-xs font-bold text-slate-800"
+                />
+
+                {/* 장르 선택 필터 바 */}
+                <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 no-scrollbar">
+                  {genres.map((cat) => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setSelectedGenre(cat)}
+                      className={`px-3 py-1.5 rounded text-xs font-black transition-all cursor-pointer whitespace-nowrap ${
+                        selectedGenre === cat
+                          ? 'bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] text-slate-950 shadow-[0_2px_8px_rgba(0,210,184,0.3)]'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {cat}
+                    </button>
                   ))}
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
+            </header>
 
-        {/* [우측 2열] 위치 및 스티키 개선 광고 배너 */}
-        <aside className="lg:col-span-2 h-full">
-          <div className="sticky top-28 h-[650px] w-full p-5 bg-slate-100 rounded-xl border border-slate-200/80 flex flex-col items-center justify-between text-center shadow-inner">
-            <span className="px-2.5 py-1 bg-slate-800 text-white font-bold text-[9px] rounded tracking-wider">
+            {/* 스켈레톤 로더 */}
+            {loading ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 animate-pulse">
+                {[...Array(8)].map((_, i) => (
+                  <div key={i} className="p-4 bg-slate-100 rounded-lg h-36 border border-slate-200" />
+                ))}
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                  {visibleGames.map((g, index) => (
+                    <div
+                      key={g.id || index}
+                      className="p-4 bg-white rounded-lg border border-slate-200/90 shadow-xs hover:border-[#00D2B8] hover:shadow-[0_4px_14px_rgba(0,210,184,0.25)] transition-all space-y-3 cursor-pointer flex flex-col justify-between"
+                    >
+                      <div className="space-y-2.5">
+                        <div className="flex items-center space-x-3">
+                          {g.icon_url ? (
+                            <img
+                              src={g.icon_url}
+                              alt={g.name}
+                              referrerPolicy="no-referrer"
+                              loading="lazy"
+                              decoding="async"
+                              onError={(e) => {
+                                e.currentTarget.onerror = null;
+                                e.currentTarget.style.display = 'none';
+                              }}
+                              className="w-12 h-12 rounded object-cover border border-slate-200 shrink-0 shadow-2xs bg-slate-100"
+                            />
+                          ) : (
+                            <div className="w-12 h-12 rounded bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-400 border border-slate-200 shrink-0">
+                              GAME
+                            </div>
+                          )}
+                          
+                          <div className="min-w-0">
+                            <span className="text-[9.5px] font-black text-[#00A896] bg-gradient-to-r from-[#00D2B8]/15 to-[#00F5FF]/15 px-1.5 py-0.5 rounded border border-[#00D2B8]/30 truncate inline-block">
+                              {g.company}
+                            </span>
+                            <h3 className="text-xs md:text-sm font-extrabold text-slate-900 mt-1 truncate">
+                              {g.name}
+                            </h3>
+                          </div>
+                        </div>
+
+                        <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">
+                          {g.description}
+                        </p>
+                      </div>
+
+                      <div className="border-t border-slate-100 pt-2.5 space-y-2">
+                        <div className="flex flex-wrap gap-1">
+                          {g.stores.map((s) => (
+                            <span key={s} className="text-[9px] font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200/60">
+                              {s}
+                            </span>
+                          ))}
+                        </div>
+
+                        <div className="flex flex-wrap gap-1">
+                          {g.genre_tags.slice(0, 3).map((tag, tIdx) => (
+                            <button
+                              key={tIdx}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSearchQuery(tag);
+                              }}
+                              className="text-[9.5px] font-bold text-[#00A896] bg-gradient-to-r from-[#00D2B8]/10 to-[#00F5FF]/10 hover:bg-[#00D2B8]/20 active:scale-95 px-2 py-0.5 rounded border border-[#00D2B8]/30 transition-all cursor-pointer"
+                            >
+                              #{tag}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                    </div>
+                  ))}
+                </div>
+
+                <div ref={observerTargetRef} className="h-10 w-full" />
+              </>
+            )}
+          </div>
+
+          {/* 💡 [우측 2열] 스티키 top-36 적용 완료 */}
+          <aside className="lg:col-span-2 sticky top-36 bg-slate-900 rounded-lg border border-slate-800 h-[650px] w-full p-5 flex flex-col items-center justify-between text-center shadow-md">
+            <span className="px-2.5 py-1 bg-slate-800 text-slate-300 font-bold text-[9px] rounded border border-slate-700 tracking-wider">
               ADVERTISEMENT
             </span>
 
             <div className="space-y-4 my-auto">
-              <div className="w-14 h-14 bg-white rounded-xl flex items-center justify-center text-3xl shadow-sm border border-slate-200 mx-auto animate-pulse">
+              <div className="w-14 h-14 bg-slate-800 rounded-lg flex items-center justify-center text-3xl shadow-inner border border-slate-700 mx-auto animate-pulse">
                 📢
               </div>
+
               <div className="space-y-1.5">
-                <h3 className="font-extrabold text-slate-800 text-sm">
+                <h3 className="font-black text-white text-sm">
                   협업 제휴 광고
                 </h3>
-                <p className="text-[11px] text-slate-500 leading-relaxed max-w-[130px] mx-auto">
+                <p className="text-[11px] text-slate-400 leading-relaxed max-w-[130px] mx-auto">
                   게임별 스토어 & 카드사 전용 프로모션 공간입니다.
                 </p>
               </div>
 
-              <div className="p-3 bg-white/90 rounded-lg border border-slate-200/80 text-[10px] text-slate-600 font-medium">
-                💡 신규 게임 등록 및 배너 입점 문의 환영
+              <div className="p-3 bg-slate-800/80 rounded border border-slate-700 text-[10px] text-slate-300 font-medium">
+                신규 게임 등록 및 배너 입점 문의 환영
               </div>
             </div>
 
-            <button className="w-full py-2.5 bg-cyan-500 hover:bg-cyan-600 text-white font-extrabold text-xs rounded-lg transition-all shadow-md shadow-cyan-500/20 cursor-pointer">
+            <button className="w-full py-2.5 bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] hover:brightness-105 text-slate-950 font-black text-xs rounded transition-all shadow-md cursor-pointer">
               광고/제휴 신청하기
             </button>
-          </div>
-        </aside>
+          </aside>
 
+        </div>
       </div>
-
     </div>
   );
 }
-// finish
