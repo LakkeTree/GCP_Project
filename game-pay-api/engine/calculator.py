@@ -127,7 +127,48 @@ def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
     eligible = []
     warnings = []
 
+    req_platform = str(platform).upper()
+
     for b in benefits:
+        # 1. 스토어 등급 기본 적립 데이터는 별도 함수에서 처리하므로 제외
+        if b.get("category") in ("REWARD_STORE", "SUMMARY_STORE_TIER_REWARD_RATES"):
+            continue
+
+        target_p = str(b.get("target_platform") or "").upper()
+        provider_code = str(b.get("provider_or_retailer") or "").upper()
+        event_name = str(b.get("item_or_event_name") or "").upper()
+
+        # 2. [완벽 차단] 타 스토어 혜택 및 T멤버십 교차 유입 철저 차단
+        if req_platform == "GOOGLE_PLAY":
+            # 구글 연산 시 원스토어, T멤버십, 갤스, 앱스토어 키워드가 포함된 모든 혜택 차단
+            if any(k in target_p or k in provider_code or k in event_name for k in ["ONE_STORE", "ONESTORE", "원스토어", "T_MEMBERSHIP", "T멤버십", "GALAXY", "갤스", "APP_STORE"]):
+                continue
+        elif req_platform == "ONE_STORE":
+            # 원스토어 연산 시 구글, 갤스, 앱스토어 전용 혜택 차단
+            if any(k in target_p or k in provider_code or k in event_name for k in ["GOOGLE_PLAY", "GOOGLE", "GALAXY", "갤스", "APP_STORE"]):
+                continue
+        elif req_platform == "GALAXY_STORE":
+            # 갤럭시 스토어 연산 시 구글, 원스토어, 앱스토어 전용 혜택 차단
+            if any(k in target_p or k in provider_code or k in event_name for k in ["GOOGLE_PLAY", "GOOGLE", "ONE_STORE", "ONESTORE", "원스토어", "T_MEMBERSHIP", "T멤버십", "APP_STORE"]):
+                continue
+        elif req_platform == "APP_STORE":
+            # 앱스토어 연산 시 구글, 원스토어, 갤스 전용 혜택 차단
+            if any(k in target_p or k in provider_code or k in event_name for k in ["GOOGLE_PLAY", "GOOGLE", "ONE_STORE", "ONESTORE", "원스토어", "T_MEMBERSHIP", "T멤버십", "GALAXY", "갤스"]):
+                continue
+
+        # 2. [핵심] 다른 스토어 전용 쿠폰이 교차로 유입되는 현상 영구 차단
+        if req_platform == "GOOGLE_PLAY":
+            if "ONE_STORE" in target_p or "ONE_STORE" in provider_code or "GALAXY" in target_p or "GALAXY" in provider_code:
+                continue
+        elif req_platform == "ONE_STORE":
+            if "GOOGLE_PLAY" in target_p or "GALAXY" in target_p or "APP_STORE" in target_p:
+                continue
+        elif req_platform == "GALAXY_STORE":
+            if "GOOGLE_PLAY" in target_p or "ONE_STORE" in target_p or "APP_STORE" in target_p:
+                continue
+        elif req_platform == "APP_STORE":
+            if "GOOGLE_PLAY" in target_p or "ONE_STORE" in target_p or "GALAXY" in target_p:
+                continue
         if b["benefit_type"] not in CALCULABLE_TYPES:
             continue
         if b["disbursement_type"] in EXCLUDED_DISBURSEMENT:
@@ -453,10 +494,12 @@ def generate_combinations(benefits):
     for combo in all_combos:
         # PAYMENT_LAYER_ORDER = ["STORE_COUPON", "PAYMENT_PG", "PAYMENT_E_PAY", "CARD_ISSUER"]
         store_coupon, payment_pg, payment_epay, card_issuer = combo
-        has_pay = (payment_pg is not None or payment_epay is not None)
-        has_card = (card_issuer is not None)
-        if has_pay and has_card:
+        
+        # 💡 [핵심 수정] 스토어 쿠폰을 제외한 결제 수단(통신사/PG, 간편결제, 카드사) 중 2개 이상 동시 중첩 차단
+        selected_payments = [m for m in (payment_pg, payment_epay, card_issuer) if m is not None]
+        if len(selected_payments) > 1:
             continue
+
         valid_combos.append(combo)
 
     return valid_combos

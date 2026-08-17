@@ -7,7 +7,6 @@ import {
   CARRIER_OPTIONS,
   PAY_OPTIONS,
   VOUCHER_OPTIONS,
-  SPECIAL_CARD_OPTIONS,
   CARD_CODE_MAP,
   PLATFORM_CODE_MAP,
   PAYMENT_METHOD_MAP,
@@ -16,17 +15,51 @@ import {
   BACKEND_API_URL,
 } from '../constants/searchOptions';
 
+// 검색 결과 및 상세 모달 전용 한국어 명칭 통합 매핑 사전
+const KOREAN_PAYMENT_MAP: Record<string, string> = {
+  'GOOGLE_PLAY Giftcard/Voucher': '구글 플레이 기프트카드 할인',
+  'GOOGLE_PLAY_Giftcard/Voucher': '구글 플레이 기프트카드 할인',
+  'GOOGLE_PLAY Giftcard': '구글 플레이 기프트카드',
+  'GOOGLE_PLAY_GIFTCARD': '구글 플레이 기프트카드',
+  'GALAXY_STORE_GIFTCARD': '갤럭시 스토어 기프트카드',
+  'ONESTORE_GIFTCARD': '원스토어 기프트카드',
+  'APPLE_GIFTCARD': '애플 기프트카드',
+  'STORE MEMBERSHIP REWARD': '스토어 멤버십 기본 적립',
+  'STORE_MEMBERSHIP_REWARD': '스토어 멤버십 기본 적립',
+  'CREDIT CHECK CARD': '일반 신용/체크카드',
+  'CREDIT_CHECK_CARD': '일반 신용/체크카드',
+  'TELECOM DISCOUNT': '통신사 멤버십 / 소액결제',
+  'TELECOM_DISCOUNT': '통신사 멤버십 / 소액결제',
+  'CULTURELAND CASH': '컬쳐랜드 캐시 (우회)',
+  'CULTURELAND_CASH': '컬쳐랜드 캐시 (우회)',
+  'CULTURELAND BYPASS': '컬쳐랜드 상품권 우회',
+  'CULTURELAND_BYPASS': '컬쳐랜드 상품권 우회',
+  'QUICK BANK TRANSFER': '실시간 계좌이체',
+  'QUICK_BANK_TRANSFER': '실시간 계좌이체',
+};
+
 const formatMethodName = (text: string) => {
   if (!text) return '';
-  return text
+  const trimmed = text.trim();
+  
+  // 1. 통합 매핑 사전에 정확히 일치하는 영문명이 있으면 한글로 즉시 변환
+  if (KOREAN_PAYMENT_MAP[trimmed]) {
+    return KOREAN_PAYMENT_MAP[trimmed];
+  }
+
+  // 2. 부분 일치 및 긴 이벤트 타이틀 정돈
+  return trimmed
+    .replace(/GOOGLE_PLAY\s*Giftcard\/Voucher/gi, '구글 기프트카드 할인')
+    .replace(/GALAXY_STORE\s*Giftcard\/Voucher/gi, '갤스 기프트카드 할인')
+    .replace(/ONESTORE\s*Giftcard\/Voucher/gi, '원스토어 기프트카드 할인')
+    .replace(/STORE\s*MEMBERSHIP\s*REWARD/gi, '스토어 기본 적립')
+    .replace(/CREDIT\s*CHECK\s*CARD/gi, '일반 신용/체크카드')
+    .replace(/TELECOM\s*DISCOUNT/gi, '통신사 할인')
     .replace(/갤럭시 스토어\s*\d+월 모바일 게임 월간 할인 쿠폰 이벤트\s*-\s*/g, '갤스 월간 쿠폰 ')
     .replace(/한여름 쿠폰 WAVE,\s*팔팔한 혜택이 밀려온다\s*-\s*/g, '갤스 한여름 WAVE ')
     .replace(/혜택은 서포트,\s*게임은 퍼펙트\s*갤럭시 스토어\s*/g, '갤스 ')
     .replace(/스토어별 첫 결제 혜택\s*-\s*/g, '첫 결제 ')
     .replace(/CU_CONVENIENCE_STORE/g, 'CU 편의점')
-    .replace(/GOOGLE_PLAY_Giftcard\/Voucher/g, '구글 기프트카드 할인')
-    .replace(/GOOGLE_PLAY_Giftcard/g, '구글 기프트카드')
-    .replace(/Giftcard\/Voucher/g, '기프트카드 할인')
     .replace(/GOOGLE_PLAY_NAVER_STORE/g, '네이버 스토어')
     .replace(/ZEROPIN/g, '제로핀')
     .replace(/GOOGLE_PLAY/g, '구글 플레이')
@@ -38,7 +71,6 @@ const formatMethodName = (text: string) => {
     .replace(/TOSS_PAY/g, '토스페이')
     .replace(/NAVER_PAY/g, '네이버페이');
 };
-
 const getUsageGuide = (pathText: string) => {
   const text = pathText.toUpperCase();
 
@@ -148,13 +180,21 @@ type SortOption = 'BEST_PRICE' | 'POINT_FIRST' | 'DISCOUNT_RATE';
 
 const formatEventTitle = (title: string): string => {
   if (!title) return '';
-  return title
+  let cleaned = title
     .replace(/^\(더미\)\s*/, '')
-    .replace(/^스토어별 첫 결제 혜택 -\s*/, '')
     .replace(/^혜택은 서포트,\s*게임은 퍼펙트\s*갤럭시 스토어\s*/, '')
     .replace(/<[^>]+>\s*이벤트\s*-\s*/, '')
     .replace(/할인 쿠폰$/, '쿠폰')
     .trim();
+
+  // 첫 결제 혜택 명시화
+  if (title.includes('첫 결제') || title.includes('FIRST_PAY')) {
+    if (!cleaned.startsWith('[첫 결제]')) {
+      cleaned = `[첫 결제 혜택] ${cleaned.replace(/^스토어별 첫 결제 혜택 -\s*/, '')}`;
+    }
+  }
+
+  return cleaned;
 };
 
 export default function SearchResultPage() {
@@ -286,8 +326,78 @@ export default function SearchResultPage() {
     initialVouchers.length > 0 ? initialVouchers : VOUCHER_OPTIONS
   );
 
-  const [useSpecialOptions, setUseSpecialOptions] = useState(initialSpecialCard !== 'NONE');
+const [useSpecialOptions, setUseSpecialOptions] = useState(initialSpecialCard !== 'NONE');
   const [selectedSpecialCard, setSelectedSpecialCard] = useState(initialSpecialCard);
+
+  // BigQuery 결제수단 통합 API로부터 카드사 목록을 동적 로드하는 State & Effect
+  const [dynamicCardOptions, setDynamicCardOptions] = useState<{ label: string; value: string }[]>([
+    { label: '선택 안 함 (일반 신용/체크카드 / 기본 결제)', value: 'NONE' }
+  ]);
+
+  useEffect(() => {
+    fetch('http://127.0.0.1:8000/payments')
+      .then((res) => res.json())
+      .then((result) => {
+        if (result.status === 'ok' && Array.isArray(result.data)) {
+          // 1. 우회 결제/기프트카드 관련 수단 제외 키워드
+          const EXCLUDE_KEYWORDS = [
+            'GIFTCARD', 'GIFT_CARD', 'SSG', '11STREET', 'GMARKET',
+            'CONVENIENCE', 'CU_', 'GS25', 'SEVEN', 'ZEROPIN', 'NAVER_STORE', 'APPLE_GIFT',
+            'CREDIT_CHECK_CARD', 'CREDIT'
+          ];
+
+          // 2. 카드 상품이 아닌 더미/일반 혜택 타이틀 제외 키워드
+          const EXCLUDE_TITLES = [
+            'CREDIT CHECK CARD', '삼성페이', '결제수단별', '기본 적립률', '기본/이벤트 혜택'
+          ];
+
+          const genuineCardMethods = result.data.filter((m: any) => {
+            const isCardCategory = m.category === 'CARD' || m.code.includes('CARD');
+            const isExcluded = EXCLUDE_KEYWORDS.some((kw) => m.code.toUpperCase().includes(kw));
+            return isCardCategory && !isExcluded;
+          });
+
+          const cardOptions: { label: string; value: string }[] = [
+            { label: '선택 안 함 (일반 신용/체크카드 / 기본 결제)', value: 'NONE' }
+          ];
+
+          const addedCardTitles = new Set<string>();
+
+          genuineCardMethods.forEach((c: any) => {
+            if (c.benefits && c.benefits.length > 0) {
+              c.benefits.forEach((b: any) => {
+                const cardName = b.title || c.name;
+                const isTitleExcluded = EXCLUDE_TITLES.some((t) => cardName.includes(t));
+
+                if (!addedCardTitles.has(cardName) && !isTitleExcluded) {
+                  addedCardTitles.add(cardName);
+                  cardOptions.push({
+                    label: cardName, // '[제휴]' 접두사 제거
+                    value: c.code,
+                  });
+                }
+              });
+            } else {
+              const isTitleExcluded = EXCLUDE_TITLES.some((t) => c.name.includes(t));
+              if (!addedCardTitles.has(c.name) && !isTitleExcluded) {
+                addedCardTitles.add(c.name);
+                cardOptions.push({
+                  label: c.name, // '[제휴]' 접두사 제거
+                  value: c.code,
+                });
+              }
+            }
+          });
+
+          setDynamicCardOptions(cardOptions);
+        }
+      })
+      .catch((err) => console.error('제휴 카드 동적 로드 실패:', err));
+  }, []);
+
+
+
+  
   const [hasPrevSpend, setHasPrevSpend] = useState(initialHasPrevSpend);
 
   const [useGameBenefits, setUseGameBenefits] = useState(initialUseGameBenefits);
@@ -345,8 +455,13 @@ export default function SearchResultPage() {
       selectedProviders.push(cardCode);
     }
 
+    // 💡 선택한 게임의 실제 지원 스토어에 포함된 플랫폼만 필터링하여 요청
+    const supportedStoresForGame = currentGameObj?.stores || ['구글', '원스', '갤스', '앱스토어'];
+
     const targetPlatforms = osType === 'ANDROID'
-      ? androidStores.map((s) => PLATFORM_CODE_MAP[s] || s)
+      ? androidStores
+          .filter((s) => isStoreSupported(s, supportedStoresForGame))
+          .map((s) => PLATFORM_CODE_MAP[s] || s)
       : ['APP_STORE'];
 
     const amountNum = payAmount > 0 ? payAmount : 150000;
@@ -374,20 +489,21 @@ export default function SearchResultPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
-        }).then((res) => {
-          if (!res.ok) throw new Error(`API 통신 실패 (Status: ${res.status})`);
-          return res.json() as Promise<BackendResponse>;
-        });
+        })
+          .then((res) => {
+            if (!res.ok) throw new Error(`API 통신 실패 (Status: ${res.status})`);
+            return res.json() as Promise<BackendResponse>;
+          })
+          .then((data) => ({
+            ...data,
+            // 연산 요청한 실제 스토어 코드를 각 경로 데이터에 결합
+            routes: (data.routes || []).map((r) => ({ ...r, reqPlatform: platform })),
+          }));
       });
 
       const responses = await Promise.all(requests);
       const combinedRoutes: RecommendedRoute[] = responses.flatMap((res) => res.routes || []);
       combinedRoutes.sort((a, b) => a.net_cost - b.net_cost);
-
-      const bonusBadges: string[] = [];
-      if (useGameBenefits) bonusBadges.push('게임 전용 혜택');
-      if (hasPreApplied) bonusBadges.push('사전 응모 완료');
-      if (isFirstPayment) bonusBadges.push('첫 결제 대상');
 
       const converted: OptimizationResult[] = combinedRoutes.map((route, idx) => {
         const routeProviders: string[] = [];
@@ -413,14 +529,24 @@ export default function SearchResultPage() {
 
           if (step.type === 'DISCOUNT' || step.type === 'FEE') {
             formattedText = `-${step.applied_amount.toLocaleString()}원 할인`;
-          } else if (step.provider === 'GOOGLE_PLAY') {
-            const nativePt = Math.floor(step.applied_amount / 10);
-            effectiveAmount = nativePt * 10;
+          } else if (step.provider.includes('GOOGLE') || step.provider.includes('PLAY')) {
+            let pts = 0;
+            let wonValue = 0;
+
+            if (step.applied_amount >= 100) {
+              wonValue = step.applied_amount;
+              pts = Math.floor(wonValue / 10);
+            } else {
+              pts = step.applied_amount;
+              wonValue = pts * 10;
+            }
+
+            effectiveAmount = wonValue;
             adjustedRewardTotal += effectiveAmount;
-            formattedText = `+${nativePt.toLocaleString()}pt (${effectiveAmount.toLocaleString()}원)`;
+            formattedText = `+${pts.toLocaleString()}pt (${wonValue.toLocaleString()}원)`;
           } else {
             adjustedRewardTotal += step.applied_amount;
-            formattedText = `+${step.applied_amount.toLocaleString()}pt (${step.applied_amount.toLocaleString()}원)`;
+            formattedText = `+${step.applied_amount.toLocaleString()}원 (${step.applied_amount.toLocaleString()}원)`;
           }
 
           let rawEventName = step.item_or_event_name && step.item_or_event_name.trim() !== ''
@@ -467,17 +593,15 @@ export default function SearchResultPage() {
         const discountRatePercent = amountNum > 0 ? Math.round((immediateDiscountTotal / amountNum) * 1000) / 10 : 0;
         const rewardRatePercent = amountNum > 0 ? Math.round((rewardPointTotal / amountNum) * 1000) / 10 : 0;
 
-        const knownStores = ['구글 플레이 스토어', '원스토어', '갤럭시 스토어', '앱스토어'];
-        const foundStore = routeProviders.find((p) => knownStores.includes(p));
+        const PLATFORM_DISPLAY_MAP: Record<string, string> = {
+          GOOGLE_PLAY: '구글 플레이 스토어',
+          ONE_STORE: '원스토어',
+          GALAXY_STORE: '갤럭시 스토어',
+          APP_STORE: '앱스토어',
+        };
 
-        let displayPlatform = '구글 플레이 스토어';
-        if (foundStore) {
-          displayPlatform = foundStore;
-        } else if (osType === 'IOS') {
-          displayPlatform = '앱스토어';
-        } else if (androidStores.length === 1) {
-          displayPlatform = androidStores[0];
-        }
+        const displayPlatform =
+          PLATFORM_DISPLAY_MAP[(route as any).reqPlatform] || '구글 플레이 스토어';
 
         let storeIcon = 'GOOGLE';
         if (displayPlatform.includes('구글')) storeIcon = 'GOOGLE';
@@ -485,8 +609,10 @@ export default function SearchResultPage() {
         if (displayPlatform.includes('원스토어')) storeIcon = 'ONE';
         if (osType === 'IOS' || displayPlatform.includes('앱스토어')) storeIcon = 'APPLE';
 
-        const routeTitle = routeProviders.length > 0
-          ? `[${routeProviders.slice(0, 2).join(' + ')}] 최적 조합`
+        const formattedProviders = routeProviders.map((p) => formatMethodName(p));
+
+        const routeTitle = formattedProviders.length > 0
+          ? `[${formattedProviders.slice(0, 2).join(' + ')}] 최적 조합`
           : `추천 결제 경로 #${idx + 1}`;
 
         let guideText = route.route_type === 'GIFT_CARD'
@@ -495,6 +621,35 @@ export default function SearchResultPage() {
 
         if (route.leftover_balance > 0) {
           guideText += ` (결제 후 상품권 잔액 ${route.leftover_balance.toLocaleString()}원 남음)`;
+        }
+
+        // 실제 사용된 혜택이 존재하는 경우만 뱃지 동적 생성
+        const routeBonusBadges: string[] = [];
+
+        if (stepsDetailed.some((s) => s.isGameSpecific)) {
+          routeBonusBadges.push('게임 전용 혜택');
+        }
+
+        if (
+          stepsDetailed.some(
+            (s) =>
+              s.eventName.includes('사전 응모') ||
+              s.conditionText.includes('사전 응모') ||
+              s.eventName.includes('사전응모')
+          )
+        ) {
+          routeBonusBadges.push('사전 응모 완료');
+        }
+
+        if (
+          stepsDetailed.some(
+            (s) =>
+              s.eventName.includes('첫 결제') ||
+              s.conditionText.includes('첫 결제') ||
+              s.eventName.includes('첫결제')
+          )
+        ) {
+          routeBonusBadges.push('첫 결제 대상');
         }
 
         return {
@@ -511,13 +666,13 @@ export default function SearchResultPage() {
           final_price: netCost,
           total_benefit_amount: totalBenefitAmount,
           discount_rate: discountRate,
-          paymentRoute: routeProviders.length > 0 ? routeProviders : ['기본 인앱 결제'],
+          paymentRoute: formattedProviders.length > 0 ? formattedProviders : ['기본 인앱 결제'],
           discountDetail: `즉시 할인 ${discountRatePercent}% + 포인트 적립 ${rewardRatePercent}%`,
           storeIcon: storeIcon,
           discount_steps: discountSteps,
           reward_steps: rewardSteps,
           guide_text: guideText,
-          appliedBonusBadges: bonusBadges,
+          appliedBonusBadges: routeBonusBadges,
         };
       });
 
@@ -716,8 +871,7 @@ export default function SearchResultPage() {
       </div>
 
       <div className="max-w-[1400px] mx-auto px-4 md:px-6 relative z-10 space-y-6">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">          
           <main className="lg:col-span-8 space-y-5">
             
             {/* 상단 타이틀 배너 */}
@@ -1109,12 +1263,6 @@ export default function SearchResultPage() {
                               ))}
                             </div>
 
-                            <div className="pt-0.5">
-                              <span className="inline-flex items-center gap-1 text-[10px] font-black text-[#00A896] bg-gradient-to-r from-[#00D2B8]/15 to-[#00F5FF]/15 hover:bg-[#00D2B8]/25 px-2 py-0.5 rounded border border-[#00D2B8]/30 transition-all cursor-pointer shadow-2xs">
-                                <span>추천 결제 가이드 & 적립 상세 보기 ➔</span>
-                              </span>
-                            </div>
-
                             {item.appliedBonusBadges && item.appliedBonusBadges.length > 0 && (
                               <div className="flex flex-wrap gap-1 pt-0.5">
                                 {item.appliedBonusBadges.map((badge, bIdx) => (
@@ -1209,8 +1357,8 @@ export default function SearchResultPage() {
                               )}
 
                               {item.reward_steps.map((rStep, rIdx) => {
-                                const isGoogle = rStep.providerName.includes('GOOGLE') || rStep.providerName.includes('구글');
-                                const nativePt = isGoogle ? Math.floor(rStep.amount / 10) : rStep.amount;
+                                const isGoogle = rStep.providerName.includes('GOOGLE') || rStep.providerName.includes('구글') || rStep.providerName.includes('PLAY');
+                                const pts = isGoogle ? Math.floor(rStep.amount / 10) : rStep.amount;
                                 const labelName = formatMethodName(rStep.providerName);
 
                                 return (
@@ -1220,7 +1368,7 @@ export default function SearchResultPage() {
                                   >
                                     <span className="truncate max-w-[90px] text-left">└ {labelName}</span>
                                     <span className="shrink-0 font-black whitespace-nowrap">
-                                      +{nativePt.toLocaleString()}pt
+                                      +{pts.toLocaleString()}{isGoogle ? 'pt' : '원'}
                                     </span>
                                   </div>
                                 );
@@ -1256,9 +1404,15 @@ export default function SearchResultPage() {
 
           </main>
 
-          {/* 우측 스티키 사이드바 및 폼 */}
-          <aside className="lg:col-span-4 sticky top-36 space-y-3.5">
-            <form onSubmit={handleReSearch} className="space-y-3">
+          {/* 우측 사이드바 (부모 높이를 main과 동기화) */}
+          <aside className="lg:col-span-4 space-y-3.5 h-full">
+            <form
+              onSubmit={handleReSearch}
+              className={`space-y-3 transition-all duration-200 ${
+                loading ? 'pointer-events-none opacity-50 select-none cursor-not-allowed' : ''
+              }`}
+            >
+              <fieldset disabled={loading} className="space-y-3 border-0 p-0 m-0 min-w-0">
               <div className="bg-white rounded-lg border border-slate-200/90 p-3.5 shadow-2xs space-y-3">
                 <div className="space-y-1.5">
                   <span className="text-xs font-bold text-slate-800 block">스마트폰 OS</span>
@@ -1529,7 +1683,7 @@ export default function SearchResultPage() {
                       onChange={(e) => setSelectedSpecialCard(e.target.value)}
                       className="w-full px-2.5 py-2 text-xs rounded border border-slate-300 bg-white font-bold text-slate-900 focus:outline-none"
                     >
-                      {SPECIAL_CARD_OPTIONS.map((card: { label: string; value: string }) => (
+                      {dynamicCardOptions.map((card) => (
                         <option key={card.value} value={card.value}>
                           {card.label}
                         </option>
@@ -1586,10 +1740,11 @@ export default function SearchResultPage() {
                   </label>
                 </div>
               </div>
-            </form>
+            </fieldset>
+          </form>
 
             {/* 하단 광고 배너 */}
-            <div className="p-6 bg-slate-900 rounded-lg border border-slate-800 h-[500px] w-full flex flex-col items-center justify-between text-center shadow-md">
+            <div className="sticky top-36 p-6 bg-slate-900 rounded-lg border border-slate-800 h-[500px] w-full flex flex-col items-center justify-between text-center shadow-md">
               <span className="px-2.5 py-1 bg-slate-800 text-slate-300 font-bold text-[9px] rounded border border-slate-700 tracking-wider">
                 ADVERTISEMENT
               </span>
@@ -1769,7 +1924,9 @@ export default function SearchResultPage() {
                               공통 혜택
                             </span>
                           )}
-                          <span className="text-xs font-extrabold text-slate-800 truncate break-keep">{step.eventName}</span>
+                        <span className="text-xs font-extrabold text-slate-800 truncate break-keep">
+                          {formatMethodName(step.eventName)}
+                        </span>
                         </div>
                         <span className="text-xs font-black text-rose-600 shrink-0 self-end sm:self-auto">
                           -{step.amount.toLocaleString()}원 할인 {step.ratePercent ? `(${step.ratePercent}%)` : ''}
