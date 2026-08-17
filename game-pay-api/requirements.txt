@@ -10,6 +10,7 @@ email-validator
 python-dotenv
 google-auth
 requests
+cachecontrol
 python-jose[cryptography]
 
 # Database (Cloud SQL PostgreSQL 연동 추가)

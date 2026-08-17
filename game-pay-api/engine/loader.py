@@ -53,8 +53,14 @@ def _row_to_dict(row):
     return {key: _clean_bq_value(value) for key, value in row.items()}
 
 
-def _get_client():
-    return bigquery.Client(project=PROJECT_ID, location=LOCATION)
+_client = None
+
+
+def get_client():
+    global _client
+    if _client is None:
+        _client = bigquery.Client(project=PROJECT_ID, location=LOCATION)
+    return _client
 
 
 def _fetch_table_as_dicts(client, table_name):
@@ -73,7 +79,7 @@ def load_data(force_refresh=False):
     if not force_refresh and cache_is_fresh:
         return _cache["benefit_rows"], _cache["platform_rows"]
 
-    client = _get_client()
+    client = get_client()
     benefit_rows = _fetch_table_as_dicts(client, BENEFIT_TABLE)
     platform_rows = _fetch_table_as_dicts(client, PLATFORM_TABLE)
 

@@ -7,8 +7,8 @@ from typing import List, Optional
 import pandas as pd
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from google.cloud import bigquery
 from pydantic import BaseModel, Field, field_validator
+from starlette.middleware.gzip import GZipMiddleware
 from sqlalchemy.orm import Session
 
 # -----------------------------------------------------------------------------
@@ -20,7 +20,7 @@ if str(BASE_DIR) not in sys.path:
 
 from auth import verify_google_token_and_get_user, verify_google_token_optional
 from database import Base, engine, get_db
-from engine.loader import recommend_best_routes
+from engine.loader import get_client, recommend_best_routes
 from models import GameRequestLogModel, OutboundClickLogModel, UserModel
 
 # -----------------------------------------------------------------------------
@@ -45,6 +45,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(GZipMiddleware, minimum_size=500)
 
 
 # -----------------------------------------------------------------------------
@@ -186,7 +187,7 @@ def get_game_ranks(category: str = "HOGAENG"):
 @app.get("/games", summary="지원 가능 게임 목록 및 검색 (BigQuery DB 100% 동적 조회)")
 def get_supported_games(search: Optional[str] = None):
     try:
-        client = bigquery.Client(project=PROJECT_ID, location=LOCATION)
+        client = get_client()
         # BigQuery DB의 game_info 테이블을 있는 그대로 실시간 조회
         query = f"SELECT * FROM `{PROJECT_ID}.{DATASET_ID}.game_info`"
         query_job = client.query(query)
@@ -261,7 +262,6 @@ def get_optimal_routes(request: RouteRequest):
             has_prev_spend=request.has_prev_spend,
             has_pre_applied=request.has_pre_applied,
             use_game_benefits=request.use_game_benefits,
-            force_refresh=True,
         )
     except Exception as e:
         raise HTTPException(
@@ -371,7 +371,7 @@ def withdraw_user(
 @app.get("/benefits", summary="BigQuery benefit_info_staging 조회")
 def get_bigquery_benefits(table: str = "benefit_info_staging"):
     try:
-        client = bigquery.Client(project=PROJECT_ID, location=LOCATION)
+        client = get_client()
         df = client.query(f"SELECT * FROM `{PROJECT_ID}.{DATASET_ID}.{table}`").to_dataframe().fillna("")
         records = df.to_dict(orient="records")
         return {"status": "success", "total_count": len(records), "data": records}
@@ -383,7 +383,7 @@ def get_bigquery_benefits(table: str = "benefit_info_staging"):
 @app.get("/payments", summary="지원 결제 수단 및 세부 혜택 목록 동적 조회")
 def get_supported_payment_methods():
     try:
-        client = bigquery.Client(project=PROJECT_ID, location=LOCATION)
+        client = get_client()
         query = f"""
             SELECT 
                 p.payment_method,
