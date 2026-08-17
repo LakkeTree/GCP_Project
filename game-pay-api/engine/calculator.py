@@ -233,13 +233,14 @@ def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
 # [공통] 한도 적용
 # =============================================================================
 
+# 1. apply_cap 함수 보완 (max_benefit_krw가 0인 경우 제한 없음으로 처리)
 def apply_cap(effect, benefit):
-    cap = benefit["max_benefit_krw"]
-    if cap is None:
+    cap = benefit.get("max_benefit_krw")
+    if cap is None or cap == 0:  # 0 또는 None일 경우 제한 없음으로 처리
         return effect
     if cap > 0:
         return min(effect, cap)
-    if benefit["benefit_unit"] == "PERCENT":
+    if benefit.get("benefit_unit") == "PERCENT":
         return min(effect, FALLBACK_PERCENT_CAP_KRW)
     return effect
 
@@ -619,12 +620,9 @@ def apply_store_base_reward_with_rules(routes, store_reward_benefit, platform):
 # =============================================================================
 
 def recommend_best_routes(benefit_rows, platform_rows, platform, amount, held_methods,
-                          game="COOKIERUN_KINGDOM", is_first_purchase=False, top_n=10,
+                          game="ALL", is_first_purchase=False, top_n=10,
                           store_tier=None, has_prev_spend=None, has_pre_applied=False,
                           use_game_benefits=True, **kwargs):
-    """
-    반환값: {"routes": [...], "warnings": [...]} 형태의 딕셔너리 (그대로 JSON 변환 가능)
-    """
     compat_index = build_compatibility_index(platform_rows)
 
     eligible, warnings = filter_eligible_benefits(
@@ -634,22 +632,21 @@ def recommend_best_routes(benefit_rows, platform_rows, platform, amount, held_me
         use_game_benefits=use_game_benefits,
     )
 
-    # stacking_layer가 아니라 category로 판정한다: 정제 후에도 GIFT_CARD 일부가
-    # CARD_ISSUER로 잘못 표기된 상태이기 때문이다.
-    giftcard_benefits = [b for b in eligible if b["category"] == "GIFT_CARD"]
-    voucher_benefits = [b for b in eligible if b["category"] == "VOUCHER_PURCHASE"]
+    giftcard_benefits = [b for b in eligible if b.get("category") == "GIFT_CARD"]
+    voucher_benefits = [b for b in eligible if b.get("category") == "VOUCHER_PURCHASE"]
+
+    # 💡 stacking_layer 정규화 후 비교하여 모든 일반 카드/간편결제 할인 혜택 포함
     payment_benefits = [
         b for b in eligible
-        if b["category"] not in ("GIFT_CARD", "VOUCHER_PURCHASE") and b["stacking_layer"] in PAYMENT_LAYER_ORDER
+        if b.get("category") not in ("GIFT_CARD", "VOUCHER_PURCHASE")
+        and _normalize_layer(b.get("stacking_layer")) in PAYMENT_LAYER_ORDER
     ]
 
-    # 경로 A(고정권종 상품권) + 경로 A'(자유충전형 문화상품권) + 경로 B(직접결제)
     routes = build_giftcard_routes(giftcard_benefits, benefit_rows, held_methods, platform, amount)
     routes += build_voucher_charge_routes(voucher_benefits, platform, amount)
     direct_routes = [calculate_direct_payment_route(c, amount)
                       for c in generate_combinations(payment_benefits)]
 
-    # 스토어 기본 적립을 규칙에 따라 중첩 적용
     store_reward_benefit = get_store_base_reward(benefit_rows, platform, store_tier)
     all_routes = apply_store_base_reward_with_rules(direct_routes + routes, store_reward_benefit, platform)
 

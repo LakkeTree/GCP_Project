@@ -17,8 +17,9 @@ PROJECT_ID = os.environ.get("BQ_PROJECT_ID", "positive-tuner-504502-m5")
 DATASET_ID = os.environ.get("BQ_DATASET_ID", "benefit")
 LOCATION = os.environ.get("BQ_LOCATION", "asia-northeast3")
 
-# 💡 최신 실시간 혜택 테이블(benefit_info_staging)로 기본값 업데이트
-BENEFIT_TABLE = os.environ.get("BQ_BENEFIT_TABLE", "benefit_info_staging")
+# engine/loader.py 상단 테이블 설정 수정
+BENEFIT_TABLE = os.environ.get("BQ_BENEFIT_TABLE", "benefit_info") # benefit_info_staging -> benefit_info로 변경
+
 PLATFORM_TABLE = os.environ.get("BQ_PLATFORM_TABLE", "platform_connection")
 
 CACHE_TTL_SECONDS = int(os.environ.get("BQ_CACHE_TTL_SECONDS", 600))  # 10분 캐시
@@ -85,7 +86,7 @@ def load_data(force_refresh=False):
 
 
 def recommend_best_routes(platform, amount, held_methods,
-                          game="COOKIERUN_KINGDOM", is_first_purchase=False, top_n=10,
+                          game="ALL", is_first_purchase=False, top_n=10,
                           store_tier=None, has_prev_spend=None, has_pre_applied=False,
                           use_game_benefits=True, force_refresh=False, **kwargs):
     benefit_rows, platform_rows = load_data(force_refresh=force_refresh)
