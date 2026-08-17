@@ -9,7 +9,6 @@ import {
   VOUCHER_OPTIONS,
   GOOGLE_PLAY_TIERS,
   GALAXY_STORE_TIERS,
-  SPECIAL_CARD_OPTIONS,
 } from '../constants/searchOptions';
 
 export default function SearchPage() {
@@ -31,7 +30,20 @@ export default function SearchPage() {
   const [gameTitle, setGameTitle] = useState('');
   const [amount, setAmount] = useState<number | ''>(0);
 
-  const [allGames, setAllGames] = useState<{ id: string; name: string; company: string; icon_url: string; stores?: string[] }[]>([]);
+  // 로컬 캐시에서 게임 목록을 즉시 0초만에 읽어오는 헬퍼 함수
+  const getInitialGames = (): { id: string; name: string; company: string; icon_url: string; stores?: string[] }[] => {
+    try {
+      const localData = localStorage.getItem('cached_games_list');
+      if (localData) {
+        const parsed = JSON.parse(localData);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  };
+
+  // State 초기값으로 캐시 데이터 즉시 로드
+  const [allGames, setAllGames] = useState<{ id: string; name: string; company: string; icon_url: string; stores?: string[] }[]>(getInitialGames);
   const [showDropdown, setShowDropdown] = useState(false);
 
   useEffect(() => {
@@ -40,6 +52,8 @@ export default function SearchPage() {
       .then((result) => {
         if (result.status === 'ok' && Array.isArray(result.data)) {
           setAllGames(result.data);
+          // 다음 접속 시 딜레이 없이 0초 만에 띄우도록 로컬 스토리지에 저장
+          localStorage.setItem('cached_games_list', JSON.stringify(result.data));
         }
       })
       .catch((err) => console.error('자동완성 게임 목록 로드 실패:', err));
@@ -174,7 +188,72 @@ export default function SearchPage() {
     navigate(`/search-result?${params.toString()}`);
   };
 
+// BigQuery 기반 카드 목록 동적 로드
+  const [dynamicCardOptions, setDynamicCardOptions] = useState<{ label: string; value: string }[]>([
+    { label: '선택 안 함 (일반 신용/체크카드 / 기본 결제)', value: 'NONE' }
+  ]);
+
+  useEffect(() => {
+    fetch('http://127.0.0.1:8000/payments')
+      .then((res) => res.json())
+      .then((result) => {
+        if (result.status === 'ok' && Array.isArray(result.data)) {
+          const EXCLUDE_KEYWORDS = [
+            'GIFTCARD', 'GIFT_CARD', 'SSG', '11STREET', 'GMARKET',
+            'CONVENIENCE', 'CU_', 'GS25', 'SEVEN', 'ZEROPIN', 'NAVER_STORE', 'APPLE_GIFT',
+            'CREDIT_CHECK_CARD', 'CREDIT'
+          ];
+
+          const EXCLUDE_TITLES = [
+            'CREDIT CHECK CARD', '삼성페이', '결제수단별', '기본 적립률', '기본/이벤트 혜택'
+          ];
+
+          const genuineCardMethods = result.data.filter((m: any) => {
+            const isCardCategory = m.category === 'CARD' || m.code.includes('CARD');
+            const isExcluded = EXCLUDE_KEYWORDS.some((kw) => m.code.toUpperCase().includes(kw));
+            return isCardCategory && !isExcluded;
+          });
+
+          const cardOptions: { label: string; value: string }[] = [
+            { label: '선택 안 함 (일반 신용/체크카드 / 기본 결제)', value: 'NONE' }
+          ];
+
+          const addedCardTitles = new Set<string>();
+
+          genuineCardMethods.forEach((c: any) => {
+            if (c.benefits && c.benefits.length > 0) {
+              c.benefits.forEach((b: any) => {
+                const cardName = b.title || c.name;
+                const isTitleExcluded = EXCLUDE_TITLES.some((t) => cardName.includes(t));
+
+                if (!addedCardTitles.has(cardName) && !isTitleExcluded) {
+                  addedCardTitles.add(cardName);
+                  cardOptions.push({
+                    label: cardName,
+                    value: c.code,
+                  });
+                }
+              });
+            } else {
+              const isTitleExcluded = EXCLUDE_TITLES.some((t) => c.name.includes(t));
+              if (!addedCardTitles.has(c.name) && !isTitleExcluded) {
+                addedCardTitles.add(c.name);
+                cardOptions.push({
+                  label: c.name,
+                  value: c.code,
+                });
+              }
+            }
+          });
+
+          setDynamicCardOptions(cardOptions);
+        }
+      })
+      .catch((err) => console.error('제휴 카드 동적 로드 실패:', err));
+  }, []);
+
   const isGoogleSelected = filter.osType === 'ANDROID' && filter.androidStores.includes('구글 플레이 스토어');
+  
   const isGalaxySelected = filter.osType === 'ANDROID' && filter.androidStores.includes('갤럭시 스토어');
   const isOneStoreSelected = filter.osType === 'ANDROID' && filter.androidStores.includes('원스토어');
   const isNaverPaySelected = filter.usePays && filter.pays.includes('네이버페이');
@@ -742,7 +821,7 @@ export default function SearchPage() {
                 {filter.useSpecialOptions && (
                   <div className="space-y-3 pt-1">
                     <select value={filter.selectedSpecialCard} onChange={(e) => updateFilter('selectedSpecialCard', e.target.value)} className="w-full px-3 py-2 text-xs rounded border border-slate-300 bg-white font-medium text-slate-800">
-                      {SPECIAL_CARD_OPTIONS.map((card) => (
+                      {dynamicCardOptions.map((card) => (
                         <option key={card.value} value={card.value}>{card.label}</option>
                       ))}
                     </select>

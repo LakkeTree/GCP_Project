@@ -127,7 +127,48 @@ def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
     eligible = []
     warnings = []
 
+    req_platform = str(platform).upper()
+
     for b in benefits:
+        # 1. 스토어 등급 기본 적립 데이터는 별도 함수에서 처리하므로 제외
+        if b.get("category") in ("REWARD_STORE", "SUMMARY_STORE_TIER_REWARD_RATES"):
+            continue
+
+        target_p = str(b.get("target_platform") or "").upper()
+        provider_code = str(b.get("provider_or_retailer") or "").upper()
+        event_name = str(b.get("item_or_event_name") or "").upper()
+
+        # 2. [완벽 차단] 타 스토어 혜택 및 T멤버십 교차 유입 철저 차단
+        if req_platform == "GOOGLE_PLAY":
+            # 구글 연산 시 원스토어, T멤버십, 갤스, 앱스토어 키워드가 포함된 모든 혜택 차단
+            if any(k in target_p or k in provider_code or k in event_name for k in ["ONE_STORE", "ONESTORE", "원스토어", "T_MEMBERSHIP", "T멤버십", "GALAXY", "갤스", "APP_STORE"]):
+                continue
+        elif req_platform == "ONE_STORE":
+            # 원스토어 연산 시 구글, 갤스, 앱스토어 전용 혜택 차단
+            if any(k in target_p or k in provider_code or k in event_name for k in ["GOOGLE_PLAY", "GOOGLE", "GALAXY", "갤스", "APP_STORE"]):
+                continue
+        elif req_platform == "GALAXY_STORE":
+            # 갤럭시 스토어 연산 시 구글, 원스토어, 앱스토어 전용 혜택 차단
+            if any(k in target_p or k in provider_code or k in event_name for k in ["GOOGLE_PLAY", "GOOGLE", "ONE_STORE", "ONESTORE", "원스토어", "T_MEMBERSHIP", "T멤버십", "APP_STORE"]):
+                continue
+        elif req_platform == "APP_STORE":
+            # 앱스토어 연산 시 구글, 원스토어, 갤스 전용 혜택 차단
+            if any(k in target_p or k in provider_code or k in event_name for k in ["GOOGLE_PLAY", "GOOGLE", "ONE_STORE", "ONESTORE", "원스토어", "T_MEMBERSHIP", "T멤버십", "GALAXY", "갤스"]):
+                continue
+
+        # 2. [핵심] 다른 스토어 전용 쿠폰이 교차로 유입되는 현상 영구 차단
+        if req_platform == "GOOGLE_PLAY":
+            if "ONE_STORE" in target_p or "ONE_STORE" in provider_code or "GALAXY" in target_p or "GALAXY" in provider_code:
+                continue
+        elif req_platform == "ONE_STORE":
+            if "GOOGLE_PLAY" in target_p or "GALAXY" in target_p or "APP_STORE" in target_p:
+                continue
+        elif req_platform == "GALAXY_STORE":
+            if "GOOGLE_PLAY" in target_p or "ONE_STORE" in target_p or "APP_STORE" in target_p:
+                continue
+        elif req_platform == "APP_STORE":
+            if "GOOGLE_PLAY" in target_p or "ONE_STORE" in target_p or "GALAXY" in target_p:
+                continue
         if b["benefit_type"] not in CALCULABLE_TYPES:
             continue
         if b["disbursement_type"] in EXCLUDED_DISBURSEMENT:
@@ -233,13 +274,14 @@ def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
 # [공통] 한도 적용
 # =============================================================================
 
+# 1. apply_cap 함수 보완 (max_benefit_krw가 0인 경우 제한 없음으로 처리)
 def apply_cap(effect, benefit):
-    cap = benefit["max_benefit_krw"]
-    if cap is None:
+    cap = benefit.get("max_benefit_krw")
+    if cap is None or cap == 0:  # 0 또는 None일 경우 제한 없음으로 처리
         return effect
     if cap > 0:
         return min(effect, cap)
-    if benefit["benefit_unit"] == "PERCENT":
+    if benefit.get("benefit_unit") == "PERCENT":
         return min(effect, FALLBACK_PERCENT_CAP_KRW)
     return effect
 
@@ -452,10 +494,12 @@ def generate_combinations(benefits):
     for combo in all_combos:
         # PAYMENT_LAYER_ORDER = ["STORE_COUPON", "PAYMENT_PG", "PAYMENT_E_PAY", "CARD_ISSUER"]
         store_coupon, payment_pg, payment_epay, card_issuer = combo
-        has_pay = (payment_pg is not None or payment_epay is not None)
-        has_card = (card_issuer is not None)
-        if has_pay and has_card:
+        
+        # 💡 [핵심 수정] 스토어 쿠폰을 제외한 결제 수단(통신사/PG, 간편결제, 카드사) 중 2개 이상 동시 중첩 차단
+        selected_payments = [m for m in (payment_pg, payment_epay, card_issuer) if m is not None]
+        if len(selected_payments) > 1:
             continue
+
         valid_combos.append(combo)
 
     return valid_combos
@@ -619,12 +663,9 @@ def apply_store_base_reward_with_rules(routes, store_reward_benefit, platform):
 # =============================================================================
 
 def recommend_best_routes(benefit_rows, platform_rows, platform, amount, held_methods,
-                          game="COOKIERUN_KINGDOM", is_first_purchase=False, top_n=10,
+                          game="ALL", is_first_purchase=False, top_n=10,
                           store_tier=None, has_prev_spend=None, has_pre_applied=False,
                           use_game_benefits=True, **kwargs):
-    """
-    반환값: {"routes": [...], "warnings": [...]} 형태의 딕셔너리 (그대로 JSON 변환 가능)
-    """
     compat_index = build_compatibility_index(platform_rows)
 
     eligible, warnings = filter_eligible_benefits(
@@ -634,22 +675,21 @@ def recommend_best_routes(benefit_rows, platform_rows, platform, amount, held_me
         use_game_benefits=use_game_benefits,
     )
 
-    # stacking_layer가 아니라 category로 판정한다: 정제 후에도 GIFT_CARD 일부가
-    # CARD_ISSUER로 잘못 표기된 상태이기 때문이다.
-    giftcard_benefits = [b for b in eligible if b["category"] == "GIFT_CARD"]
-    voucher_benefits = [b for b in eligible if b["category"] == "VOUCHER_PURCHASE"]
+    giftcard_benefits = [b for b in eligible if b.get("category") == "GIFT_CARD"]
+    voucher_benefits = [b for b in eligible if b.get("category") == "VOUCHER_PURCHASE"]
+
+    # 💡 stacking_layer 정규화 후 비교하여 모든 일반 카드/간편결제 할인 혜택 포함
     payment_benefits = [
         b for b in eligible
-        if b["category"] not in ("GIFT_CARD", "VOUCHER_PURCHASE") and b["stacking_layer"] in PAYMENT_LAYER_ORDER
+        if b.get("category") not in ("GIFT_CARD", "VOUCHER_PURCHASE")
+        and _normalize_layer(b.get("stacking_layer")) in PAYMENT_LAYER_ORDER
     ]
 
-    # 경로 A(고정권종 상품권) + 경로 A'(자유충전형 문화상품권) + 경로 B(직접결제)
     routes = build_giftcard_routes(giftcard_benefits, benefit_rows, held_methods, platform, amount)
     routes += build_voucher_charge_routes(voucher_benefits, platform, amount)
     direct_routes = [calculate_direct_payment_route(c, amount)
                       for c in generate_combinations(payment_benefits)]
 
-    # 스토어 기본 적립을 규칙에 따라 중첩 적용
     store_reward_benefit = get_store_base_reward(benefit_rows, platform, store_tier)
     all_routes = apply_store_base_reward_with_rules(direct_routes + routes, store_reward_benefit, platform)
 

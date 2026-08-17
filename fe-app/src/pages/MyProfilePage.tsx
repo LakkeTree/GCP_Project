@@ -9,7 +9,6 @@ import {
   VOUCHER_OPTIONS,
   GOOGLE_PLAY_TIERS,
   GALAXY_STORE_TIERS,
-  SPECIAL_CARD_OPTIONS,
 } from '../constants/searchOptions';
 
 interface GameItem {
@@ -45,7 +44,74 @@ export default function MyProfilePage() {
     provider: 'GOOGLE',
   });
   
+// BigQuery 기반 제휴 카드 동적 목록 State & Effect
+  const [dynamicCardOptions, setDynamicCardOptions] = useState<{ label: string; value: string }[]>([
+    { label: '선택 안 함 (일반 신용/체크카드 / 기본 결제)', value: 'NONE' }
+  ]);
+
+  useEffect(() => {
+    fetch('http://127.0.0.1:8000/payments')
+      .then((res) => res.json())
+      .then((result) => {
+        if (result.status === 'ok' && Array.isArray(result.data)) {
+          const EXCLUDE_KEYWORDS = [
+            'GIFTCARD', 'GIFT_CARD', 'SSG', '11STREET', 'GMARKET',
+            'CONVENIENCE', 'CU_', 'GS25', 'SEVEN', 'ZEROPIN', 'NAVER_STORE', 'APPLE_GIFT',
+            'CREDIT_CHECK_CARD', 'CREDIT'
+          ];
+
+          const EXCLUDE_TITLES = [
+            'CREDIT CHECK CARD', '삼성페이', '결제수단별', '기본 적립률', '기본/이벤트 혜택'
+          ];
+
+          const genuineCardMethods = result.data.filter((m: any) => {
+            const isCardCategory = m.category === 'CARD' || m.code.includes('CARD');
+            const isExcluded = EXCLUDE_KEYWORDS.some((kw) => m.code.toUpperCase().includes(kw));
+            return isCardCategory && !isExcluded;
+          });
+
+          const cardOptions: { label: string; value: string }[] = [
+            { label: '선택 안 함 (일반 신용/체크카드 / 기본 결제)', value: 'NONE' }
+          ];
+
+          const addedCardTitles = new Set<string>();
+
+          genuineCardMethods.forEach((c: any) => {
+            if (c.benefits && c.benefits.length > 0) {
+              c.benefits.forEach((b: any) => {
+                const cardName = b.title || c.name;
+                const isTitleExcluded = EXCLUDE_TITLES.some((t) => cardName.includes(t));
+
+                if (!addedCardTitles.has(cardName) && !isTitleExcluded) {
+                  addedCardTitles.add(cardName);
+                  cardOptions.push({
+                    label: cardName,
+                    value: c.code,
+                  });
+                }
+              });
+            } else {
+              const isTitleExcluded = EXCLUDE_TITLES.some((t) => c.name.includes(t));
+              if (!addedCardTitles.has(c.name) && !isTitleExcluded) {
+                addedCardTitles.add(c.name);
+                cardOptions.push({
+                  label: c.name,
+                  value: c.code,
+                });
+              }
+            }
+          });
+
+          setDynamicCardOptions(cardOptions);
+        }
+      })
+      .catch((err) => console.error('제휴 카드 동적 로드 실패:', err));
+  }, []);
+
   const [nicknameInput, setNicknameInput] = useState('');
+
+
+
   const [originalNickname, setOriginalNickname] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
@@ -952,7 +1018,7 @@ export default function MyProfilePage() {
                       onChange={(e) => updateFilter('selectedSpecialCard', e.target.value)}
                       className="w-full px-3 py-2 text-xs rounded border border-slate-300 bg-white font-medium text-slate-800"
                     >
-                      {SPECIAL_CARD_OPTIONS.map((card) => (
+                      {dynamicCardOptions.map((card) => (
                         <option key={card.value} value={card.value}>{card.label}</option>
                       ))}
                     </select>

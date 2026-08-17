@@ -1,5 +1,38 @@
 import { useState, useEffect } from 'react';
 
+// 영문 수단 코드를 한글 명칭 및 이모지 아이콘으로 변환하는 사전
+const KOREAN_PAYMENT_MAP: Record<string, { name: string; icon: string }> = {
+  CULTURELAND_CASH: { name: '컬쳐랜드 캐시 (우회)', icon: '🎟️' },
+  CULTURELAND_BYPASS: { name: '컬쳐랜드 상품권 우회', icon: '🎟️' },
+  GALAXY_STORE_GIFTCARD: { name: '갤럭시 스토어 기프트카드', icon: '🎁' },
+  GOOGLE_PLAY_GIFTCARD: { name: '구글 플레이 기프트카드', icon: '🎁' },
+  ONESTORE_GIFTCARD: { name: '원스토어 기프트카드', icon: '🎁' },
+  APPLE_GIFTCARD: { name: '애플 기프트카드', icon: '🎁' },
+  TELECOM_DISCOUNT: { name: '통신사 멤버십 / 소액결제', icon: '📱' },
+  CREDIT_CHECK_CARD: { name: '일반 신용/체크카드', icon: '💳' },
+  QUICK_BANK_TRANSFER: { name: '실시간 계좌이체 / 무통장입금', icon: '🏦' },
+  KAKAO_PAY: { name: '카카오페이', icon: '💛' },
+  NAVER_PAY: { name: '네이버페이', icon: '💚' },
+  TOSS_PAY: { name: '토스페이', icon: '🔵' },
+  PAYCO: { name: '페이코', icon: '🔴' },
+  SAMSUNG_PAY: { name: '삼성페이', icon: '🟦' },
+  APPLE_PAY: { name: '애플페이', icon: '🍎' },
+  SKT: { name: 'SKT 통신사', icon: '📶' },
+  KT: { name: 'KT 통신사', icon: '📶' },
+  LGU_PLUS: { name: 'LGU+ 통신사', icon: '📶' },
+  LGU: { name: 'LGU+ 통신사', icon: '📶' },
+  BOOKNLIFE_VOUCHER: { name: '북앤라이프 도서문화상품권', icon: '📚' },
+  '11STREET': { name: '11번가 기프트코드', icon: '🛒' },
+  GMARKET: { name: 'G마켓 기프트코드', icon: '🛒' },
+  GALAXY_STORE: { name: '갤럭시 스토어 인앱결제', icon: '🌌' },
+  GOOGLE_PLAY: { name: '구글 플레이 인앱결제', icon: '▶️' },
+  SHINHAN_CARD: { name: '신한카드', icon: '💳' },
+  HANA_CARD: { name: '하나카드', icon: '💳' },
+  KB_KOOKMIN_CARD: { name: 'KB국민카드', icon: '💳' },
+  NH_NONGHYUP_CARD: { name: 'NH농협카드', icon: '💳' },
+  SAMSUNG_CARD: { name: '삼성카드', icon: '💳' },
+};
+
 type MethodCategory = 'ALL' | 'PAY' | 'CARRIER' | 'CARD' | 'VOUCHER';
 
 export interface BenefitDetailItem {
@@ -53,8 +86,39 @@ export default function SupportedPaymentPage() {
       .then((res) => res.json())
       .then((result) => {
         if (isMounted && result.status === 'ok' && Array.isArray(result.data)) {
-          setPaymentMethods(result.data);
-          localStorage.setItem('cached_payments_list', JSON.stringify(result.data));
+          // 기프트카드 및 우회 수단 키워드
+          const VOUCHER_KEYWORDS = [
+            'GIFTCARD', 'GIFT_CARD', 'GIFT', 'SSG', '11STREET', 'GMARKET',
+            'CONVENIENCE', 'CU_', 'GS25', 'SEVEN', 'ZEROPIN', 'NAVER_STORE', 'APPLE_GIFT', 'VOUCHER'
+          ];
+
+          const processedData = result.data.map((m: PaymentMethodItem) => {
+            const isVoucher = VOUCHER_KEYWORDS.some(
+              (kw) => m.code.toUpperCase().includes(kw) || m.name.toUpperCase().includes(kw)
+            );
+
+            // 한글 명칭 및 이모지 아이콘 매핑
+            const mappedInfo = KOREAN_PAYMENT_MAP[m.code.toUpperCase()] || {
+              name: m.name.replace(/_/g, ' '),
+              icon: m.icon || '💸',
+            };
+
+            return {
+              ...m,
+              name: mappedInfo.name,
+              icon: m.icon_url && m.icon_url.startsWith('http') ? m.icon : mappedInfo.icon,
+              category: isVoucher
+                ? ('VOUCHER' as MethodCategory)
+                : (m.category === 'CARD' || m.code.includes('CARD') ? 'CARD' : m.category),
+              tag: isVoucher
+                ? '상품권/기프트카드'
+                : (m.category === 'CARD' || m.code.includes('CARD') ? '제휴 카드' : m.tag),
+            };
+          });
+
+          setPaymentMethods(processedData);
+          
+          localStorage.setItem('cached_payments_list', JSON.stringify(processedData));
         }
       })
       .catch((err) => console.error('BigQuery 결제 수단 로드 실패:', err))
@@ -84,11 +148,15 @@ export default function SupportedPaymentPage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
           
           <div className="lg:col-span-10 space-y-6">
-            {/* 💡 요청하신 불필요한 아래 문구 및 우측 태그 제거 */}
-            <header className="space-y-2">
+            {/* 상단 타이틀 및 총 연동 갯수 뱃지 */}
+            <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-4">
               <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">
                 호갱탈출 연동 결제 수단
               </h2>
+              <span className="inline-flex items-center gap-1.5 text-xs font-black text-[#00A896] bg-gradient-to-r from-[#00D2B8]/15 via-cyan-50 to-[#00F5FF]/15 px-3.5 py-2 rounded-full border border-[#00D2B8]/40 shadow-2xs self-start sm:self-auto">
+                <span>✨</span>
+                <span>총 {filtered.length}개의 연동 결제 수단 적용 가능</span>
+              </span>
             </header>
 
             {/* 카테고리 필터 탭 */}
