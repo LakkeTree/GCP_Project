@@ -184,33 +184,25 @@ export default function SearchResultPage() {
   };
 
   // 백엔드 API 연동 함수
-  const fetchBackendData = useCallback(async () => {
+  const fetchBackendData = useCallback(async (targetGameName?: string) => {
     setLoading(true);
     setError(null);
 
-<<<<<<< Updated upstream
-=======
-const fetchBackendData = useCallback(async (targetGameName?: string) => {
-  setLoading(true);
-  setError(null);
+    const gameToQuery = targetGameName || gameTitle;
 
-  const gameToQuery = targetGameName || activeGameTitle;
+    // 💡 검색 실행 시 백엔드로 검색 로그 전송 (카운트 +1, 로그인 유저는 관리자 대시보드용 유저별 로그도 함께 적재)
+    try {
+      const searchLogToken = localStorage.getItem('google_token');
+      fetch('http://127.0.0.1:8000/games/search-log', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(searchLogToken ? { Authorization: `Bearer ${searchLogToken}` } : {}),
+        },
+        body: JSON.stringify({ game_name: gameToQuery }),
+      }).catch((err) => console.error('검색 로그 전송 실패:', err));
+    } catch (e) {}
 
-  // 💡 [추가] 검색 실행 시 백엔드로 검색 로그전송 (카운트 +1, 로그인 유저는 관리자 대시보드용 유저별 로그도 함께 적재)
-  try {
-    const searchLogToken = localStorage.getItem('google_token');
-    fetch('http://127.0.0.1:8000/games/search-log', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(searchLogToken ? { Authorization: `Bearer ${searchLogToken}` } : {}),
-      },
-      body: JSON.stringify({ game_name: gameToQuery }),
-    }).catch((err) => console.error('검색 로그 전송 실패:', err));
-  } catch (e) {}
-
-  // ... (기존 최저가 계산 연산 로직 유지를 위해 아래 동일)
->>>>>>> Stashed changes
     const selectedProviders: string[] = [];
 
     if (useCarriers) {

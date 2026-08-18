@@ -109,6 +109,18 @@ def _get_client():
     return bigquery.Client(project=PROJECT_ID, location=LOCATION)
 
 
+_client = None
+
+
+def get_client():
+    """API 서버(main.py)가 /benefits, /payments 등에서 직접 SQL을 날릴 때 쓰는
+    공개 싱글턴 클라이언트. 매 요청마다 새로 만들지 않도록 캐싱한다."""
+    global _client
+    if _client is None:
+        _client = _get_client()
+    return _client
+
+
 def _fetch_table_as_dicts(client, table_name):
     """
     테이블 전체를 읽어와 딕셔너리 리스트로 반환한다.
