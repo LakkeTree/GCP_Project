@@ -20,9 +20,10 @@ security = HTTPBearer()
 optional_security = HTTPBearer(auto_error=False)
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
-# 🔑 디버그 모드에서만 usr_ 더미 로그인 우회 허용
+# 🔑 디버그 모드(개발 환경)에서만 usr_ 더미 로그인 우회 허용
 IS_DEBUG = os.getenv("DEBUG", "False").lower() in ("true", "1", "t")
 
+# Google 공개키(certs) 조회용 Request
 _cached_session = cachecontrol.CacheControl(requests.Session())
 _google_auth_request = google_requests.Request(session=_cached_session)
 
@@ -39,7 +40,7 @@ def verify_google_token_and_get_user(
         if not IS_DEBUG:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="운영 환경에서는 테스트용 토큰 사용이 금지되어 있습니다."
+                detail="운영 환경에서는 테스트용 더미 토큰 사용이 금지되어 있습니다."
             )
         try:
             user = db.query(UserModel).filter(UserModel.user_id == token).first()
@@ -77,13 +78,13 @@ def verify_google_token_and_get_user(
         full_provider_id = f"google_{provider_id_val}"
         user_id_val = f"usr_g_{provider_id_val}"
 
-        # DB 회원 조회
+        # DB에서 기존 회원 조회
         user = db.query(UserModel).filter(
             (UserModel.user_id == user_id_val) | 
             ((UserModel.provider == "GOOGLE") & (UserModel.provider_id == full_provider_id))
         ).first()
 
-        # GCP DB에 회원 정보가 없으면 신규 가입
+        # GCP DB에 회원 정보가 없으면 신규 가입 진행 (Upsert)
         if not user:
             try:
                 user = UserModel(
@@ -104,13 +105,16 @@ def verify_google_token_and_get_user(
                 db.add(user)
                 db.commit()
                 db.refresh(user)
+                print(f"🎉 [GCP DB] 신규 구글 회원 저장 완료: {user_id_val}")
             except IntegrityError:
+                # 동시 요청 등으로 인한 중복 데이터 처리 시 롤백 후 재조회
                 db.rollback()
                 user = db.query(UserModel).filter(UserModel.user_id == user_id_val).first()
 
         return user
 
     except ValueError as e:
+        print(f"❌ [DEBUG] 구글 토큰 검증 실패: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Google 토큰 인증 실패: {str(e)}",
