@@ -163,8 +163,6 @@ export const fetchLowestPriceRecommendations = async (
   const amountNum = Number(formData.amount) || 0;
 
   try {
-    const routeToken = localStorage.getItem('google_token');
-
     const requests = targetPlatforms.map((platform) => {
       let tier = 'STANDARD';
       if (platform === 'GOOGLE_PLAY') tier = formData.googlePlayTier;
@@ -183,13 +181,9 @@ export const fetchLowestPriceRecommendations = async (
         use_game_benefits: formData.useGameBenefits,
       };
 
-      // 로그인 유저는 관리자 대시보드용 유저별 게임 이용 로그도 함께 적재하기 위해 토큰을 실어 보낸다
       return fetch(BACKEND_API_URL, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(routeToken ? { Authorization: `Bearer ${routeToken}` } : {}),
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       }).then((res) => {
         if (!res.ok) throw new Error(`API 통신 실패 (Status: ${res.status})`);

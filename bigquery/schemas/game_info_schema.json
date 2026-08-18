@@ -1,0 +1,62 @@
+[
+  {
+    "name": "game_id",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "게임 식별자 (예: GAME_0001, 원본 CSV에 이미 채번되어 있음)"
+  },
+  {
+    "name": "game_name",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "게임명"
+  },
+  {
+    "name": "company",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "게임 제작/서비스사"
+  },
+  {
+    "name": "genre_tags",
+    "type": "STRING",
+    "mode": "REPEATED",
+    "description": "장르 태그 목록 (원본 CSV의 세미콜론 구분 문자열을 분해, 프론트엔드 태그 선택용)"
+  },
+  {
+    "name": "is_google_play",
+    "type": "BOOLEAN",
+    "mode": "REQUIRED",
+    "description": "구글 플레이 지원 여부"
+  },
+  {
+    "name": "is_app_store",
+    "type": "BOOLEAN",
+    "mode": "REQUIRED",
+    "description": "앱스토어 지원 여부"
+  },
+  {
+    "name": "is_one_store",
+    "type": "BOOLEAN",
+    "mode": "REQUIRED",
+    "description": "원스토어 지원 여부"
+  },
+  {
+    "name": "is_galaxy_store",
+    "type": "BOOLEAN",
+    "mode": "REQUIRED",
+    "description": "갤럭시 스토어 지원 여부"
+  },
+  {
+    "name": "description",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "게임 설명"
+  },
+  {
+    "name": "icon_url",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "게임 아이콘 이미지 URL"
+  }
+]

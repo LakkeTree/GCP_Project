@@ -220,3 +220,165 @@ __marimo__/
 
 node_modules/
 fe-app/node_modules/
+
+.env
+.env.*
+*.env
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.vscode/
+.idea/
+
+.env
+.env.*
+*.env
+gcp-service-account-key.json
+*.json
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# ==========================================
+# 1. Environment Variables (.env)
+# ==========================================
+# DB 접속 정보, API 키, OAuth Client ID/Secret 등이 담긴 파일들
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*.local
+*.env
+
+# ==========================================
+# 2. Google OAuth & GCP / Cloud Secrets
+# ==========================================
+# Google Cloud Console 및 Firebase 다운로드 파일
+client_secret*.json
+google-services.json
+GoogleService-Info.plist
+gcp-key.json
+*.service-account.json
+
+# ==========================================
+# 3. Database & Local Config Files
+# ==========================================
+# DB 설정 파일이나 로컬 키/인증서
+database.yml
+config/database.json
+ormconfig.json
+*.pem
+*.key
+*.p12
+*.pfx
+secrets.json
+
+# ==========================================
+# 4. OS & IDE Configuration
+# ==========================================
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+.env
+*.json
+*.csv
+__pycache__/
+.pytest_cache/
+.venv/
+venv/
+
+# Environment & Secrets (최우선 차단)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.json
+gcp-key.json
+
+# Python / Virtual Environment
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+ENV/
+
+# IDE & Editor Settings
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Database & Logs
+*.db
+*.sqlite3
+*.log
+
+# OS Generated
+.DS_Store
+Thumbs.db
+
+# Database / Seed CSV
+*.csv
+*.sqlite3
+
+# ==========================================
+# 1. 환경변수 및 민감 보안 키 (Secrets & Credentials)
+# ==========================================
+.env
+.env.*
+*.json
+*.pem
+*.key
+
+# ==========================================
+# 2. 데이터베이스 & 더미/운영 데이터 파일 (Data Files)
+# ==========================================
+*.csv
+*.xlsx
+*.db
+*.sqlite3
+
+# ==========================================
+# 3. 파이썬 캐시 및 가상환경 (Python & Environments)
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+build/
+dist/
+*.egg-info/
+
+# ==========================================
+# 4. 개발 에디터 및 OS 설정 파일 (IDE & OS)
+# ==========================================
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ==========================================
+# 5. 로그 및 테스트 임시 파일 (Logs & Temporary Files)
+# ==========================================
+*.log
+.pytest_cache/
+.coverage
+
+# card_data 크롤러: 로그인 세션(storage_state, 민감정보)과 로컬 산출물 CSV는 커밋 안 함
+card_data/.auth/
+card_data/output/
+
+# game-pay-api: SQLite WAL 모드 부산물 파일(로컬 DB 상태, 소스코드 아님)
+game-pay-api/*.db-shm
+game-pay-api/*.db-wal
