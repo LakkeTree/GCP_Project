@@ -25,7 +25,7 @@ from models import GameRequestLogModel, OutboundClickLogModel, UserModel
 # -----------------------------------------------------------------------------
 # 2. 초기 설정 및 SQLite DB 테이블 생성
 # -----------------------------------------------------------------------------
-Base.metadata.create_all(bind=engine)
+#Base.metadata.create_all(bind=engine)
 
 PROJECT_ID = "positive-tuner-504502-m5"
 DATASET_ID = "benefit"

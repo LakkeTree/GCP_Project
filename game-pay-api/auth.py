@@ -9,6 +9,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError  # 👈 [추가] DB 예외 처리용
 
 from database import get_db
 from models import UserModel
@@ -19,10 +20,6 @@ security = HTTPBearer()
 optional_security = HTTPBearer(auto_error=False)
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 
-# Google 공개키(certs) 조회용 Request를 모듈 레벨에서 하나만 만들어 재사용한다.
-# CacheControl로 감싸서 Google 응답의 Cache-Control 헤더를 존중해 캐싱하므로,
-# 인증서가 실제로 바뀌기 전까지는(보통 하루 단위) 매 로그인 요청마다 구글 서버로
-# 왕복하지 않는다 (google-auth의 id_token 모듈 docstring이 공식 권장하는 방식).
 _cached_session = cachecontrol.CacheControl(requests.Session())
 _google_auth_request = google_requests.Request(session=_cached_session)
 
@@ -32,27 +29,23 @@ def verify_google_token_and_get_user(
     db: Session = Depends(get_db)
 ) -> UserModel:
     """Google OAuth 토큰 검증 후 회원 조회 및 신규 생성(Upsert)"""
-    token = credentials.credentials # + 테스트용
+    token = credentials.credentials
 
-    # =========================================================================
-    # [개발/테스트 전용] 토큰 자리에 'usr_001', 'usr_002' 등 더미 유저 ID를 직접 넣으면
-    # 구글 통신을 건너뛰고 DB에서 즉시 해당 더미 유저를 조회합니다.
-    # =========================================================================
+    print(f"👉 [DEBUG] 전달받은 토큰 값: '{token}'")
+
+    # 1. 더미 유저 테스트 우회 로직
     if token.startswith("usr_"):
         user = db.query(UserModel).filter(UserModel.user_id == token).first()
         if user:
+            print("✅ [DEBUG] 더미 유저 조회 성공!")
             return user
+        print("❌ [DEBUG] DB에 해당 usr_ ID가 존재하지 않음!")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"테스트용 더미 유저({token})를 DB에서 찾을 수 없습니다."
-        )                # +테스트용
-    if not GOOGLE_CLIENT_ID:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="서버에 GOOGLE_CLIENT_ID 환경변수가 설정되지 않았습니다.",
         )
 
-    token = credentials.credentials
+    # 2. 구글 OAuth 토큰 검증 및 DB 저장 로직
     try:
         id_info = id_token.verify_oauth2_token(
             token,
@@ -74,36 +67,43 @@ def verify_google_token_and_get_user(
         full_provider_id = f"google_{provider_id_val}"
         user_id_val = f"usr_g_{provider_id_val}"
 
-        # 1. DB에서 계정 조회
+        # GCP DB에서 회원 조회
         user = db.query(UserModel).filter(
-            UserModel.provider == "GOOGLE",
-            UserModel.provider_id == full_provider_id
+            (UserModel.user_id == user_id_val) | 
+            ((UserModel.provider == "GOOGLE") & (UserModel.provider_id == full_provider_id))
         ).first()
 
-        # 2. 신규 유저 자동 등록
+        # GCP DB에 회원 정보가 없으면 신규 가입 진행
         if not user:
-            user = UserModel(
-                user_id=user_id_val,
-                email=email_val,
-                nickname=name_val,
-                password="OAUTH_NO_PASSWORD",
-                provider="GOOGLE",
-                provider_id=full_provider_id,
-                role="ROLE_USER",
-                is_first_pay=False,
-                membership_tier="GENERAL",
-                held_epay="NONE",
-                held_cards="NONE",
-                held_vouchers="NONE",
-                favorite_games="NONE"
-            )
-            db.add(user)
-            db.commit()
-            db.refresh(user)
+            try:
+                user = UserModel(
+                    user_id=user_id_val,
+                    email=email_val,
+                    nickname=name_val,
+                    password="OAUTH_NO_PASSWORD",
+                    provider="GOOGLE",
+                    provider_id=full_provider_id,
+                    role="ROLE_USER",
+                    is_first_pay=False,
+                    membership_tier="GENERAL",
+                    held_epay="NONE",
+                    held_cards="NONE",
+                    held_vouchers="NONE",
+                    favorite_games="NONE"
+                )
+                db.add(user)
+                db.commit()      # 👈 GCP PostgreSQL에 저장 수행!
+                db.refresh(user)
+                print(f"🎉 [GCP DB] 신규 구글 회원 저장 완료: {user_id_val}")
+            except IntegrityError:
+                # 동시 요청 등으로 인해 이미 생성된 경우 롤백 후 재조회
+                db.rollback()
+                user = db.query(UserModel).filter(UserModel.user_id == user_id_val).first()
 
         return user
 
     except ValueError as e:
+        print(f"❌ [DEBUG] 구글 토큰 검증 실패: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Google 토큰 인증 실패: {str(e)}",
