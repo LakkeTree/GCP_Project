@@ -425,3 +425,76 @@ def get_supported_payment_methods():
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"BigQuery 결제수단 데이터 조회 실패: {str(e)}"
         )
+
+
+# -----------------------------------------------------------------------------
+# 게임 검색 랭킹 시스템 API
+# -----------------------------------------------------------------------------
+
+class GameSearchLogRequest(BaseModel):
+    game_name: str
+
+# 1. 유저가 게임을 검색할 때마다 DB에 카운트를 쌓는 API
+@app.post("/games/search-log", summary="게임 검색 카운트 수집")
+def log_game_search(req: GameSearchLogRequest, db: Session = Depends(get_db)):
+    game_name = req.game_name.strip()
+    if not game_name:
+        return {"status": "ignored"}
+    
+    # DB에 검색 기록(Log) 적재
+    log_entry = GameRequestLogModel(query=game_name)
+    db.add(log_entry)
+    db.commit()
+    return {"status": "success", "message": f"'{game_name}' 검색 기록 완료"}
+
+
+# 2. 누적 검색량 기준 실시간 랭킹 TOP 20 반환 API
+@app.get("/ranks", summary="실시간 인기 검색 게임 랭킹 TOP 20")
+def get_game_ranks(category: str = "HOGAENG", db: Session = Depends(get_db)):
+    try:
+        from sqlalchemy import func
+
+        # 최근 검색량이 많은 상위 20개 게임 집계 쿼리
+        results = (
+            db.query(GameRequestLogModel.query, func.count(GameRequestLogModel.id).label("search_count"))
+            .group_by(GameRequestLogModel.query)
+            .order_by(func.count(GameRequestLogModel.id).desc())
+            .limit(20)
+            .all()
+        )
+
+        rank_list = []
+        for idx, row in enumerate(results):
+            g_name = row[0]
+            count = row[1]
+
+            # 랭킹 뱃지 설정
+            badge = "1위" if idx == 0 else ("인기" if idx < 3 else None)
+
+            rank_list.append({
+                "rank": idx + 1,
+                "name": g_name,
+                "benefitText": f"최근 누적 검색 {count}회",
+                "searchCount": count,
+                "rankChange": "SAME",
+                "rankChangeText": "-",
+                "badge": badge,
+            })
+
+        # 아직 검색 데이터가 쌓이지 않았을 경우 하드코딩된 기본 랭킹 전달
+        if not rank_list:
+            default_list = [
+                {"rank": 1, "name": "쿠키런: 킹덤", "benefitText": "검색량 1위", "rankChange": "SAME", "rankChangeText": "-", "badge": "1위"},
+                {"rank": 2, "name": "리니지M", "benefitText": "인기 검색 게임", "rankChange": "UP", "rankChangeText": "▲1", "badge": "인기"},
+                {"rank": 3, "name": "오딘: 발할라 라이징", "benefitText": "검색량 급상승", "rankChange": "UP", "rankChangeText": "▲2", "badge": "상승"},
+                {"rank": 4, "name": "나 혼자만 레벨업:어라이즈", "benefitText": "주간 상위권 검색", "rankChange": "DOWN", "rankChangeText": "▼1"},
+                {"rank": 5, "name": "붕괴: 스타레일", "benefitText": "주간 상위권 검색", "rankChange": "SAME", "rankChangeText": "-"},
+            ]
+            return {"title": "🔥 호갱탈출 최근 7일간 인기 검색 순위", "list": default_list}
+
+        return {
+            "title": "🔥 호갱탈출 최근 7일간 인기 검색 순위",
+            "list": rank_list,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"랭킹 조회 오류: {str(e)}")

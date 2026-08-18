@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import type { RankCategoryData } from '../constants/gameRankData';
 import { FALLBACK_HOGAENG_RANK_DATA, fetchHogaengRankData } from '../constants/gameRankData';
 
+
+
 export default function GameRankBoard() {
   const [rankData, setRankData] = useState<RankCategoryData>(FALLBACK_HOGAENG_RANK_DATA);
   const [loading, setLoading] = useState<boolean>(false);
