@@ -44,7 +44,6 @@ export default function MyProfilePage() {
     provider: 'GOOGLE',
   });
   
-// BigQuery 기반 제휴 카드 동적 목록 State & Effect
   const [dynamicCardOptions, setDynamicCardOptions] = useState<{ label: string; value: string }[]>([
     { label: '선택 안 함 (일반 신용/체크카드 / 기본 결제)', value: 'NONE' }
   ]);
@@ -109,9 +108,6 @@ export default function MyProfilePage() {
   }, []);
 
   const [nicknameInput, setNicknameInput] = useState('');
-
-
-
   const [originalNickname, setOriginalNickname] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
@@ -194,7 +190,13 @@ export default function MyProfilePage() {
             setOriginalNickname(finalNick);
             
             if (result.data.favorite_games) {
-              setFilter((prev) => ({ ...prev, favoriteGames: result.data.favorite_games }));
+              const favList = Array.isArray(result.data.favorite_games) ? result.data.favorite_games : [];
+              setFilter((prev) => ({ ...prev, favoriteGames: favList }));
+
+              const savedFilter = localStorage.getItem('user_filter_settings');
+              const parsed = savedFilter ? JSON.parse(savedFilter) : {};
+              parsed.favoriteGames = favList;
+              localStorage.setItem('user_filter_settings', JSON.stringify(parsed));
             }
           }
         })
@@ -288,6 +290,11 @@ export default function MyProfilePage() {
   };
 
   const autoSaveFavoriteGames = async (newFavoriteGames: string[]) => {
+    const savedFilter = localStorage.getItem('user_filter_settings');
+    const parsed = savedFilter ? JSON.parse(savedFilter) : {};
+    parsed.favoriteGames = newFavoriteGames;
+    localStorage.setItem('user_filter_settings', JSON.stringify(parsed));
+
     const token = localStorage.getItem('google_token');
     if (!token) return;
 
@@ -305,7 +312,6 @@ export default function MyProfilePage() {
         },
         body: JSON.stringify(payload)
       });
-      saveFilterSettings();
     } catch (err) {
       console.error("즐겨찾기 자동 저장 오류:", err);
     }
@@ -395,13 +401,39 @@ export default function MyProfilePage() {
   const isTossPaySelected = filter.usePays && filter.pays.includes('토스페이');
 
   return (
-  <div className="bg-[#F8FAFC] min-h-screen py-8 relative">
+    <div className="bg-[#F8FAFC] min-h-screen py-8 relative">
       
-      {/* 은은한 불규칙 SVG 기하학 레이어 */}
+      {/* 수직 다층 SVG 기하학 모듈 */}
       <div className="absolute top-0 right-0 w-[550px] h-[550px] pointer-events-none opacity-[0.05] z-0">
         <svg viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
           <polygon points="120,20 480,80 380,420 40,300" fill="#00D2B8" />
           <polygon points="480,80 380,420 490,480" fill="#0F172A" />
+        </svg>
+      </div>
+
+      <div className="absolute top-[20%] -left-16 w-[500px] h-[500px] pointer-events-none opacity-[0.04] z-0 rotate-12">
+        <svg viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="50,50 450,120 300,450 100,380" fill="#00D2B8" />
+          <polygon points="450,120 300,450 480,320" fill="#00E5FF" />
+        </svg>
+      </div>
+
+      <div className="absolute top-[45%] -right-20 w-[600px] h-[600px] pointer-events-none opacity-[0.05] z-0 -rotate-15">
+        <svg viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="80,100 420,30 350,480 60,320" fill="#00E5FF" />
+          <polygon points="420,30 350,480 490,250" fill="#0F172A" />
+        </svg>
+      </div>
+
+      <div className="absolute top-[70%] -left-20 w-[550px] h-[550px] pointer-events-none opacity-[0.04] z-0 rotate-45">
+        <svg viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="100,40 460,150 280,460 50,300" fill="#00D2B8" />
+        </svg>
+      </div>
+
+      <div className="absolute bottom-10 right-0 w-[500px] h-[500px] pointer-events-none opacity-[0.05] z-0">
+        <svg viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="150,30 450,100 390,450 80,350" fill="#00E5FF" />
         </svg>
       </div>
 
@@ -423,18 +455,18 @@ export default function MyProfilePage() {
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 items-start">
           
-          {/* 좌측 사이드바 (상단 헤더 높이를 고려하여 top-36으로 여백 확보) */}
+          {/* 💡 [요청 반영] 좌측 사이드바 선택 탭: 화이트 바탕 + 민트 테두리 + 민트 그림자 스타일 */}
           <aside className="md:col-span-1 space-y-2 sticky top-36 self-start z-20">
             <button
               type="button"
               onClick={() => scrollToSection('profile')}
-              className={`w-full text-left px-4 py-3.5 rounded-lg font-black text-sm flex items-center gap-3 transition-all cursor-pointer ${
+              className={`w-full text-left px-4 py-3.5 rounded-lg text-sm flex items-center gap-3 transition-all cursor-pointer ${
                 activeSection === 'profile'
-                  ? 'bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] text-slate-950 shadow-[0_2px_8px_rgba(0,210,184,0.3)]'
-                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                  ? 'bg-white text-slate-900 font-black border-2 border-[#00D2B8] shadow-[0_4px_14px_rgba(0,210,184,0.3)]'
+                  : 'bg-white text-slate-600 font-bold border border-slate-200 hover:bg-slate-50'
               }`}
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 text-[#00A896]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
               <span>개인 정보 & 즐겨찾기</span>
@@ -443,13 +475,13 @@ export default function MyProfilePage() {
             <button
               type="button"
               onClick={() => scrollToSection('filter')}
-              className={`w-full text-left px-4 py-3.5 rounded-lg font-black text-sm flex items-center gap-3 transition-all cursor-pointer ${
+              className={`w-full text-left px-4 py-3.5 rounded-lg text-sm flex items-center gap-3 transition-all cursor-pointer ${
                 activeSection === 'filter'
-                  ? 'bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] text-slate-950 shadow-[0_2px_8px_rgba(0,210,184,0.3)]'
-                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                  ? 'bg-white text-slate-900 font-black border-2 border-[#00D2B8] shadow-[0_4px_14px_rgba(0,210,184,0.3)]'
+                  : 'bg-white text-slate-600 font-bold border border-slate-200 hover:bg-slate-50'
               }`}
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 text-[#00A896]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
               </svg>
               <span>기본 검색 필터링</span>
@@ -512,7 +544,6 @@ export default function MyProfilePage() {
                       </span>
                     </div>
 
-                    {/* 연동 소셜 계정 상자 바로 오른쪽에 붙는 로그아웃 버튼 */}
                     <button
                       type="button"
                       onClick={() => {
@@ -704,11 +735,8 @@ export default function MyProfilePage() {
 
               {/* 일괄 필터 설정 바 */}
               <div className="flex items-center justify-between bg-slate-100/90 p-3.5 rounded-lg border border-slate-200">
-                <span className="text-xs font-extrabold text-slate-700 flex items-center gap-1.5">
-                  <svg className="w-4 h-4 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.381z" clipRule="evenodd" />
-                  </svg>
-                  <span>한 번에 필터 설정:</span>
+                <span className="text-xs font-extrabold text-slate-700">
+                  한 번에 필터 설정:
                 </span>
                 <div className="flex items-center space-x-2">
                   <button
@@ -759,14 +787,15 @@ export default function MyProfilePage() {
                       {ANDROID_STORE_OPTIONS.map((store) => {
                         const selected = filter.androidStores.includes(store);
                         return (
+                          /* 💡 [요청 반영] 화이트 바탕 + 민트 보더 + 민트 후광 그림자 스타일 적용 */
                           <button
                             type="button"
                             key={store}
                             onClick={() => toggleArrayItem('androidStores', store)}
-                            className={`px-3 py-1.5 rounded text-xs font-bold border transition-all cursor-pointer ${
+                            className={`px-3 py-1.5 rounded text-xs transition-all cursor-pointer ${
                               selected
-                                ? 'bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] text-slate-950 border-[#00D2B8] font-black shadow-2xs'
-                                : 'bg-white text-slate-500 border-slate-200'
+                                ? 'bg-white text-slate-900 font-black border-2 border-[#00D2B8] shadow-[0_2px_8px_rgba(0,210,184,0.35)]'
+                                : 'bg-slate-50 text-slate-500 font-bold border border-slate-200'
                             }`}
                           >
                             {selected ? '✓ ' : '+ '}{store}
@@ -791,8 +820,9 @@ export default function MyProfilePage() {
                   </div>
                 )}
 
+                {/* 💡 서브 등급 선택 박스 약한 그라데이션 틴트 적용 */}
                 {(isGoogleSelected || isGalaxySelected) && (
-                  <div className="p-3.5 bg-gradient-to-r from-[#00D2B8]/10 to-[#00F5FF]/10 rounded-lg border border-[#00D2B8]/30 space-y-3">
+                  <div className="p-3.5 bg-gradient-to-r from-[#00D2B8]/10 via-slate-50 to-[#00F5FF]/10 rounded-lg border border-[#00D2B8]/30 space-y-3 shadow-2xs">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {isGoogleSelected && (
                         <div className="space-y-1">
@@ -882,7 +912,7 @@ export default function MyProfilePage() {
               <div className="space-y-4 pt-2 border-t border-slate-100">
                 <label className="block text-xs font-bold text-slate-700">보유 결제 수단 & 마일리지/구독 멤버십</label>
 
-                {/* 통신사 */}
+                {/* 통신사 버블 칩 */}
                 <div className="space-y-2">
                   <label className="flex items-center space-x-2 p-2.5 bg-slate-50 rounded border border-slate-200 cursor-pointer">
                     <input
@@ -897,15 +927,16 @@ export default function MyProfilePage() {
                     {CARRIER_OPTIONS.map((c) => {
                       const selected = filter.carriers.includes(c);
                       return (
+                        /* 💡 [요청 반영] 화이트 바탕 + 민트 보더 + 민트 후광 그림자 스타일 */
                         <button
                           key={c}
                           type="button"
                           disabled={!filter.useCarriers}
                           onClick={() => toggleArrayItem('carriers', c)}
-                          className={`px-3 py-1.5 rounded text-xs font-bold border ${
+                          className={`px-3 py-1.5 rounded text-xs transition-all ${
                             selected
-                              ? 'bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] text-slate-950 border-[#00D2B8] font-black'
-                              : 'bg-slate-50 text-slate-500 border-slate-200'
+                              ? 'bg-white text-slate-950 font-black border-2 border-[#00D2B8] shadow-[0_2px_8px_rgba(0,210,184,0.35)]'
+                              : 'bg-slate-50 text-slate-500 font-bold border border-slate-200'
                           }`}
                         >
                           {selected ? '✓ ' : '+ '}{c}
@@ -915,7 +946,7 @@ export default function MyProfilePage() {
                   </div>
                 </div>
 
-                {/* 간편결제 */}
+                {/* 간편결제 버블 칩 */}
                 <div className="space-y-2 pt-2 border-t border-slate-100">
                   <label className="flex items-center space-x-2 p-2.5 bg-slate-50 rounded border border-slate-200 cursor-pointer">
                     <input
@@ -930,15 +961,16 @@ export default function MyProfilePage() {
                     {PAY_OPTIONS.map((p) => {
                       const selected = filter.pays.includes(p);
                       return (
+                        /* 💡 [요청 반영] 화이트 바탕 + 민트 보더 + 민트 후광 그림자 스타일 */
                         <button
                           key={p}
                           type="button"
                           disabled={!filter.usePays}
                           onClick={() => toggleArrayItem('pays', p)}
-                          className={`px-3 py-1.5 rounded text-xs font-bold border ${
+                          className={`px-3 py-1.5 rounded text-xs transition-all ${
                             selected
-                              ? 'bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] text-slate-950 border-[#00D2B8] font-black'
-                              : 'bg-slate-50 text-slate-500 border-slate-200'
+                              ? 'bg-white text-slate-950 font-black border-2 border-[#00D2B8] shadow-[0_2px_8px_rgba(0,210,184,0.35)]'
+                              : 'bg-slate-50 text-slate-500 font-bold border border-slate-200'
                           }`}
                         >
                           {selected ? '✓ ' : '+ '}{p}
@@ -976,7 +1008,7 @@ export default function MyProfilePage() {
                   )}
                 </div>
 
-                {/* 문화상품권 우회 충전 */}
+                {/* 문화상품권 우회 버블 칩 */}
                 <div className="space-y-2 pt-2 border-t border-slate-100">
                   <label className="flex items-center space-x-2 p-2.5 bg-slate-50 rounded border border-slate-200 cursor-pointer">
                     <input
@@ -991,15 +1023,16 @@ export default function MyProfilePage() {
                     {VOUCHER_OPTIONS.map((v) => {
                       const selected = filter.voucherBypasses.includes(v);
                       return (
+                        /* 💡 [요청 반영] 화이트 바탕 + 민트 보더 + 민트 후광 그림자 스타일 */
                         <button
                           key={v}
                           type="button"
                           disabled={!filter.useVoucherBypasses}
                           onClick={() => toggleArrayItem('voucherBypasses', v)}
-                          className={`px-3 py-1.5 rounded text-xs font-bold border ${
+                          className={`px-3 py-1.5 rounded text-xs transition-all ${
                             selected
-                              ? 'bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] text-slate-950 border-[#00D2B8] font-black'
-                              : 'bg-slate-50 text-slate-500 border-slate-200'
+                              ? 'bg-white text-slate-950 font-black border-2 border-[#00D2B8] shadow-[0_2px_8px_rgba(0,210,184,0.35)]'
+                              : 'bg-slate-50 text-slate-500 font-bold border border-slate-200'
                           }`}
                         >
                           {selected ? '✓ ' : '+ '}{v}
@@ -1066,7 +1099,7 @@ export default function MyProfilePage() {
               </div>
             </section>
 
-            {/* 맨 아래 독립된 계정 탈퇴 전용 카드 */}
+            {/* 계정 탈퇴 카드 */}
             <section className="bg-white rounded-lg border border-slate-200/90 p-6 md:p-8 shadow-xs space-y-4">
               <h2 className="text-base font-black text-slate-900 border-b border-slate-100 pb-3 flex items-center gap-2">
                 <svg className="w-5 h-5 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
