@@ -368,39 +368,51 @@ def find_min_overshoot_combo(denominations, target_amount):
 
 def build_giftcard_routes(giftcard_benefits, all_benefits, held_methods, platform, target_amount):
     """
-    상품권 제공처마다 독립적으로 경로를 하나씩 만든다.
-    할인(DISCOUNT)과 적립(CASHBACK/REWARD)을 분리 계산한다: 할인은 결제액 자체를
-    낮추지만, 적립은 액면가 그대로 지출하고 별도로 되돌려받는 금액이기 때문이다
-    (예: 편의점 상품권 캐시백은 정가를 그대로 내고 나중에 페이백으로 돌려받는다).
+    denomination_list 기반으로 목표 결제 금액(target_amount)을 충족하는 최소 권종 조합을 찾고,
+    선할인(DISCOUNT)과 추가적립(REWARD/CASHBACK)을 정확히 분리하여 체감가를 연산합니다.
     """
     routes = []
 
     for benefit in giftcard_benefits:
+        # 1. denomination_list 파싱 및 최소 초과 권종 조합 산출
         result = find_min_overshoot_combo(benefit.get("denomination_list"), target_amount)
         if result is None:
             continue
-        face_total, combo = result
+        
+        face_total, combo = result  # face_total: 권종 합계 (액면가), combo: 구매한 권종 배열
+        btype = benefit.get("benefit_type")
+        bunit = benefit.get("benefit_unit")
+        bvalue = benefit.get("benefit_value", 0)
 
-        btype = benefit["benefit_type"]
-        if benefit["benefit_unit"] == "PERCENT":
-            effect = face_total * benefit["benefit_value"] / 100
+        # 2. 혜택 금액 계산 (퍼센트 또는 정액)
+        if bunit == "PERCENT":
+            effect = face_total * bvalue / 100
         else:
-            effect = benefit["benefit_value"]
+            effect = bvalue
+        
         effect = round(apply_cap(effect, benefit))
 
+        # 3. DISCOUNT(선할인) vs REWARD/CASHBACK(추가 적립) 분기 연산
         if btype == "DISCOUNT":
-            spent = face_total - effect
-            reward = 0
+            # [선할인형]: 정가보다 저렴하게 구매 (지출액 감소, 적립 0)
+            actual_spent = face_total - effect
+            reward_amount = 0
         elif btype in ("REWARD", "CASHBACK"):
-            spent = face_total
-            reward = effect
+            # [추가 적립형]: 정가 그대로 지출하고 보너스 포인트/적립금 받음
+            actual_spent = face_total
+            reward_amount = effect
         else:
-            spent = face_total
-            reward = 0
+            actual_spent = face_total
+            reward_amount = 0
+
+        # 결제 후 남는 상품권 잔액
+        leftover = face_total - target_amount
+        # 최종 실질 체감가 = 실제 지출액 - 잔액 - 적립금 가치
+        net_cost = actual_spent - leftover - reward_amount
 
         steps = [{
-            "benefit_id": benefit["benefit_id"],
-            "provider": benefit["provider_or_retailer"],
+            "benefit_id": benefit.get("benefit_id"),
+            "provider": benefit.get("provider_or_retailer"),
             "layer": "GIFT_CARD",
             "type": btype,
             "applied_amount": effect,
@@ -411,20 +423,17 @@ def build_giftcard_routes(giftcard_benefits, all_benefits, held_methods, platfor
             "target_game": benefit.get("target_game", "ALL"),
         }]
 
-        leftover = face_total - target_amount
-        net_cost = spent - leftover - reward   # 체감가 = 실제 지출액 - 잔액 - 적립금액
-
         routes.append({
             "route_type": "GIFT_CARD",
             "base_amount": target_amount,
             "steps": steps,
-            "final_paid_amount": spent,
-            "payment_method_reward_total": 0,
+            "final_paid_amount": actual_spent,            # 결제창에서 실제 결제할 금액
+            "payment_method_reward_total": reward_amount,  # 추가 적립금액
             "store_reward_total": 0,
-            "reward_total": reward,
+            "reward_total": reward_amount,
             "fee_total": 0,
-            "leftover_balance": leftover,
-            "net_cost": net_cost,
+            "leftover_balance": leftover,                   # 남는 상품권 잔액
+            "net_cost": net_cost,                           # 최종 체감가
         })
 
     return routes

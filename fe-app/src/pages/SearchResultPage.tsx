@@ -74,35 +74,50 @@ const formatMethodName = (text: string) => {
     .replace(/TOSS_PAY/g, '토스페이')
     .replace(/NAVER_PAY/g, '네이버페이');
 };
-const getUsageGuide = (pathText: string) => {
+const getUsageGuide = (pathText: string, comboText?: string) => {
   const text = pathText.toUpperCase();
+  let prefix = "";
 
-  if (text.includes('CU')) {
-    return '결제 경로 가이드: CU 편의점/Pocket CU 앱에서 구글 기프트카드 구매 ➔ 영수증/카드 핀번호(코드) 입력 ➔ 구글 스토어 충전 후 결제';
+  // 백엔드에서 조합된 권종 정보가 존재할 경우 구체적인 권종 구매 가이드 생성
+  if (comboText && comboText.trim() !== "") {
+    // 예: "30,000원+30,000원+30,000원" 형태를 "30,000원권 x 3개" 형태의 가독성 좋은 텍스트로 요약
+    const items = comboText.split("+");
+    const counts: Record<string, number> = {};
+    items.forEach((item) => {
+      const trimmed = item.trim();
+      counts[trimmed] = (counts[trimmed] || 0) + 1;
+    });
+
+    const comboSummary = Object.entries(counts)
+      .map(([denom, count]) => (count > 1 ? `${denom} x ${count}개` : `${denom} 1개`))
+      .join(", ");
+
+    prefix = `💡 [추천 권종 구매] ${comboSummary} 구매 후 충전 진행 ➔ `;
   }
-  if (text.includes('ZEROPIN') || text.includes('제로핀')) {
-    return '결제 경로 가이드: 제로핀 공식몰에서 기프트코드 할인 구매 ➔ 발급된 핀번호 입력 및 스토어 충전 ➔ 인앱 결제 진행';
+
+  if (text.includes("CU")) {
+    return `${prefix}CU 편의점/Pocket CU 앱에서 기프트카드 구매 ➔ 영수증/카드 핀번호(코드) 입력 ➔ 스토어 충전 후 결제`;
   }
-  if (text.includes('CULTURELAND') || text.includes('컬쳐랜드') || text.includes('북앤라이프')) {
-    return '결제 경로 가이드: 문화상품권 할인 구매 ➔ 해당 컬쳐캐시/상품권 핀번호 입력 충전 ➔ 스토어 우회 결제 적용';
+  if (text.includes("ZEROPIN") || text.includes("제로핀")) {
+    return `${prefix}제로핀 공식몰에서 기프트코드 할인 구매 ➔ 발급된 핀번호 입력 및 스토어 충전 ➔ 인앱 결제 진행`;
   }
-  if (text.includes('NAVER') && (text.includes('STORE') || text.includes('스토어'))) {
-    return '결제 경로 가이드: 네이버 스마트스토어 공식 판매처 구매 ➔ 문자/알림톡 기프트코드 핀번호 입력 ➔ 스토어 등록 후 결제';
+  if (text.includes("CULTURELAND") || text.includes("컬쳐랜드") || text.includes("북앤라이프")) {
+    return `${prefix}문화상품권 할인 구매 ➔ 해당 컬쳐캐시/상품권 핀번호 입력 충전 ➔ 스토어 우회 결제 적용`;
   }
-  if (text.includes('삼성페이') || text.includes('SAMSUNG_PAY')) {
-    return '결제 경로 가이드: 스토어 쿠폰함에서 할인 쿠폰 받기 ➔ 게임 결제창 접속 ➔ 삼성페이 선택하여 즉시 결제';
+  if (text.includes("NAVER") && (text.includes("STORE") || text.includes("스토어"))) {
+    return `${prefix}네이버 스마트스토어 공식 판매처 구매 ➔ 문자/알림톡 기프트코드 핀번호 입력 ➔ 스토어 등록 후 결제`;
   }
-  if (text.includes('갤럭시') || text.includes('GALAXY')) {
-    return '결제 경로 가이드: 갤럭시 스토어 [쿠폰함] 쿠폰 다운로드 ➔ 게임 결제창에서 쿠폰 적용 후 선택 결제 수단으로 결제';
+  if (text.includes("삼성페이") || text.includes("SAMSUNG_PAY")) {
+    return "결제 경로 가이드: 스토어 쿠폰함에서 할인 쿠폰 받기 ➔ 게임 결제창 접속 ➔ 삼성페이 선택하여 즉시 결제";
   }
-  if (text.includes('원스토어') || text.includes('ONE_STORE')) {
-    return '결제 경로 가이드: 원스토어 [혜택/쿠폰함] 쿠폰 및 T멤버십 할인 선택 ➔ 결제 수단 최종 확인 후 결제';
+  if (text.includes("갤럭시") || text.includes("GALAXY")) {
+    return "결제 경로 가이드: 갤럭시 스토어 [쿠폰함] 쿠폰 다운로드 ➔ 게임 결제창에서 쿠폰 적용 후 선택 결제 수단으로 결제";
   }
-  if (text.includes('구글') || text.includes('GOOGLE')) {
-    return '결제 경로 가이드: 구글 플레이 [혜택] 탭 쿠폰 적용 확인 ➔ 게임 인앱 결제창에서 보유 수단으로 진행';
+  if (text.includes("원스토어") || text.includes("ONE_STORE")) {
+    return "결제 경로 가이드: 원스토어 [혜택/쿠폰함] 쿠폰 및 T멤버십 할인 선택 ➔ 결제 수단 최종 확인 후 결제";
   }
   
-  return '결제 경로 가이드: 해당 스토어 쿠폰함에서 이벤트 쿠폰 적용 ➔ 지정된 결제 수단 선택 후 최종 결제 진행';
+  return `${prefix}해당 스토어/공식 판매처에서 기프트카드 구매 ➔ 핀번호 입력 충전 후 인앱 결제 진행`;
 };
 
 const getInitialGames = (): { id: string; name: string; company: string; icon_url: string; stores?: string[] }[] => {
@@ -2091,7 +2106,11 @@ const fetchBackendData = useCallback(async (targetGameName?: string) => {
             </div>
 
             <div className="p-3 bg-gradient-to-r from-[#00D2B8]/15 to-[#00F5FF]/15 rounded border border-[#00D2B8]/30 text-xs font-extrabold text-slate-900 leading-relaxed shadow-2xs">
-              {getUsageGuide(selectedResultForDetail.paymentRoute.join(' '))}
+              {getUsageGuide(
+                selectedResultForDetail.paymentRoute.join(' '),
+                selectedResultForDetail.discount_steps.find((s) => s.comboText)?.comboText ||
+                selectedResultForDetail.reward_steps.find((s) => s.comboText)?.comboText
+              )}
             </div>
 
             {selectedResultForDetail.discount_steps.length > 0 && (
