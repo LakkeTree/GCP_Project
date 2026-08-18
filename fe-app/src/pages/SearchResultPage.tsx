@@ -15,6 +15,8 @@ import {
   BACKEND_API_URL,
 } from '../constants/searchOptions';
 
+
+
 // 검색 결과 및 상세 모달 전용 한국어 명칭 통합 매핑 사전
 const KOREAN_PAYMENT_MAP: Record<string, string> = {
   'GOOGLE_PLAY Giftcard/Voucher': '구글 플레이 기프트카드 할인',
@@ -195,6 +197,73 @@ const formatEventTitle = (title: string): string => {
   }
 
   return cleaned;
+};
+
+// 💡 실제 저장된 이미지 파일(PNG/JPG)을 불러오는 renderStoreLogo 함수
+const renderStoreLogo = (platformName: string) => {
+  const p = platformName.toLowerCase();
+
+  // 1. 구글 플레이 스토어
+  if (p.includes('구글') || p.includes('google')) {
+    return (
+      <img
+        src="/stores/google_play.png"
+        alt="Google Play"
+        className="w-10 h-10 object-contain rounded-xl shadow-2xs border border-slate-100 bg-white p-0.5 shrink-0"
+        onError={(e) => {
+          e.currentTarget.style.display = 'none';
+        }}
+      />
+    );
+  }
+
+  // 2. 갤럭시 스토어
+  if (p.includes('갤럭시') || p.includes('galaxy') || p.includes('갤스')) {
+    return (
+      <img
+        src="/stores/galaxy_store.png"
+        alt="Galaxy Store"
+        className="w-10 h-10 object-contain rounded-xl shadow-2xs shrink-0"
+        onError={(e) => {
+          e.currentTarget.style.display = 'none';
+        }}
+      />
+    );
+  }
+
+  // 3. 원스토어
+  if (p.includes('원스') || p.includes('one')) {
+    return (
+      <img
+        src="/stores/one_store.png"
+        alt="ONE Store"
+        className="w-10 h-10 object-contain rounded-xl shadow-2xs shrink-0"
+        onError={(e) => {
+          e.currentTarget.style.display = 'none';
+        }}
+      />
+    );
+  }
+
+  // 4. 애플 앱스토어
+  if (p.includes('앱스토어') || p.includes('apple') || p.includes('app')) {
+    return (
+      <img
+        src="/stores/app_store.png"
+        alt="App Store"
+        className="w-10 h-10 object-contain rounded-xl shadow-2xs shrink-0"
+        onError={(e) => {
+          e.currentTarget.style.display = 'none';
+        }}
+      />
+    );
+  }
+
+  return (
+    <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-500 font-bold text-[10px] flex items-center justify-center border border-slate-200 shrink-0">
+      STORE
+    </div>
+  );
 };
 
 export default function SearchResultPage() {
@@ -625,6 +694,7 @@ const fetchBackendData = useCallback(async (targetGameName?: string) => {
         if (osType === 'IOS' || displayPlatform.includes('앱스토어')) storeIcon = 'APPLE';
 
         const formattedProviders = routeProviders.map((p) => formatMethodName(p));
+      
 
         const routeTitle = formattedProviders.length > 0
           ? `[${formattedProviders.slice(0, 2).join(' + ')}] 최적 조합`
@@ -1250,10 +1320,16 @@ const fetchBackendData = useCallback(async (targetGameName?: string) => {
                             )}
                           </div>
 
-                          <div className="flex-1 flex flex-col items-center justify-center text-center p-2.5 bg-white rounded border border-slate-200/80 shadow-2xs space-y-1">
+                          <div className="flex-1 flex flex-col items-center justify-center text-center p-2.5 bg-white rounded border border-slate-200/80 shadow-2xs space-y-2">
                             <span className="text-[9.5px] text-slate-400 font-extrabold block tracking-tight">
                               결제 추천 스토어
                             </span>
+
+                            {/* 💡 [추가] 스토어 브랜드 SVG 로고 아이콘 노출 */}
+                            <div className="flex items-center justify-center">
+                              {renderStoreLogo(item.platform)}
+                            </div>
+
                             <h4 className="font-black text-slate-900 text-xs sm:text-sm truncate max-w-full px-1">
                               {item.platform}
                             </h4>
