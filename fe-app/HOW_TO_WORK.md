@@ -9,9 +9,20 @@
 백엔드 구현 후 프런트엔드 구현
 1. 우선 gcloud auth application-default login를 통하여 g-cloud 로그인을 해야만함
 2. cd game-pay-api/ ← 이것을 입력하면 백엔드 파일 열기가능
-3. python -m uvicorn main:app --reload --port 8000 를 통하여 실행
+3. .\venv\Scripts\python.exe -m uvicorn main:app --reload --port 8000 를 통하여 실행
 
 
 ++ 업데이트를 하였으니 
 - cd fe-app
 - npm install 이것을 우선적으로 하기
+
+++ 3.12 다운로드
+- # 1. 3.12 가상환경 생성 (이미 만들어져 있다면 바로 넘어갑니다)
+py -3.12 -m venv venv
+
+# 2. 가상환경 전용 파이썬으로 패키지 설치
+.\venv\Scripts\python.exe -m pip install -r requirements.txt
+
+# 3. 가상환경 전용 파이썬으로 백엔드 서버 실행
+.\venv\Scripts\python.exe -m uvicorn main:app --reload --port 8000
+이것들을 입력 후 가상환경 생성
