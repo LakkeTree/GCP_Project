@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import LegalModals from '../components/LegalModals';
 
 const KOREAN_PAYMENT_MAP: Record<string, { name: string }> = {
   // 🔽 한국어로 변환할 수단들
@@ -78,6 +79,7 @@ const getInitialPayments = (): PaymentMethodItem[] => {
 export default function SupportedPaymentPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<MethodCategory>('ALL');
+  const [modalType, setModalType] = useState<'terms' | 'privacy' | 'contact' | null>(null);
   
   const initialData = getInitialPayments();
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodItem[]>(initialData);
@@ -400,7 +402,11 @@ export default function SupportedPaymentPage() {
               </div>
             </div>
 
-            <button className="w-full py-2.5 bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] hover:brightness-105 text-slate-950 font-black text-xs rounded transition-all shadow-md cursor-pointer">
+            <button 
+              type="button"
+              onClick={() => setModalType('contact')}
+              className="w-full py-2.5 bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] hover:brightness-105 text-slate-950 font-black text-xs rounded transition-all shadow-md cursor-pointer"
+            >
               광고/제휴 신청하기
             </button>
           </aside>
@@ -482,6 +488,9 @@ export default function SupportedPaymentPage() {
           </div>
         </div>
       )}
+
+      {/* 제휴 및 광고 문의 모달 */}
+      <LegalModals type={modalType} onClose={() => setModalType(null)} />
     </div>
   );
 }

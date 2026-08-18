@@ -401,7 +401,6 @@ export default function MyProfilePage() {
   const isNicknameChanged = nicknameInput.trim() !== '' && nicknameInput !== originalNickname;
   const isGoogleSelected = filter.osType === 'ANDROID' && filter.androidStores.includes('구글 플레이 스토어');
   const isGalaxySelected = filter.osType === 'ANDROID' && filter.androidStores.includes('갤럭시 스토어');
-  const isOneStoreSelected = filter.osType === 'ANDROID' && filter.androidStores.includes('원스토어');
   const isNaverPaySelected = filter.usePays && filter.pays.includes('네이버페이');
   const isTossPaySelected = filter.usePays && filter.pays.includes('토스페이');
 
@@ -809,19 +808,26 @@ export default function MyProfilePage() {
                       })}
                     </div>
 
-                    {isOneStoreSelected && (
-                      <div className="pt-2 border-t border-slate-200">
-                        <label className="flex items-center space-x-2 p-2 bg-white rounded border border-slate-200 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={filter.useTMembership}
-                            onChange={(e) => updateFilter('useTMembership', e.target.checked)}
-                            className="w-4 h-4 text-[#00D2B8] rounded"
-                          />
-                          <span className="text-xs font-bold text-slate-700">T멤버십 이용 중 (원스토어 10% 할인/적립 가능)</span>
-                        </label>
-                      </div>
-                    )}
+                    <div className={`flex flex-wrap gap-1.5 pl-1 ${filter.useCarriers ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                      {CARRIER_OPTIONS.map((c) => {
+                        const selected = filter.carriers.includes(c);
+                        return (
+                          <button
+                            key={c}
+                            type="button"
+                            disabled={!filter.useCarriers}
+                            onClick={() => toggleArrayItem('carriers', c)}
+                            className={`px-3 py-1.5 rounded text-xs transition-all ${
+                              selected
+                                ? 'bg-white text-slate-950 font-black border-2 border-[#00D2B8] shadow-[0_2px_8px_rgba(0,210,184,0.35)]'
+                                : 'bg-slate-50 text-slate-500 font-bold border border-slate-200'
+                            }`}
+                          >
+                            {selected ? '✓ ' : '+ '}{c}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
 
@@ -917,22 +923,24 @@ export default function MyProfilePage() {
               <div className="space-y-4 pt-2 border-t border-slate-100">
                 <label className="block text-xs font-bold text-slate-700">보유 결제 수단 & 마일리지/구독 멤버십</label>
 
-                {/* 통신사 버블 칩 */}
+                {/* 통신사 멤버십 영역 */}
                 <div className="space-y-2">
                   <label className="flex items-center space-x-2 p-2.5 bg-slate-50 rounded border border-slate-200 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={filter.useCarriers}
                       onChange={(e) => updateFilter('useCarriers', e.target.checked)}
-                      className="w-4 h-4 text-[#00D2B8] rounded"
+                      className="w-4 h-4 text-[#00D2B8] rounded cursor-pointer"
                     />
-                    <span className="text-xs font-bold text-slate-800">통신사 할인 사용하기</span>
+                    <span className="text-xs font-bold text-slate-800">
+                      통신사 멤버십 혜택 포함
+                    </span>
                   </label>
+
                   <div className={`flex flex-wrap gap-1.5 pl-1 ${filter.useCarriers ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
                     {CARRIER_OPTIONS.map((c) => {
                       const selected = filter.carriers.includes(c);
                       return (
-                        /* 💡 [요청 반영] 화이트 바탕 + 민트 보더 + 민트 후광 그림자 스타일 */
                         <button
                           key={c}
                           type="button"
