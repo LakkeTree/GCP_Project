@@ -1,0 +1,4 @@
+cleaned/
+docs/
+__pycache__/
+*.pyc

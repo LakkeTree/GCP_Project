@@ -11,12 +11,16 @@
 2. cd game-pay-api/ ← 이것을 입력하면 백엔드 파일 열기가능
 3. .\venv\Scripts\python.exe -m uvicorn main:app --reload --port 8000 를 통하여 실행
 
+# 백엔드 (game-pay-api 디렉토리에서)
+cd game-pay-api
+python -m uvicorn main:app --reload --port 8000
 
-++ 업데이트를 하였으니 
-- cd fe-app
-- npm install 이것을 우선적으로 하기
+# 프론트엔드 (새 터미널, fe-app 디렉토리에서)
+cd fe-app
+npm install
+npm run dev
 
-++ 3.12 다운로드
+++ 백엔드 파이썬 버전 3.12로 업데이트 하였으니, 가상환경이 아직 없다면 아래대로 새로 생성
 - # 1. 3.12 가상환경 생성 (이미 만들어져 있다면 바로 넘어갑니다)
 py -3.12 -m venv venv
 
@@ -25,4 +29,3 @@ py -3.12 -m venv venv
 
 # 3. 가상환경 전용 파이썬으로 백엔드 서버 실행
 .\venv\Scripts\python.exe -m uvicorn main:app --reload --port 8000
-이것들을 입력 후 가상환경 생성
