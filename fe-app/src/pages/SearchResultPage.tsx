@@ -423,11 +423,24 @@ const [useSpecialOptions, setUseSpecialOptions] = useState(initialSpecialCard !=
     );
   };
 
-  const fetchBackendData = useCallback(async (targetGameName?: string) => {
-    setLoading(true);
-    setError(null);
+  // SearchResultPage.tsx 내 fetchBackendData 함수 내부 상단에 추가
 
-    const gameToQuery = targetGameName || activeGameTitle;
+const fetchBackendData = useCallback(async (targetGameName?: string) => {
+  setLoading(true);
+  setError(null);
+
+  const gameToQuery = targetGameName || activeGameTitle;
+
+  // 💡 [추가] 검색 실행 시 백엔드로 검색 로그전송 (카운트 +1)
+  try {
+    fetch('http://127.0.0.1:8000/games/search-log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ game_name: gameToQuery }),
+    }).catch((err) => console.error('검색 로그 전송 실패:', err));
+  } catch (e) {}
+
+  // ... (기존 최저가 계산 연산 로직 유지를 위해 아래 동일)
     const selectedProviders: string[] = [];
 
     if (useCarriers) {
