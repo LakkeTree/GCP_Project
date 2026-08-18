@@ -13,7 +13,7 @@
 
 # 백엔드 (game-pay-api 디렉토리에서)
 cd game-pay-api
-python -m uvicorn main:app --reload --port 8000
+.\venv\Scripts\python.exe -m uvicorn main:app --reload --port 8000
 
 # 프론트엔드 (새 터미널, fe-app 디렉토리에서)
 cd fe-app
@@ -26,6 +26,9 @@ py -3.12 -m venv venv
 
 # 2. 가상환경 전용 파이썬으로 패키지 설치
 .\venv\Scripts\python.exe -m pip install -r requirements.txt
+
+++ .\venv\Scripts\python.exe -m pip install cachecontrol google-auth requests
+이거 다운받기
 
 # 3. 가상환경 전용 파이썬으로 백엔드 서버 실행
 .\venv\Scripts\python.exe -m uvicorn main:app --reload --port 8000

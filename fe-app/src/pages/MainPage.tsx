@@ -12,7 +12,6 @@ export interface EventDetailItem {
 }
 
 export default function MainPage() {
-  // 💡 0초 즉시 로딩 및 고정 4개 이벤트 캐시 로더
   const getInitialEvents = (): EventDetailItem[] => {
     try {
       const cached = localStorage.getItem('cached_main_events');
@@ -47,7 +46,7 @@ export default function MainPage() {
         tag: '⏰ 기간한정',
         game: '트릭컬 리바이브',
         provider: '갤럭시 스토어 (GALAXY_STORE)',
-        condition: '이벤트 응모 시 구간별 금액 할인 쿠폰 패크 즉시 지급',
+        condition: '이벤트 응모 시 구간별 금액 할인 쿠폰 패치 즉시 지급',
         valueText: '최대 2만원 할인',
       },
       {
@@ -65,8 +64,6 @@ export default function MainPage() {
   const [events, setEvents] = useState<EventDetailItem[]>(getInitialEvents);
   const [activeIndex, setActiveIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
-
-  // 💡 상세보기 팝업 모달 관리 State
   const [selectedEventForDetail, setSelectedEventForDetail] = useState<EventDetailItem | null>(null);
 
   useEffect(() => {
@@ -135,7 +132,6 @@ export default function MainPage() {
             }
           });
 
-          // 고정 키 기준 일관 정렬
           limitedBenefits.sort((a, b) => a.title.localeCompare(b.title));
           generalBenefits.sort((a, b) => a.title.localeCompare(b.title));
 
@@ -171,13 +167,26 @@ export default function MainPage() {
   }, [isPaused, events.length, selectedEventForDetail]);
 
   return (
-    <div className="bg-[#F8FAFC] min-h-screen py-6 md:py-8 relative overflow-hidden">
+    <div className="bg-[#F8FAFC] min-h-screen py-6 md:py-8 relative">
       
-      {/* 백그라운드 SVG 조각 */}
+      {/* 💡 수직 다층 SVG 기하학 모듈 */}
       <div className="absolute top-0 right-0 w-[550px] h-[550px] pointer-events-none opacity-[0.05] z-0">
         <svg viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
           <polygon points="120,20 480,80 380,420 40,300" fill="#00D2B8" />
           <polygon points="480,80 380,420 490,480" fill="#0F172A" />
+        </svg>
+      </div>
+
+      <div className="absolute top-[35%] -left-16 w-[500px] h-[500px] pointer-events-none opacity-[0.04] z-0 rotate-12">
+        <svg viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="50,50 450,120 300,450 100,380" fill="#00D2B8" />
+          <polygon points="450,120 300,450 480,320" fill="#00E5FF" />
+        </svg>
+      </div>
+
+      <div className="absolute bottom-10 right-0 w-[500px] h-[500px] pointer-events-none opacity-[0.05] z-0">
+        <svg viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="150,30 450,100 390,450 80,350" fill="#00E5FF" />
         </svg>
       </div>
 
@@ -215,7 +224,7 @@ export default function MainPage() {
                         <span
                           className={`inline-block px-2.5 py-0.5 rounded text-xs font-black border ${
                             isActive
-                              ? 'bg-gradient-to-r from-[#00D2B8]/15 to-[#00F5FF]/15 text-[#00A896] border-[#00D2B8]/40'
+                              ? 'bg-gradient-to-r from-[#00D2B8]/15 via-cyan-50/90 to-[#00F5FF]/15 text-slate-950 border-2 border-[#00D2B8] shadow-[0_2px_8px_rgba(0,210,184,0.25)]'
                               : 'bg-slate-100 text-slate-600 border-slate-200'
                           }`}
                         >
@@ -238,7 +247,6 @@ export default function MainPage() {
                         클릭 시 이벤트 상세 정보 및 조건을 확인합니다.
                       </p>
 
-                      {/* 💡 [수정] 상세보기 버튼 클릭 시 팝업 열기 */}
                       <button
                         type="button"
                         onClick={(e) => {
@@ -261,7 +269,6 @@ export default function MainPage() {
             </div>
           </div>
 
-          {/* 하단 인디케이터 바 */}
           <div className="flex items-center justify-center space-x-2 pt-1">
             {events.map((_, idx) => (
               <button
@@ -279,31 +286,36 @@ export default function MainPage() {
           </div>
         </section>
 
-        {/* TOP 20 검색 순위 */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-4 border-t border-slate-200">
+        {/* TOP 20 검색 순위 및 스티키 광고 */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-4 border-t border-slate-200 items-start">
           <div className="lg:col-span-9">
             <GameRankBoard />
           </div>
 
-          <aside className="lg:col-span-3">
-            <div className="h-full min-h-[320px] p-6 bg-slate-900 rounded-lg border border-slate-800 flex flex-col items-center justify-center text-center space-y-4 shadow-sm">
-              <span className="text-3xl animate-bounce">📢</span>
+          <aside className="lg:col-span-3 sticky top-36 bg-slate-900 rounded-lg border border-slate-800 h-[500px] w-full p-6 flex flex-col items-center justify-between text-center shadow-md">
+            <span className="px-2.5 py-1 bg-slate-800 text-slate-300 font-bold text-[9px] rounded border border-slate-700 tracking-wider">
+              ADVERTISEMENT
+            </span>
+            <div className="space-y-4 my-auto">
+              <div className="w-14 h-14 bg-slate-800 rounded-lg flex items-center justify-center text-3xl shadow-inner border border-slate-700 mx-auto animate-pulse">
+                📢
+              </div>
               <div className="space-y-1">
                 <h3 className="font-black text-white text-base">협업 광고 영역</h3>
                 <p className="text-xs text-slate-400 leading-relaxed">
                   제휴 스토어 및 카드사 프로모션 배너 공간입니다.
                 </p>
               </div>
-              <button className="px-5 py-2.5 bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] hover:brightness-105 text-slate-950 font-black text-xs rounded transition-all cursor-pointer shadow-md">
-                신청하기
-              </button>
             </div>
+            <button className="w-full py-2.5 bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] hover:brightness-105 text-slate-950 font-black text-xs rounded transition-all shadow-md cursor-pointer">
+              신청하기
+            </button>
           </aside>
         </div>
 
       </div>
 
-      {/* 💡 [추가] 이벤트 카드 [상세보기] 클릭 시 뜨는 상세 정보 팝업 모달 */}
+      {/* 이벤트 상세 정보 모달 */}
       {selectedEventForDetail && (
         <div
           onClick={() => setSelectedEventForDetail(null)}
@@ -315,7 +327,7 @@ export default function MainPage() {
           >
             <div className="flex items-center justify-between border-b pb-3">
               <div className="flex items-center space-x-2">
-                <span className="text-xs font-black text-[#00A896] bg-gradient-to-r from-[#00D2B8]/15 to-[#00F5FF]/15 px-2.5 py-1 rounded-full border border-[#00D2B8]/40">
+                <span className="text-xs font-black text-[#00A896] bg-gradient-to-r from-[#00D2B8]/15 via-cyan-50/90 to-[#00F5FF]/15 px-2.5 py-1 rounded-full border-2 border-[#00D2B8]">
                   {selectedEventForDetail.tag}
                 </span>
               </div>
@@ -356,7 +368,7 @@ export default function MainPage() {
                 )}
               </div>
 
-              <div className="p-3.5 bg-gradient-to-r from-[#00D2B8]/10 to-[#00F5FF]/10 rounded-lg border border-[#00D2B8]/30 space-y-1.5 text-xs">
+              <div className="p-3.5 bg-gradient-to-r from-[#00D2B8]/10 via-slate-50 to-[#00F5FF]/10 rounded-lg border border-[#00D2B8]/30 space-y-1.5 text-xs">
                 <span className="font-black text-[#00A896] block">💡 상세 참여 조건 & 안내</span>
                 <p className="text-slate-700 font-medium leading-relaxed">
                   {selectedEventForDetail.condition}
