@@ -159,7 +159,9 @@ export default function MyProfilePage() {
     }
 
     const token = localStorage.getItem('google_token');
-    if (token) {
+    
+    // 💡 유효한 토큰이 있을 때만 서버에 프로필을 요청하도록 수정 (401 에러 완전 차단)
+    if (token && token !== 'undefined' && token !== 'null') {
       let googleNick = '유저';
       try {
         const base64Url = token.split('.')[1];
@@ -202,14 +204,17 @@ export default function MyProfilePage() {
         })
         .catch((err) => {
           console.error("프로필 로드 실패/미인증:", err);
+          setUserProfile({ email: '로그인 필요', nickname: '게스트', provider: 'GOOGLE' });
           setNicknameInput(googleNick);
           setOriginalNickname(googleNick);
         });
     } else {
+      // 💡 토큰이 없는 게스트 상태일 때는 서버 요청을 보내지 않고 게스트 상태 설정
       setUserProfile({ email: '로그인 필요', nickname: '게스트', provider: 'GOOGLE' });
     }
   }, []);
 
+  
   useEffect(() => {
     const tabParam = searchParams.get('tab');
     if (tabParam === 'filter') {

@@ -484,8 +484,10 @@ def get_game_ranks(category: str = "HOGAENG", db: Session = Depends(get_db)):
                 "badge": "1위" if idx == 0 else ("인기" if idx < 3 else None)
             })
 
+        # main.py 내부 487~489번째 줄 부근 수정
+
         if not rank_list:
-            from gameRankData import FALLBACK_HOGAENG_RANK_DATA
+            from fallback_rank import FALLBACK_HOGAENG_RANK_DATA  # 💡 파일명 변경에 맞게 수정
             return FALLBACK_HOGAENG_RANK_DATA
 
         return {

@@ -41,21 +41,46 @@ export const FALLBACK_HOGAENG_RANK_DATA: RankCategoryData = {
   ],
 };
 
-// 백엔드 DB 기반 검색 랭킹 수집 유틸리티
+// gameRankData.ts 내 fetchHogaengRankData 함수 교체
+
 export const fetchHogaengRankData = async (): Promise<RankCategoryData> => {
-  const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
-  
   try {
-    const res = await fetch(`${API_BASE}/ranks?category=HOGAENG`, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
+    // 1. /ranks API 호출
+    const rankRes = await fetch('http://127.0.0.1:8000/ranks');
+    const rankResult = await rankRes.json();
+
+    // 2. BigQuery game_info 데이터를 가지고 있는 /games API 호출
+    let gameIconMap: Record<string, string> = {};
+    try {
+      const gamesRes = await fetch('http://127.0.0.1:8000/games');
+      const gamesResult = await gamesRes.json();
+      if (gamesResult.status === 'ok' && Array.isArray(gamesResult.data)) {
+        gamesResult.data.forEach((g: any) => {
+          if (g.name && g.icon_url) {
+            gameIconMap[g.name.trim().toLowerCase()] = g.icon_url;
+          }
+        });
+      }
+    } catch (e) {
+      console.error('게임 아이콘 DB 조회 실패:', e);
+    }
+
+    // 3. 랭킹 데이터 아이콘 매핑
+    const rankList = Array.isArray(rankResult) ? rankResult : (rankResult.list || []);
+    const updatedList = rankList.map((item: any) => {
+      const cleanName = (item.name || '').trim().toLowerCase();
+      return {
+        ...item,
+        icon: item.icon || gameIconMap[cleanName] || null
+      };
     });
 
-    if (!res.ok) throw new Error('DB 검색 랭킹 조회 실패');
-    
-    const data = await res.json();
-    return data;
+    return {
+      title: rankResult.title || FALLBACK_HOGAENG_RANK_DATA.title,
+      list: updatedList
+    };
   } catch (err) {
+    console.error('랭킹 데이터 로드 실패:', err);
     return FALLBACK_HOGAENG_RANK_DATA;
   }
 };
