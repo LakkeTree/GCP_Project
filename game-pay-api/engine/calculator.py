@@ -60,16 +60,48 @@ STORE_PROVIDER_TO_PLATFORM = {
 
 # 스토어 등급 매칭용 키워드 사전. 한글/영문 표기가 섞여 들어올 수 있어
 # (프론트는 한글, 데이터는 "Cond: 브론즈 / ..." 형태 등) 양쪽 다 등록해둔다.
+# DB condition_raw_text 및 item_or_event_name 파싱용 통합 등급 키워드 맵
 TIER_MAP = {
-    "BRONZE": ["브론즈", "BRONZE"],
-    "SILVER": ["실버", "SILVER"],
-    "GOLD": ["골드", "GOLD"],
-    "PLATINUM": ["플래티넘", "PLATINUM"],
-    "DIAMOND": ["다이아몬드", "DIAMOND"],
-    "STANDARD": ["기본", "상시", "STANDARD"],
-    "PRESTIGE": ["프레스티지", "PRESTIGE"],
-    "ROYAL_BLUE": ["로열블루", "ROYAL_BLUE"],
+    "BRONZE": ["브론즈", "BRONZE", "10원당 1PT", "10원당 1.0PT"],
+    "SILVER": ["실버", "SILVER", "10원당 1.1PT"],
+    "GOLD": ["골드", "GOLD", "10원당 1.3PT"],
+    "PLATINUM": ["플래티넘", "PLATINUM", "10원당 1.4PT"],
+    "DIAMOND": ["다이아몬드", "DIAMOND", "10원당 1.6PT"],
+    "STANDARD": ["일반", "기본", "상시", "STANDARD", "1%"],
+    "VIP": ["VIP", "2%"],
+    "VVIP": ["VVIP", "3%"],
+    "ROYAL_BLUE": ["로열블루", "ROYAL_BLUE", "10%"],
 }
+
+def get_store_base_reward(benefit_rows, platform, store_tier=None):
+    """
+    Database(benefit_info)에 저장되어 있는 스토어 등급별 기본 적립 혜택을 100% 매칭하여 조회합니다.
+    """
+    # 1. DB에서 해당 스토어(GOOGLE_PLAY, GALAXY_STORE 등)의 등급 적립 카테고리 데이터만 추출
+    candidates = [
+        r for r in benefit_rows
+        if r.get("category") in ("REWARD_STORE", "SUMMARY_STORE_TIER_REWARD_RATES")
+        and STORE_PROVIDER_TO_PLATFORM.get(r.get("provider_or_retailer")) == platform
+    ]
+    
+    if not candidates:
+        return None
+
+    # 2. 유저가 선택한 등급(store_tier: 예 - DIAMOND, BRONZE, ROYAL_BLUE 등)이 전달된 경우 DB 매칭 실행
+    if store_tier:
+        tier_str = str(store_tier).upper()
+        keywords = TIER_MAP.get(tier_str, [tier_str])
+
+        for cand in candidates:
+            # DB의 이벤트명, 상세조건 text를 가져와 대문자로 통합
+            text_to_search = f"{cand.get('item_or_event_name', '')} {cand.get('condition_raw_text', '')}".upper()
+            
+            # DB 데이터 조건문에 매칭 키워드가 들어있는 행(Row)을 찾아 리턴
+            if any(kw.upper() in text_to_search for kw in keywords):
+                return cand
+
+    # 3. 매칭되는 특별 등급 데이터가 없으면 DB 내 최소 적립률 기본행(브론즈/일반) 적용
+    return min(candidates, key=lambda r: r.get("benefit_value", 0))
 
 
 # =============================================================================

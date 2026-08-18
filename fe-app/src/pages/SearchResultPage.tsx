@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import LegalModals from '../components/LegalModals';
 import type { OsType } from '../constants/searchOptions';
 import { getGameCode } from '../constants/gameMapping';
 import {
@@ -269,6 +270,7 @@ const renderStoreLogo = (platformName: string) => {
 export default function SearchResultPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const [modalType, setModalType] = useState<'terms' | 'privacy' | 'contact' | null>(null);
 
   const initialGame = searchParams.get('game') || '쿠키런: 킹덤';
   const initialAmount = Number(searchParams.get('amount')) || 150000;
@@ -378,11 +380,16 @@ export default function SearchResultPage() {
     }
   };
 
+  // 기존 코드
   const [googlePlayTier, setGooglePlayTier] = useState(initialGoogleTier);
   const [galaxyStoreTier, setGalaxyStoreTier] = useState(initialGalaxyTier);
   const [isPcVersion] = useState(initialIsPcVersion);
 
-  const [useTMembership, setUseTMembership] = useState(true);
+  const [useTMembership] = useState(true);  // 🔽 아래 2줄을 새로 추가해 주세요!
+
+
+  const [useNaverMembership, setUseNaverMembership] = useState(false);
+  const [useTossPrime, setUseTossPrime] = useState(false);
 
   const [useCarriers, setUseCarriers] = useState(initialCarriers.length > 0);
   const [carriers, setCarriers] = useState<string[]>(initialCarriers);
@@ -561,7 +568,7 @@ const fetchBackendData = useCallback(async (targetGameName?: string) => {
           payment_methods: selectedProviders,
           game: getGameCode(gameToQuery),
           membership_tier: tier,
-          has_subscription: useSpecialOptions,
+          has_subscription: useTMembership, // 통신사 멤버십 할인 포함
           has_prev_spend: useSpecialOptions ? hasPrevSpend : false,
           has_pre_applied: hasPreApplied,
           use_game_benefits: useGameBenefits,
@@ -614,21 +621,15 @@ const fetchBackendData = useCallback(async (targetGameName?: string) => {
           if (step.type === 'DISCOUNT' || step.type === 'FEE') {
             formattedText = `-${step.applied_amount.toLocaleString()}원 할인`;
           } else if (step.provider.includes('GOOGLE') || step.provider.includes('PLAY')) {
-            let pts = 0;
-            let wonValue = 0;
-
-            if (step.applied_amount >= 100) {
-              wonValue = step.applied_amount;
-              pts = Math.floor(wonValue / 10);
-            } else {
-              pts = step.applied_amount;
-              wonValue = pts * 10;
-            }
+            // 백엔드에서 넘어온 step.applied_amount는 순수 포인트(pt) 수량입니다.
+            // Google Play Points 기준: 1pt = 10원 가치로 일관되게 환산합니다.
+            const pts = Math.floor(step.applied_amount);
+            const wonValue = pts * 10;
 
             effectiveAmount = wonValue;
             adjustedRewardTotal += effectiveAmount;
             formattedText = `+${pts.toLocaleString()}pt (${wonValue.toLocaleString()}원)`;
-          } else {
+          }  else {
             adjustedRewardTotal += step.applied_amount;
             formattedText = `+${step.applied_amount.toLocaleString()}원 (${step.applied_amount.toLocaleString()}원)`;
           }
@@ -914,7 +915,6 @@ const fetchBackendData = useCallback(async (targetGameName?: string) => {
     fetchBackendData(gameTitle);
   };
 
-  const isOneStoreSelected = osType === 'ANDROID' && androidStores.includes('원스토어');
   const isGoogleSelected = osType === 'ANDROID' && androidStores.includes('구글 플레이 스토어');
   const isGalaxySelected = osType === 'ANDROID' && androidStores.includes('갤럭시 스토어');
 
@@ -1585,20 +1585,7 @@ const fetchBackendData = useCallback(async (targetGameName?: string) => {
                     })}
                   </div>
 
-                  {isOneStoreSelected && isStoreSupported('원스토어', currentGameObj?.stores) && (
-                    <div className="pt-1.5 border-t border-slate-200/60">
-                      <label className="flex items-center space-x-2 p-2 bg-slate-50 rounded border border-slate-200 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={useTMembership}
-                          onChange={(e) => setUseTMembership(e.target.checked)}
-                          className="w-4 h-4 text-[#00D2B8] rounded border-slate-300 shrink-0"
-                        />
-                        <span className="text-xs font-bold text-slate-800">T멤버십 이용 중 (원스토어 10% 할인)</span>
-                      </label>
-                    </div>
-                  )}
-
+                  
                   {/* 💡 [수정 포인트 3] 등급 선택 서브 박스에 약한 세로/가로 그라데이션 틴트 적용 */}
                   {(isGoogleSelected || isGalaxySelected) && (
                     <div className="p-2.5 bg-gradient-to-r from-[#00D2B8]/10 via-slate-50 to-[#00F5FF]/10 rounded border border-[#00D2B8]/30 space-y-2 mt-2 shadow-2xs">
@@ -1642,6 +1629,10 @@ const fetchBackendData = useCallback(async (targetGameName?: string) => {
               <div className="bg-white rounded-lg border border-slate-200/90 p-3.5 shadow-2xs space-y-3">
                 <span className="text-xs font-black text-slate-800 block">보유 결제 수단 필터</span>
 
+                <div className="bg-white rounded-lg border border-slate-200/90 p-3.5 shadow-2xs space-y-3">
+                <span className="text-xs font-black text-slate-800 block">보유 결제 수단 필터</span>
+
+                {/* 통신사 멤버십 영역 */}
                 <div className="space-y-1.5">
                   <label className="flex items-center space-x-2 p-2 bg-slate-50 rounded border border-slate-200 cursor-pointer">
                     <input
@@ -1651,7 +1642,7 @@ const fetchBackendData = useCallback(async (targetGameName?: string) => {
                       className="w-4 h-4 text-[#00D2B8] rounded border-slate-300 shrink-0 cursor-pointer"
                     />
                     <span className="text-xs font-extrabold text-slate-800 select-none">
-                      통신사 할인 사용하기
+                      통신사 멤버십 혜택 포함
                     </span>
                   </label>
                   
@@ -1677,6 +1668,7 @@ const fetchBackendData = useCallback(async (targetGameName?: string) => {
                   </div>
                 </div>
 
+                {/* 간편결제 (페이) 영역 + 네이버/토스 멤버십 */}
                 <div className="space-y-1.5 pt-2 border-t border-slate-200/60">
                   <label className="flex items-center space-x-2 p-2 bg-slate-50 rounded border border-slate-200 cursor-pointer">
                     <input
@@ -1690,7 +1682,75 @@ const fetchBackendData = useCallback(async (targetGameName?: string) => {
                     </span>
                   </label>
 
-                  <div className={`flex flex-wrap gap-1.5 pl-1 transition-all ${usePays ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                  <div className={`space-y-2 transition-all ${usePays ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                    <div className="flex flex-wrap gap-1.5 pl-1">
+                      {PAY_OPTIONS.map((p: string) => {
+                        const selected = pays.includes(p);
+                        return (
+                          <button
+                            key={p}
+                            type="button"
+                            disabled={!usePays}
+                            onClick={() => handleToggleArray(setPays, p)}
+                            className={`px-2.5 py-1 rounded text-xs transition-all ${
+                              selected && usePays
+                                ? 'bg-white text-slate-900 font-black border-2 border-[#00D2B8] shadow-[0_2px_10px_rgba(0,210,184,0.3)] cursor-pointer'
+                                : 'bg-white text-slate-600 font-bold border border-slate-200 cursor-pointer'
+                            }`}
+                          >
+                            {selected ? '✓ ' : '+ '}{p}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {usePays && pays.includes('네이버페이') && (
+                      <div className="pt-1 pl-1 w-full animate-fadeIn">
+                        <label className="flex items-center space-x-2 p-2 bg-emerald-50/80 rounded border border-emerald-200 cursor-pointer w-full">
+                          <input
+                            type="checkbox"
+                            checked={useNaverMembership}
+                            onChange={(e) => setUseNaverMembership(e.target.checked)}
+                            className="w-3.5 h-3.5 text-emerald-600 rounded border-slate-300 shrink-0"
+                          />
+                          <span className="text-xs font-bold text-emerald-900">네이버플러스 멤버십 가입 중 (+4% 추가 적립)</span>
+                        </label>
+                      </div>
+                    )}
+
+                    {usePays && pays.includes('토스페이') && (
+                      <div className="pt-1 pl-1 w-full animate-fadeIn">
+                        <label className="flex items-center space-x-2 p-2 bg-blue-50/80 rounded border border-blue-200 cursor-pointer w-full">
+                          <input
+                            type="checkbox"
+                            checked={useTossPrime}
+                            onChange={(e) => setUseTossPrime(e.target.checked)}
+                            className="w-3.5 h-3.5 text-blue-600 rounded border-slate-300 shrink-0"
+                          />
+                          <span className="text-xs font-bold text-blue-900">토스프라임 구독 중 (+4% 추가 적립)</span>
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* 간편결제 (페이) 영역 + 네이버/토스 멤버십 */}
+              <div className="space-y-1.5 pt-2 border-t border-slate-200/60">
+                <label className="flex items-center space-x-2 p-2 bg-slate-50 rounded border border-slate-200 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={usePays}
+                    onChange={(e) => setUsePays(e.target.checked)}
+                    className="w-4 h-4 text-[#00D2B8] rounded border-slate-300 shrink-0 cursor-pointer"
+                  />
+                  <span className="text-xs font-extrabold text-slate-800 select-none">
+                    사용 간편결제 (페이) 선택
+                  </span>
+                </label>
+
+                <div className={`space-y-2 transition-all ${usePays ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                  <div className="flex flex-wrap gap-1.5 pl-1">
                     {PAY_OPTIONS.map((p: string) => {
                       const selected = pays.includes(p);
                       return (
@@ -1710,7 +1770,39 @@ const fetchBackendData = useCallback(async (targetGameName?: string) => {
                       );
                     })}
                   </div>
+
+                  {/* 네이버페이 선택 시 1자 패널 */}
+                  {usePays && pays.includes('네이버페이') && (
+                    <div className="pt-1 pl-1 w-full animate-fadeIn">
+                      <label className="flex items-center space-x-2 p-2 bg-emerald-50/80 rounded border border-emerald-200 cursor-pointer w-full">
+                        <input
+                          type="checkbox"
+                          checked={useNaverMembership}
+                          onChange={(e) => setUseNaverMembership(e.target.checked)}
+                          className="w-3.5 h-3.5 text-emerald-600 rounded border-slate-300 shrink-0"
+                        />
+                        <span className="text-xs font-bold text-emerald-900">네이버플러스 멤버십 가입 중 (+4% 추가 적립)</span>
+                      </label>
+                    </div>
+                  )}
+
+                  {/* 토스페이 선택 시 1자 패널 */}
+                  {usePays && pays.includes('토스페이') && (
+                    <div className="pt-1 pl-1 w-full animate-fadeIn">
+                      <label className="flex items-center space-x-2 p-2 bg-blue-50/80 rounded border border-blue-200 cursor-pointer w-full">
+                        <input
+                          type="checkbox"
+                          checked={useTossPrime}
+                          onChange={(e) => setUseTossPrime(e.target.checked)}
+                          className="w-3.5 h-3.5 text-blue-600 rounded border-slate-300 shrink-0"
+                        />
+                        <span className="text-xs font-bold text-blue-900">토스프라임 구독 중 (+4% 추가 적립)</span>
+                      </label>
+                    </div>
+                  )}
                 </div>
+              </div>
+
 
                 <div className="space-y-1.5 pt-2 border-t border-slate-200/60">
                   <label className="flex items-center space-x-2 p-2 bg-slate-50 rounded border border-slate-200 cursor-pointer">
@@ -1853,7 +1945,11 @@ const fetchBackendData = useCallback(async (targetGameName?: string) => {
                 </div>
               </div>
 
-              <button className="w-full py-2.5 bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] hover:brightness-105 text-slate-950 font-black text-xs rounded transition-all shadow-md cursor-pointer">
+              <button 
+                type="button"
+                onClick={() => setModalType('contact')}
+                className="w-full py-2.5 bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] hover:brightness-105 text-slate-950 font-black text-xs rounded transition-all shadow-md cursor-pointer"
+              >
                 신청하기
               </button>
             </div>
@@ -1861,6 +1957,8 @@ const fetchBackendData = useCallback(async (targetGameName?: string) => {
 
         </div>
       </div>
+
+      <LegalModals type={modalType} onClose={() => setModalType(null)} />
 
       {isCriteriaModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">

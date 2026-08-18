@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFilterState } from '../hooks/useFilterState';
+import LegalModals from '../components/LegalModals';
 import type { OsType } from '../constants/searchOptions';
 import {
   ANDROID_STORE_OPTIONS,
@@ -14,6 +15,7 @@ import {
 export default function SearchPage() {
   const navigate = useNavigate();
   const [isLoggedIn] = useState(true);
+  const [modalType, setModalType] = useState<'terms' | 'privacy' | 'contact' | null>(null);
 
   const {
     filter,
@@ -263,7 +265,6 @@ export default function SearchPage() {
 
   const isGoogleSelected = filter.osType === 'ANDROID' && filter.androidStores.includes('구글 플레이 스토어');
   const isGalaxySelected = filter.osType === 'ANDROID' && filter.androidStores.includes('갤럭시 스토어');
-  const isOneStoreSelected = filter.osType === 'ANDROID' && filter.androidStores.includes('원스토어');
   const isNaverPaySelected = filter.usePays && filter.pays.includes('네이버페이');
   const isTossPaySelected = filter.usePays && filter.pays.includes('토스페이');
 
@@ -642,19 +643,7 @@ export default function SearchPage() {
                         })}
                       </div>
 
-                      {isOneStoreSelected && isStoreSupported('원스토어', selectedGame?.stores) && (
-                        <div className="pt-2 border-t border-slate-200">
-                          <label className="flex items-center space-x-2 p-2 bg-white rounded border border-slate-200 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={filter.useTMembership}
-                              onChange={(e) => updateFilter('useTMembership', e.target.checked)}
-                              className="w-4 h-4 text-[#00D2B8] rounded"
-                            />
-                            <span className="text-xs font-bold text-slate-700">T멤버십 이용 중 (원스토어 10% 할인/적립 가능)</span>
-                          </label>
-                        </div>
-                      )}
+                      
                     </div>
                   )}
                 </div>
@@ -736,13 +725,21 @@ export default function SearchPage() {
                 </h3>
 
                 <div className="space-y-4">
-                  {/* 통신사 버블 칩 */}
+                  {/* 통신사 멤버십 영역 */}
                   <div className="space-y-2">
                     <label className="flex items-center space-x-2 p-2.5 bg-slate-50 rounded border border-slate-200 cursor-pointer">
-                      <input type="checkbox" checked={filter.useCarriers} onChange={(e) => updateFilter('useCarriers', e.target.checked)} className="w-4 h-4 text-[#00D2B8] rounded" />
-                      <span className="text-xs font-extrabold text-slate-800">통신사 할인 사용하기</span>
+                      <input
+                        type="checkbox"
+                        checked={filter.useCarriers}
+                        onChange={(e) => updateFilter('useCarriers', e.target.checked)}
+                        className="w-4 h-4 text-[#00D2B8] rounded cursor-pointer"
+                      />
+                      <span className="text-xs font-extrabold text-slate-800">
+                        통신사 멤버십 혜택 포함
+                      </span>
                     </label>
-                    <div className={`flex flex-wrap gap-1.5 ${filter.useCarriers ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+
+                    <div className={`flex flex-wrap gap-1.5 pl-1 transition-all ${filter.useCarriers ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
                       {CARRIER_OPTIONS.map((c) => {
                         const selected = filter.carriers.includes(c);
                         return (
@@ -916,11 +913,19 @@ export default function SearchPage() {
                 <p className="text-[11px] text-slate-400 leading-relaxed max-w-[130px] mx-auto">실시간 최저가 검색 전용 프로모션 공간입니다.</p>
               </div>
             </div>
-            <button className="w-full py-2.5 bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] hover:brightness-105 text-slate-950 font-black text-xs rounded transition-all shadow-md cursor-pointer">광고/제휴 신청하기</button>
+            <button 
+              type="button" 
+              onClick={() => setModalType('contact')} 
+              className="w-full py-2.5 bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] hover:brightness-105 text-slate-950 font-black text-xs rounded transition-all shadow-md cursor-pointer"
+            >
+              광고/제휴 신청하기
+            </button>
           </aside>
 
         </div>
       </div>
+
+      <LegalModals type={modalType} onClose={() => setModalType(null)} />
     </form>
   );
 }
