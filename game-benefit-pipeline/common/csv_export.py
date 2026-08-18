@@ -58,19 +58,36 @@ def _build_csv_rows(items: list[BenefitInfo]) -> tuple[list[str], list[dict]]:
 import re
 
 
+def _extract_tier_marker(name: str) -> str:
+    """
+    이름에서 '1차', '2차'처럼 명시적인 차수 표시만 뽑아냅니다.
+    이름 전체를 비교하지 않고 이 마커만 쓰는 이유는 아래 _dedup_key() 설명을
+    참고하세요.
+    """
+    match = re.search(r"(\d+)\s*차", name or "")
+    return match.group(1) if match else ""
+
+
 def _dedup_key(row: dict) -> str:
     """
     '이 행이 저 행과 같은 혜택인가'를 판단하는 비교용 키를 만듭니다.
 
-    [초보자 설명: benefit_id 대신 이걸 쓰는 이유]
-    benefit_id는 Gemini가 만든 item_or_event_name 텍스트로 해시를 만듭니다.
-    그런데 Gemini는 temperature=0으로 설정해도 완벽하게 똑같은 문장을 매번
-    만들지는 않습니다 — "위클리 출석체크 5%"와 "위클리출석체크 5%"처럼
-    공백·문장부호가 살짝 다르면 benefit_id도 매번 달라져서, 같은 혜택인데도
-    "새 혜택"으로 착각해 계속 쌓이는 문제가 생깁니다.
+    [초보자 설명: 왜 이름을 거의 안 쓰는가 — v2로 바뀐 이유]
+    처음엔 이름 앞 40자를 비교에 썼습니다. 그런데 실제로 겪어보니, Gemini는
+    같은 혜택을 매번 완전히 다른 단어로 재작성하는 경우가 많았습니다.
+    예) '원스토어 게임/앱 카테고리 할인', '원스토어 앱 인앱 할인',
+        '원스토어 T 멤버십 게임/앱 할인' —전부 SKT의 같은 혜택 하나인데
+        이름이 매번 딴판이라 40자 비교로는 절대 못 잡았습니다.
 
-    이 함수는 공백·문장부호를 전부 지우고 핵심 필드만 비교해서, 표현이
-    조금 달라도 "같은 혜택"으로 정확히 인식하게 만듭니다.
+    그래서 이름은 '1차/2차' 같은 명시적 차수 표시만 뽑아 쓰고, 나머지는
+    제공처·플랫폼·게임·혜택종류·수치·종료일·결제수단제한·권종처럼
+    Gemini가 비교적 안정적으로 뽑아내는 '구조화된 필드'로만 판단합니다.
+
+    ⚠️ 트레이드오프: 아주 드물게, 이름은 다른데 차수 표시도 없고 다른
+    구조화 필드까지 우연히 전부 같은 서로 다른 혜택(예: 조건이 글로만
+    설명되고 수치화된 필드에 안 잡히는 경우)이 있으면 잘못 합쳐질 수
+    있습니다. 이런 경우가 생기면 알려주세요 — 그 케이스를 구분할 수 있는
+    필드를 추가로 찾아서 반영하겠습니다.
     """
     def strip_symbols(s: str) -> str:
         s = (s or "").lower()
@@ -85,10 +102,14 @@ def _dedup_key(row: dict) -> str:
         (row.get("benefit_unit") or "").strip().upper(),
         (row.get("benefit_value") or "").strip(),
         (row.get("end_date") or "").strip(),
-        # 이름은 앞 40자만 비교합니다. 전체를 다 비교하면 사소한 차이에도
-        # 여전히 민감해지고, 아예 안 쓰면 서로 다른 혜택(예: 1차/2차 쿠폰,
-        # 출석 일수별 다른 보상)까지 하나로 뭉개질 위험이 있어 절충했습니다.
-        strip_symbols(row.get("item_or_event_name", ""))[:40],
+        # 결제수단 제한·권종처럼, 이름과 무관하게 진짜 조건 차이를 담는
+        # 구조화된 필드도 같이 봅니다. (예: 페이코의 VISA 컨택리스 vs
+        # 실물카드처럼 할인율은 같아도 조건이 다른 경우를 구분하기 위함)
+        (row.get("payment_method_restriction") or "").strip().upper(),
+        (row.get("denomination_list") or "").strip(),
+        (row.get("max_benefit_krw") or "").strip(),
+        # 이름 전체 대신, 명시적 차수 표시만 뽑아서 씁니다.
+        _extract_tier_marker(row.get("item_or_event_name", "")),
     ])
 
 
@@ -115,14 +136,24 @@ def _loose_key(row: dict) -> str:
     ])
 
 
+# 이번 실행(run_all 한 번) 안에서 이미 경고한 그룹은 다시 경고하지 않기 위한 캐시입니다.
+# ⚠️ 크롤러 17개가 전부 같은 파일을 여러 번 병합하면서 매번 파일 전체를 다시
+# 훑기 때문에, 이게 없으면 같은 문제 하나가 크롤러 수만큼(예: 17번) 반복
+# 경고됩니다. 실제로 63건이던 게 550번 찍혔던 게 바로 이 문제였습니다.
+_already_warned_keys: set[str] = set()
+
+
 def _warn_near_duplicates(rows: list[dict]) -> None:
     """병합 후에도 '이름만 다르고 사실상 같아 보이는' 행이 남아있으면 경고 로그를 남깁니다."""
     groups: dict[str, list[dict]] = {}
     for row in rows:
         groups.setdefault(_loose_key(row), []).append(row)
 
+    new_warnings = 0
     for key, group in groups.items():
-        if len(group) > 1:
+        if len(group) > 1 and key not in _already_warned_keys:
+            _already_warned_keys.add(key)
+            new_warnings += 1
             names = [r.get("item_or_event_name", "") for r in group]
             log.warning(
                 "⚠️ 이름만 다르고 나머지 조건(제공처/플랫폼/게임/할인율/종료일)이 "
@@ -131,6 +162,9 @@ def _warn_near_duplicates(rows: list[dict]) -> None:
                 "주세요: %s",
                 len(group), names,
             )
+
+    if new_warnings == 0 and any(len(g) > 1 for g in groups.values()):
+        log.debug("근접 중복 그룹이 있지만 이번 실행에서 이미 전부 경고했습니다(반복 생략).")
 
 
 def merge_csv_strings(existing_csv: str, new_csv: str) -> str:
