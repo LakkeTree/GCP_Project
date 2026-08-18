@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import cachecontrol
@@ -34,8 +34,13 @@ _LAST_LOGIN_THROTTLE = timedelta(minutes=5)
 
 
 def _touch_last_login(user: UserModel, db: Session) -> None:
-    now = datetime.utcnow()
-    if not user.last_login_at or (now - user.last_login_at) > _LAST_LOGIN_THROTTLE:
+    now = datetime.now(timezone.utc)
+    # Postgres(timestamptz)는 timezone-aware 값을 돌려주지만, SQLite로 개발하던 시절 값이 섞여있을 수 있어
+    # naive 값이면 UTC로 간주해 aware로 맞춰준다 (naive - aware는 TypeError가 나기 때문).
+    last_login = user.last_login_at
+    if last_login and last_login.tzinfo is None:
+        last_login = last_login.replace(tzinfo=timezone.utc)
+    if not last_login or (now - last_login) > _LAST_LOGIN_THROTTLE:
         user.last_login_at = now
         db.commit()
 

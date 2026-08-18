@@ -1,7 +1,7 @@
 import json
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import List, Optional
 
@@ -514,7 +514,7 @@ def get_admin_stats_summary(
 ):
     total_users = db.query(func.count(UserModel.user_id)).scalar() or 0
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     dau_cutoff = now - timedelta(days=1)
     wau_cutoff = now - timedelta(days=7)
     mau_cutoff = now - timedelta(days=30)
@@ -570,7 +570,7 @@ def get_admin_user_logs(
             if len(bucket) < 3:
                 bucket.append({"game_name": game_name, "play_count": play_count})
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     user_rows = []
     for u in users:
         top_games = games_by_user.get(u.user_id)
@@ -580,6 +580,12 @@ def get_admin_user_logs(
                 for g in parse_db_list(u.favorite_games)[:3]
             ]
 
+        # Postgres(timestamptz)는 timezone-aware 값을 돌려주지만, 예전 SQLite 데이터가 섞여있으면
+        # naive일 수 있어 UTC로 간주해 맞춰준다 (naive - aware는 TypeError).
+        last_login = u.last_login_at
+        if last_login and last_login.tzinfo is None:
+            last_login = last_login.replace(tzinfo=timezone.utc)
+
         user_rows.append({
             "user_id": u.user_id,
             "email": u.email,
@@ -588,7 +594,7 @@ def get_admin_user_logs(
             "role": u.role,
             "created_at": u.created_at.isoformat() if u.created_at else None,
             "last_login_at": u.last_login_at.isoformat() if u.last_login_at else None,
-            "is_active_7d": bool(u.last_login_at and (now - u.last_login_at) <= timedelta(days=7)),
+            "is_active_7d": bool(last_login and (now - last_login) <= timedelta(days=7)),
             "top_games": top_games,
         })
 

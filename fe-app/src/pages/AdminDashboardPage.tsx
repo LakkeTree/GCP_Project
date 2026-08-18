@@ -98,6 +98,7 @@ export default function AdminDashboardPage() {
       } catch (err) {
         console.error('관리자 대시보드 로드 실패:', err);
         setErrorMsg('데이터를 불러오는 중 오류가 발생했습니다. 서버 연결을 확인해 주세요.');
+        setGuard((prev) => (prev === 'FORBIDDEN' ? prev : 'OK'));
       }
     })();
   }, [loadStats, loadUsers]);
