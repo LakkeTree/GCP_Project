@@ -234,6 +234,7 @@ export default function Header() {
                       </div>
                     </div>
 
+                    {/* 개인 정보 & 즐겨찾기 메뉴 */}
                     <div className="relative z-20">
                       <button
                         type="button"
@@ -243,18 +244,40 @@ export default function Header() {
                         }}
                         className="w-full text-left p-3 bg-slate-800 hover:bg-slate-750 border border-slate-700/80 hover:border-[#00D2B8] rounded-md text-xs font-extrabold text-slate-100 hover:text-[#00D2B8] flex items-center gap-2.5 transition-all cursor-pointer shadow-sm"
                       >
-                        <span className="text-sm">👤</span>
+                        <svg className="w-4 h-4 text-[#00D2B8]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
                         <span>개인 정보 & 즐겨찾기</span>
                       </button>
                     </div>
 
+                    {/* 💡 기본 검색 필터링 메뉴 추가 */}
                     <div className="relative z-20">
                       <button
                         type="button"
-                        onClick={handleLogout}
-                        className="w-full text-left p-3 bg-slate-800 hover:bg-rose-950/50 border border-slate-700/80 hover:border-rose-500/50 rounded-md text-xs font-extrabold text-rose-400 flex items-center gap-2.5 transition-all cursor-pointer shadow-sm"
+                        onClick={() => {
+                          setIsProfileMenuOpen(false);
+                          navigate('/profile?tab=filter');
+                        }}
+                        className="w-full text-left p-3 bg-slate-800 hover:bg-slate-750 border border-slate-700/80 hover:border-[#00D2B8] rounded-md text-xs font-extrabold text-slate-100 hover:text-[#00D2B8] flex items-center gap-2.5 transition-all cursor-pointer shadow-sm"
                       >
-                        <span className="text-sm">🚪</span>
+                        <svg className="w-4 h-4 text-[#00D2B8]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                        </svg>
+                        <span>기본 검색 필터링</span>
+                      </button>
+                    </div>
+
+                    {/* 로그아웃 메뉴 */}
+                    <div className="relative z-20 pt-1 border-t border-slate-800/80">
+                      <button
+                        type="button"
+                        onClick={handleLogout}
+                        className="w-full text-left p-2.5 bg-slate-800 hover:bg-rose-950/50 border border-slate-700/80 hover:border-rose-500/50 rounded-md text-xs font-extrabold text-rose-400 flex items-center gap-2.5 transition-all cursor-pointer shadow-sm"
+                      >
+                        <svg className="w-4 h-4 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                        </svg>
                         <span>로그아웃</span>
                       </button>
                     </div>

@@ -1484,7 +1484,7 @@ const [useSpecialOptions, setUseSpecialOptions] = useState(initialSpecialCard !=
                           }}
                           className={`px-2.5 py-1.5 rounded text-xs transition-all ${
                             selected
-                              ? 'bg-gradient-to-r from-[#00D2B8]/15 via-cyan-50/90 to-[#00F5FF]/15 text-slate-950 font-black border-2 border-[#00D2B8] shadow-[0_2px_8px_rgba(0,210,184,0.25)] cursor-pointer'
+                              ? 'bg-white text-slate-900 font-black border-2 border-[#00D2B8] shadow-[0_2px_8px_rgba(0,210,184,0.35)] cursor-pointer'
                               : 'bg-slate-50 text-slate-600 font-bold border border-slate-200 cursor-pointer hover:border-[#00D2B8]/60'
                           }`}
                         >

@@ -30,7 +30,6 @@ export default function SearchPage() {
   const [gameTitle, setGameTitle] = useState('');
   const [amount, setAmount] = useState<number | ''>(0);
 
-  // 로컬 캐시에서 게임 목록을 즉시 0초만에 읽어오는 헬퍼 함수
   const getInitialGames = (): { id: string; name: string; company: string; icon_url: string; stores?: string[] }[] => {
     try {
       const localData = localStorage.getItem('cached_games_list');
@@ -42,7 +41,6 @@ export default function SearchPage() {
     return [];
   };
 
-  // State 초기값으로 캐시 데이터 즉시 로드
   const [allGames, setAllGames] = useState<{ id: string; name: string; company: string; icon_url: string; stores?: string[] }[]>(getInitialGames);
   const [showDropdown, setShowDropdown] = useState(false);
 
@@ -52,7 +50,6 @@ export default function SearchPage() {
       .then((result) => {
         if (result.status === 'ok' && Array.isArray(result.data)) {
           setAllGames(result.data);
-          // 다음 접속 시 딜레이 없이 0초 만에 띄우도록 로컬 스토리지에 저장
           localStorage.setItem('cached_games_list', JSON.stringify(result.data));
         }
       })
@@ -188,7 +185,6 @@ export default function SearchPage() {
     navigate(`/search-result?${params.toString()}`);
   };
 
-// BigQuery 기반 카드 목록 동적 로드
   const [dynamicCardOptions, setDynamicCardOptions] = useState<{ label: string; value: string }[]>([
     { label: '선택 안 함 (일반 신용/체크카드 / 기본 결제)', value: 'NONE' }
   ]);
@@ -253,7 +249,6 @@ export default function SearchPage() {
   }, []);
 
   const isGoogleSelected = filter.osType === 'ANDROID' && filter.androidStores.includes('구글 플레이 스토어');
-  
   const isGalaxySelected = filter.osType === 'ANDROID' && filter.androidStores.includes('갤럭시 스토어');
   const isOneStoreSelected = filter.osType === 'ANDROID' && filter.androidStores.includes('원스토어');
   const isNaverPaySelected = filter.usePays && filter.pays.includes('네이버페이');
@@ -262,7 +257,7 @@ export default function SearchPage() {
   return (
     <form onSubmit={handleSearch} className="bg-[#F8FAFC] min-h-screen py-6 md:py-8 relative">
       
-      {/* 은은한 불규칙 SVG 기하학 레이어 */}
+      {/* 💡 [수직 다층 기하학 모듈] 스크롤 시 끝까지 계속 노출되는 5개의 은은한 SVG 백그라운드 무늬 */}
       <div className="absolute top-0 right-0 w-[550px] h-[550px] pointer-events-none opacity-[0.05] z-0">
         <svg viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
           <polygon points="120,20 480,80 380,420 40,300" fill="#00D2B8" />
@@ -270,10 +265,36 @@ export default function SearchPage() {
         </svg>
       </div>
 
+      <div className="absolute top-[20%] -left-16 w-[500px] h-[500px] pointer-events-none opacity-[0.04] z-0 rotate-12">
+        <svg viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="50,50 450,120 300,450 100,380" fill="#00D2B8" />
+          <polygon points="450,120 300,450 480,320" fill="#00E5FF" />
+        </svg>
+      </div>
+
+      <div className="absolute top-[45%] -right-20 w-[600px] h-[600px] pointer-events-none opacity-[0.05] z-0 -rotate-15">
+        <svg viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="80,100 420,30 350,480 60,320" fill="#00E5FF" />
+          <polygon points="420,30 350,480 490,250" fill="#0F172A" />
+        </svg>
+      </div>
+
+      <div className="absolute top-[70%] -left-20 w-[550px] h-[550px] pointer-events-none opacity-[0.04] z-0 rotate-45">
+        <svg viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="100,40 460,150 280,460 50,300" fill="#00D2B8" />
+        </svg>
+      </div>
+
+      <div className="absolute bottom-10 right-0 w-[500px] h-[500px] pointer-events-none opacity-[0.05] z-0">
+        <svg viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="150,30 450,100 390,450 80,350" fill="#00E5FF" />
+        </svg>
+      </div>
+
       <div className="max-w-[1400px] mx-auto px-4 md:px-6 relative z-10 space-y-6">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
           
-          {/* 💡 [수정] top-36을 적용하여 스크롤 시 상단 헤더와의 시원한 상부 여백 보장 */}
+          {/* [좌측 4열] 스티키 입력 카드 */}
           <aside className="lg:col-span-4 sticky top-36 bg-white rounded-lg border-2 border-[#00D2B8] p-5 shadow-[0_4px_14px_rgba(0,210,184,0.25)] space-y-6">
             <div className="space-y-6">
               <div className="border-b border-slate-100 pb-3.5 flex items-center justify-between">
@@ -388,7 +409,7 @@ export default function SearchPage() {
                         onClick={() => setGameTitle(g)}
                         className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all border cursor-pointer ${
                           gameTitle === g
-                            ? 'bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] text-slate-950 border-[#00D2B8] font-black shadow-2xs'
+                            ? 'bg-white text-slate-900 font-black border-2 border-[#00D2B8] shadow-[0_2px_8px_rgba(0,210,184,0.35)]'
                             : 'bg-gradient-to-r from-[#00D2B8]/10 to-[#00F5FF]/10 text-[#00A896] border-[#00D2B8]/30 hover:bg-[#00D2B8]/20'
                         }`}
                       >
@@ -555,7 +576,7 @@ export default function SearchPage() {
                             className={`px-3 py-1 rounded text-xs font-bold border transition-all ${
                               !isIosSupported
                                 ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed blur-[0.6px] opacity-40 line-through'
-                                : 'bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] text-slate-950 border-[#00D2B8] font-black shadow-2xs cursor-default'
+                                : 'bg-white text-slate-900 font-black border-2 border-[#00D2B8] shadow-[0_2px_8px_rgba(0,210,184,0.35)] cursor-default'
                             }`}
                             title={!isIosSupported ? '해당 게임은 iOS 앱스토어를 지원하지 않습니다.' : ''}
                           >
@@ -581,6 +602,7 @@ export default function SearchPage() {
                           const isSupported = isStoreSupported(store, selectedGame?.stores);
                           const selected = filter.androidStores.includes(store);
                           return (
+                            /* 💡 [개선] 입체감 있는 소프트 그라데이션 + 민트 보더 버블 칩 스타일 적용 */
                             <button
                               type="button"
                               key={store}
@@ -591,12 +613,12 @@ export default function SearchPage() {
                                   setIsDirty(true);
                                 }
                               }}
-                              className={`px-2.5 py-1 rounded text-xs font-bold border transition-all ${
+                              className={`px-2.5 py-1.5 rounded text-xs transition-all ${
                                 !isSupported
-                                  ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed blur-[0.6px] opacity-40 line-through select-none'
+                                  ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed blur-[0.6px] opacity-40 line-through select-none'
                                   : selected
-                                  ? 'bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] text-slate-950 border-[#00D2B8] font-black cursor-pointer shadow-2xs'
-                                  : 'bg-white text-slate-500 border-slate-200 hover:border-[#00D2B8]/60 cursor-pointer'
+                                  ? 'bg-white text-slate-900 font-black border-2 border-[#00D2B8] shadow-[0_2px_8px_rgba(0,210,184,0.35)] cursor-pointer'
+                                  : 'bg-slate-50 text-slate-600 font-bold border border-slate-200 cursor-pointer hover:border-[#00D2B8]/60'
                               }`}
                               title={!isSupported ? '선택한 게임에서 지원하지 않는 스토어입니다.' : ''}
                             >
@@ -623,8 +645,9 @@ export default function SearchPage() {
                   )}
                 </div>
 
+                {/* 💡 [개선] 등급 선택 서브 박스 그라데이션 틴트 적용 */}
                 {(isGoogleSelected || isGalaxySelected) && (
-                  <div className="p-3 bg-gradient-to-r from-[#00D2B8]/10 to-[#00F5FF]/10 rounded border border-[#00D2B8]/30 space-y-3">
+                  <div className="p-3 bg-gradient-to-r from-[#00D2B8]/10 via-slate-50 to-[#00F5FF]/10 rounded border border-[#00D2B8]/30 space-y-3 shadow-2xs">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {isGoogleSelected && (
                         <div className="space-y-1">
@@ -699,6 +722,7 @@ export default function SearchPage() {
                 </h3>
 
                 <div className="space-y-4">
+                  {/* 통신사 버블 칩 */}
                   <div className="space-y-2">
                     <label className="flex items-center space-x-2 p-2.5 bg-slate-50 rounded border border-slate-200 cursor-pointer">
                       <input type="checkbox" checked={filter.useCarriers} onChange={(e) => updateFilter('useCarriers', e.target.checked)} className="w-4 h-4 text-[#00D2B8] rounded" />
@@ -716,10 +740,10 @@ export default function SearchPage() {
                               toggleArrayItem('carriers', c);
                               setIsDirty(true);
                             }}
-                            className={`px-3 py-1.5 rounded text-xs font-bold border ${
+                            className={`px-3 py-1.5 rounded text-xs transition-all ${
                               selected
-                                ? 'bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] text-slate-950 border-[#00D2B8] font-black shadow-2xs'
-                                : 'bg-slate-50 text-slate-500 border-slate-200'
+                                ? 'bg-white text-slate-900 font-black border-2 border-[#00D2B8] shadow-[0_2px_8px_rgba(0,210,184,0.35)] cursor-pointer'
+                                : 'bg-slate-50 text-slate-600 font-bold border border-slate-200 cursor-pointer hover:border-[#00D2B8]/60'
                             }`}
                           >
                             {selected ? '✓ ' : '+ '}{c}
@@ -729,6 +753,7 @@ export default function SearchPage() {
                     </div>
                   </div>
 
+                  {/* 간편결제 버블 칩 */}
                   <div className="space-y-2 pt-2 border-t border-slate-100">
                     <label className="flex items-center space-x-2 p-2.5 bg-slate-50 rounded border border-slate-200 cursor-pointer">
                       <input type="checkbox" checked={filter.usePays} onChange={(e) => updateFilter('usePays', e.target.checked)} className="w-4 h-4 text-[#00D2B8] rounded" />
@@ -746,10 +771,10 @@ export default function SearchPage() {
                               toggleArrayItem('pays', p);
                               setIsDirty(true);
                             }}
-                            className={`px-3 py-1.5 rounded text-xs font-bold border ${
+                            className={`px-3 py-1.5 rounded text-xs transition-all ${
                               selected
-                                ? 'bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] text-slate-950 border-[#00D2B8] font-black shadow-2xs'
-                                : 'bg-slate-50 text-slate-500 border-slate-200'
+                                ? 'bg-white text-slate-900 font-black border-2 border-[#00D2B8] shadow-[0_2px_8px_rgba(0,210,184,0.35)] cursor-pointer'
+                                : 'bg-slate-50 text-slate-600 font-bold border border-slate-200 cursor-pointer hover:border-[#00D2B8]/60'
                             }`}
                           >
                             {selected ? '✓ ' : '+ '}{p}
@@ -777,6 +802,7 @@ export default function SearchPage() {
                     )}
                   </div>
 
+                  {/* 문화상품권 버블 칩 */}
                   <div className="space-y-2 pt-2 border-t border-slate-100">
                     <label className="flex items-center space-x-2 p-2.5 bg-slate-50 rounded border border-slate-200 cursor-pointer">
                       <input type="checkbox" checked={filter.useVoucherBypasses} onChange={(e) => updateFilter('useVoucherBypasses', e.target.checked)} className="w-4 h-4 text-[#00D2B8] rounded" />
@@ -794,10 +820,10 @@ export default function SearchPage() {
                               toggleArrayItem('voucherBypasses', v);
                               setIsDirty(true);
                             }}
-                            className={`px-3 py-1.5 rounded text-xs font-bold border ${
+                            className={`px-3 py-1.5 rounded text-xs transition-all ${
                               selected
-                                ? 'bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] text-slate-950 border-[#00D2B8] font-black shadow-2xs'
-                                : 'bg-slate-50 text-slate-500 border-slate-200'
+                                ? 'bg-white text-slate-900 font-black border-2 border-[#00D2B8] shadow-[0_2px_8px_rgba(0,210,184,0.35)] cursor-pointer'
+                                : 'bg-slate-50 text-slate-600 font-bold border border-slate-200 cursor-pointer hover:border-[#00D2B8]/60'
                             }`}
                           >
                             {selected ? '✓ ' : '+ '}{v}
@@ -862,7 +888,7 @@ export default function SearchPage() {
             </div>
           </div>
 
-          {/* 💡 [수정] top-36을 적용하여 스크롤 시 상단 헤더와 여유로운 거리 유지 */}
+          {/* [우측 2열] 스티키 광고 패널 */}
           <aside className="lg:col-span-2 sticky top-36 bg-slate-900 rounded-lg border border-slate-800 h-[650px] w-full p-5 flex flex-col items-center justify-between text-center shadow-md">
             <span className="px-2.5 py-1 bg-slate-800 text-slate-300 font-bold text-[9px] rounded border border-slate-700 tracking-wider">ADVERTISEMENT</span>
             <div className="space-y-4 my-auto">
