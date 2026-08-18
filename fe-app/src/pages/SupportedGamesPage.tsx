@@ -14,18 +14,18 @@ export interface GameItem {
 const parseGenreTags = (tags: any): string[] => {
   if (!tags) return [];
 
-  const rawStr = typeof tags === 'string' ? tags : JSON.stringify(tags);
+  // 모든 괄호([], {}), 작은따옴표('), 큰따옴표(") 제거
+  const cleanStr = String(typeof tags === 'string' ? tags : JSON.stringify(tags))
+    .replace(/[\[\]{}'"]/g, '')
+    .trim();
 
-  const matches = [...rawStr.matchAll(/['"]v['"]\s*:\s*['"]([^'"]+)['"]/g)];
-  if (matches.length > 0) {
-    return matches.map((m) => m[1]);
-  }
+  if (!cleanStr) return [];
 
-  if (Array.isArray(tags)) {
-    return tags.map((t) => (typeof t === 'object' && t?.v ? t.v : String(t)));
-  }
-
-  return typeof tags === 'string' && tags.trim() !== '' ? [tags] : [];
+  // 쉼표(,) 단위로만 분리 (슬래시 / 는 유지)
+  return cleanStr
+    .split(',')
+    .map((t) => t.trim())
+    .filter(Boolean);
 };
 
 const getInitialGames = (): GameItem[] => {

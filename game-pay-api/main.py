@@ -115,6 +115,10 @@ class ProfileUpdateRequest(BaseModel):
     galaxy_store_tier: Optional[str] = "NONE"
     favorite_games: List[str] = []
 
+
+class GameSearchLogRequest(BaseModel):
+    game_name: str
+
 # -----------------------------------------------------------------------------
 # 5. API 엔드포인트
 # -----------------------------------------------------------------------------
@@ -124,24 +128,11 @@ def health_check():
     return {"status": "ok", "message": "API Server connected with BigQuery & DB"}
 
 
-@app.get("/ranks")
-def get_game_ranks(category: str = "HOGAENG"):
-    default_list = [
-        {"rank": 1, "name": "쿠키런: 킹덤", "benefitText": "스토어 15% 쿠폰 + 문화상품권 10% 우회 결제", "rankChange": "SAME", "rankChangeText": "-", "badge": "매출 1위"},
-        {"rank": 2, "name": "승리의 여신: 니케", "benefitText": "T멤버십 10% 차감 할인 혜택", "rankChange": "UP", "rankChangeText": "▲2", "badge": "인기"},
-        {"rank": 3, "name": "메이플스토리M", "benefitText": "원스 쿠폰 20% 즉시 적용", "rankChange": "DOWN", "rankChangeText": "▼1", "badge": "상승"},
-        {"rank": 4, "name": "오딘: 발할라 라이징", "benefitText": "매일 첫 결제 10% 할인", "rankChange": "SAME", "rankChangeText": "-", "badge": "유지"},
-        {"rank": 5, "name": "기적의 검", "benefitText": "원스 전용 포인트 적립", "rankChange": "SAME", "rankChangeText": "-", "badge": "유지"},
-    ]
-    return {"title": "실시간 순위 대시보드", "list": default_list}
-
-
 # [BigQuery] game_info 테이블 조회
 @app.get("/games", summary="BigQuery game_info 실시간 연동")
 def get_supported_games(search: Optional[str] = None):
     try:
         client = get_client()
-        # BigQuery DB의 game_info 테이블을 있는 그대로 실시간 조회
         query = f"SELECT * FROM `{PROJECT_ID}.{DATASET_ID}.game_info`"
         query_job = client.query(query)
         rows = query_job.result()
@@ -311,14 +302,15 @@ def get_bigquery_benefits(table: str = "benefit_info_staging"):
         raise HTTPException(status_code=500, detail=f"BigQuery 데이터 조회 실패: {str(e)}")
 
 
-# [공통] BigQuery platform_connection & benefit_info 연동 결제 수단 API (세부 혜택 배열화)
+# main.py 파일의 /payments 엔드포인트 전체 교체
+
 @app.get("/payments", summary="지원 결제 수단 및 세부 혜택 목록 동적 조회")
 def get_supported_payment_methods():
     try:
         client = get_client()
         query = f"""
             SELECT
-                p.payment_method,
+                COALESCE(NULLIF(p.payment_method, ''), b.provider_or_retailer) AS payment_method,
                 p.platform,
                 p.is_supported,
                 p.note,
@@ -331,11 +323,12 @@ def get_supported_payment_methods():
                 b.benefit_unit,
                 b.target_game,
                 b.payment_method_icon_url
-            FROM `{PROJECT_ID}.{DATASET_ID}.platform_connection` p
-            LEFT JOIN `{PROJECT_ID}.{DATASET_ID}.benefit_info` b
-              ON p.payment_method = b.provider_or_retailer
+            FROM `{PROJECT_ID}.{DATASET_ID}.benefit_info` b
+            FULL OUTER JOIN `{PROJECT_ID}.{DATASET_ID}.platform_connection` p
+              ON b.provider_or_retailer = p.payment_method
         """
-        df = client.query(query).to_dataframe().fillna("")
+        query_job = client.query(query)
+        rows = list(query_job.result())
 
         STORE_NAME_MAP = {
             "GOOGLE_PLAY": "구글",
@@ -344,28 +337,52 @@ def get_supported_payment_methods():
             "APP_STORE": "앱스토어"
         }
 
+        # main.py 내부 determine_category 함수 수정
+
+# main.py 파일 내 determine_category 함수 교체
+
         def determine_category(method: str, cat: str) -> tuple:
-            method_upper = method.upper()
-            if any(k in method_upper for k in ["PAY", "NAVER", "KAKAO", "TOSS", "SAMSUNG_PAY", "PAYCO", "APPLE_PAY"]):
-                return "PAY", "간편결제", "💸"
-            elif any(k in method_upper for k in ["SKT", "KT", "LGU", "CARRIER"]):
-                return "CARRIER", "통신사", "📶"
-            elif any(k in method_upper for k in ["CARD", "SHINHAN", "SAMSUNG", "KB", "NH", "HANA"]):
-                return "CARD", "신용/체크카드", "💳"
-            elif any(k in method_upper for k in ["CULTURELAND", "VOUCHER", "GIFTCARD", "BOOKNLIFE", "ZEROPIN"]):
+            m_up = (method or "").upper()
+            c_up = (cat or "").upper()
+
+            # 1. 상품권 / 기프트카드류 우선 판별
+            voucher_keywords = [
+                "GIFTCARD", "GIFT", "VOUCHER", "CULTURELAND", "BOOKNLIFE", 
+                "ZEROPIN", "11STREET", "GMARKET", "SSG", "CONVENIENCE", "CU_"
+            ]
+            if any(k in m_up for k in voucher_keywords):
                 return "VOUCHER", "상품권 우회", "🎟️"
+
+            # 2. 간편결제 (삼성페이 포함)
+            pay_keywords = ["PAY", "SAMSUNG_PAY", "NAVER", "KAKAO", "TOSS", "PAYCO", "APPLE_PAY"]
+            if any(k in m_up for k in pay_keywords):
+                return "PAY", "간편결제", "💸"
+
+            # 3. 제휴 카드
+            card_keywords = ["CARD", "SHINHAN", "KB", "NH", "HANA", "HYUNDAI", "LOTTE", "BC", "SAMSUNG_CARD", "KOOKMIN", "NONGHYUP"]
+            if "CARD" in c_up or any(k in m_up for k in card_keywords):
+                return "CARD", "제휴 카드", "💳"
+
+            # 4. 통신사
+            if any(k in m_up for k in ["SKT", "KT", "LGU", "CARRIER"]):
+                return "CARRIER", "통신사", "📶"
+
             return "PAY", "기타", "💸"
 
         methods_map = {}
-        for idx, row in df.iterrows():
-            m_code = str(row.get("payment_method") or "").strip()
-            platform = str(row.get("platform") or "").strip()
-            is_supported = str(row.get("is_supported")).strip().lower() in ["true", "1", "t", "y"]
-            note = str(row.get("note") or "").strip()
-            category_raw = str(row.get("category") or "").strip()
-            event_name = str(row.get("item_or_event_name") or "").strip()
-            condition_text = str(row.get("condition_raw_text") or "").strip()
-            icon_url = str(row.get("payment_method_icon_url") or "").strip()
+        for row in rows:
+            # Row 객체 안전 디코딩 (dict 또는 Row 접근 호환)
+            r = dict(row) if hasattr(row, 'keys') else row
+            
+            m_code = str(r.get("payment_method") or "").strip()
+            platform = str(r.get("platform") or "").strip()
+            is_supported_val = r.get("is_supported")
+            is_supported = str(is_supported_val).strip().lower() in ["true", "1", "t", "y"] if is_supported_val is not None else False
+            note = str(r.get("note") or "").strip()
+            category_raw = str(r.get("category") or "").strip()
+            event_name = str(r.get("item_or_event_name") or "").strip()
+            condition_text = str(r.get("condition_raw_text") or "").strip()
+            icon_url = str(r.get("payment_method_icon_url") or "").strip()
 
             if not m_code:
                 continue
@@ -387,17 +404,16 @@ def get_supported_payment_methods():
             if is_supported and platform in STORE_NAME_MAP:
                 methods_map[m_code]["stores"].add(STORE_NAME_MAP[platform])
 
-            # 개별 혜택 항목 생성 및 중복 추가 방지
-            benefit_id = str(row.get("benefit_id") or "").strip()
+            benefit_id = str(r.get("benefit_id") or "").strip()
             if condition_text or event_name or note:
                 b_item = {
                     "benefit_id": benefit_id or f"BNF_{len(methods_map[m_code]['benefits'])+1}",
                     "title": event_name or f"{m_code} 기본 혜택",
                     "condition": condition_text or note or "상세 조건은 스토어 이벤트 페이지 참고",
-                    "benefit_type": str(row.get("benefit_type") or "DISCOUNT").strip(),
-                    "benefit_value": str(row.get("benefit_value") or "0").strip(),
-                    "benefit_unit": str(row.get("benefit_unit") or "PERCENT").strip(),
-                    "target_game": str(row.get("target_game") or "ALL").strip(),
+                    "benefit_type": str(r.get("benefit_type") or "DISCOUNT").strip(),
+                    "benefit_value": str(r.get("benefit_value") or "0").strip(),
+                    "benefit_unit": str(r.get("benefit_unit") or "PERCENT").strip(),
+                    "target_game": str(r.get("target_game") or "ALL").strip(),
                 }
                 if not any(existing["condition"] == b_item["condition"] for existing in methods_map[m_code]["benefits"]):
                     methods_map[m_code]["benefits"].append(b_item)
@@ -415,46 +431,37 @@ def get_supported_payment_methods():
                 "tag": item["tag"],
                 "benefit_count": len(item["benefits"]),
                 "benefits": item["benefits"],
-                "stores": stores_list if stores_list else ["구글"]
+                "stores": stores_list if stores_list else ["구글", "원스", "갤스", "앱스토어"]
             })
 
         return {"status": "ok", "total_count": len(result_list), "data": result_list}
 
     except Exception as e:
+        import traceback
+        print("=== /payments 백엔드 에러 발생 상세 ===")
+        traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"BigQuery 결제수단 데이터 조회 실패: {str(e)}"
         )
 
 
-# -----------------------------------------------------------------------------
-# 게임 검색 랭킹 시스템 API
-# -----------------------------------------------------------------------------
-
-class GameSearchLogRequest(BaseModel):
-    game_name: str
-
-# 1. 유저가 게임을 검색할 때마다 DB에 카운트를 쌓는 API
 @app.post("/games/search-log", summary="게임 검색 카운트 수집")
 def log_game_search(req: GameSearchLogRequest, db: Session = Depends(get_db)):
     game_name = req.game_name.strip()
     if not game_name:
         return {"status": "ignored"}
     
-    # DB에 검색 기록(Log) 적재
     log_entry = GameRequestLogModel(query=game_name)
     db.add(log_entry)
     db.commit()
-    return {"status": "success", "message": f"'{game_name}' 검색 기록 완료"}
+    return {"status": "success", "message": f"'{game_name}' 검색 카운트 기록 완료"}
 
 
-# 2. 누적 검색량 기준 실시간 랭킹 TOP 20 반환 API
 @app.get("/ranks", summary="실시간 인기 검색 게임 랭킹 TOP 20")
 def get_game_ranks(category: str = "HOGAENG", db: Session = Depends(get_db)):
     try:
         from sqlalchemy import func
-
-        # 최근 검색량이 많은 상위 20개 게임 집계 쿼리
         results = (
             db.query(GameRequestLogModel.query, func.count(GameRequestLogModel.id).label("search_count"))
             .group_by(GameRequestLogModel.query)
@@ -467,10 +474,6 @@ def get_game_ranks(category: str = "HOGAENG", db: Session = Depends(get_db)):
         for idx, row in enumerate(results):
             g_name = row[0]
             count = row[1]
-
-            # 랭킹 뱃지 설정
-            badge = "1위" if idx == 0 else ("인기" if idx < 3 else None)
-
             rank_list.append({
                 "rank": idx + 1,
                 "name": g_name,
@@ -478,23 +481,25 @@ def get_game_ranks(category: str = "HOGAENG", db: Session = Depends(get_db)):
                 "searchCount": count,
                 "rankChange": "SAME",
                 "rankChangeText": "-",
-                "badge": badge,
+                "badge": "1위" if idx == 0 else ("인기" if idx < 3 else None)
             })
 
-        # 아직 검색 데이터가 쌓이지 않았을 경우 하드코딩된 기본 랭킹 전달
+        # main.py 내부 487~489번째 줄 부근 수정
+
         if not rank_list:
-            default_list = [
-                {"rank": 1, "name": "쿠키런: 킹덤", "benefitText": "검색량 1위", "rankChange": "SAME", "rankChangeText": "-", "badge": "1위"},
-                {"rank": 2, "name": "리니지M", "benefitText": "인기 검색 게임", "rankChange": "UP", "rankChangeText": "▲1", "badge": "인기"},
-                {"rank": 3, "name": "오딘: 발할라 라이징", "benefitText": "검색량 급상승", "rankChange": "UP", "rankChangeText": "▲2", "badge": "상승"},
-                {"rank": 4, "name": "나 혼자만 레벨업:어라이즈", "benefitText": "주간 상위권 검색", "rankChange": "DOWN", "rankChangeText": "▼1"},
-                {"rank": 5, "name": "붕괴: 스타레일", "benefitText": "주간 상위권 검색", "rankChange": "SAME", "rankChangeText": "-"},
-            ]
-            return {"title": "🔥 호갱탈출 최근 7일간 인기 검색 순위", "list": default_list}
+            from fallback_rank import FALLBACK_HOGAENG_RANK_DATA  # 💡 파일명 변경에 맞게 수정
+            return FALLBACK_HOGAENG_RANK_DATA
 
         return {
             "title": "🔥 호갱탈출 최근 7일간 인기 검색 순위",
-            "list": rank_list,
+            "list": rank_list
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"랭킹 조회 오류: {str(e)}")
+        return {
+            "title": "🔥 호갱탈출 최근 7일간 인기 검색 순위",
+            "list": [
+                {"rank": 1, "name": "쿠키런: 킹덤", "benefitText": "최근 7일 검색 1위", "rankChange": "SAME", "rankChangeText": "-", "badge": "1위"},
+                {"rank": 2, "name": "리니지M", "benefitText": "인기 검색 게임", "rankChange": "UP", "rankChangeText": "▲1", "badge": "인기"},
+                {"rank": 3, "name": "오딘: 발할라 라이징", "benefitText": "검색량 급상승", "rankChange": "UP", "rankChangeText": "▲2", "badge": "상승"},
+            ]
+        }

@@ -58,15 +58,18 @@ export default function Header() {
     }
   };
 
+    // ✅ 수정 코드 (대체 대상)
   useEffect(() => {
     const token = localStorage.getItem('google_token');
-    if (token) {
+    
+    // 토큰이 없거나, 문자열 'undefined'/'null'로 들어있으면 서버 호출하지 않음 (401 에러 방지)
+    if (token && token !== 'undefined' && token !== 'null') {
       fetchUserProfile(token);
     }
 
     const handleProfileUpdate = () => {
       const currentToken = localStorage.getItem('google_token');
-      if (currentToken) {
+      if (currentToken && currentToken !== 'undefined' && currentToken !== 'null') {
         fetchUserProfile(currentToken);
       }
     };
