@@ -9,6 +9,7 @@ import SupportedPaymentPage from './pages/SupportedPaymentPage';
 import SearchPage from './pages/SearchPage';
 import SearchResultPage from './pages/SearchResultPage';
 import MyProfilePage from './pages/MyProfilePage'; // 👈 1. 프로필 페이지 임포트
+import AdminDashboardPage from './pages/AdminDashboardPage'; // 👈 관리자 대시보드 페이지
 
 export default function App() {
   return (
@@ -26,6 +27,7 @@ export default function App() {
               <Route path="/search" element={<SearchPage />} /> {/* 👈 검색/입력 페이지 */}
               <Route path="/search-result" element={<SearchResultPage />} /> {/* 👈 결과 페이지 */}
               <Route path="/profile" element={<MyProfilePage />} /> {/* 👈 프로필 페이지 */}
+              <Route path="/admin" element={<AdminDashboardPage />} /> {/* 👈 관리자 대시보드 */}
             </Routes>
           </main>
         </div>
