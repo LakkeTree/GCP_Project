@@ -9,7 +9,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError  # 👈 [추가] DB 예외 처리용
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from database import get_db
 from models import UserModel
@@ -18,7 +18,10 @@ load_dotenv()
 
 security = HTTPBearer()
 optional_security = HTTPBearer(auto_error=False)
+
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+# 🔑 디버그 모드에서만 usr_ 더미 로그인 우회 허용
+IS_DEBUG = os.getenv("DEBUG", "False").lower() in ("true", "1", "t")
 
 _cached_session = cachecontrol.CacheControl(requests.Session())
 _google_auth_request = google_requests.Request(session=_cached_session)
@@ -31,19 +34,26 @@ def verify_google_token_and_get_user(
     """Google OAuth 토큰 검증 후 회원 조회 및 신규 생성(Upsert)"""
     token = credentials.credentials
 
-    print(f"👉 [DEBUG] 전달받은 토큰 값: '{token}'")
-
-    # 1. 더미 유저 테스트 우회 로직
+    # 1. 더미 유저 우회 로직 (개발/테스트 환경 전용 보안 가드)
     if token.startswith("usr_"):
-        user = db.query(UserModel).filter(UserModel.user_id == token).first()
-        if user:
-            print("✅ [DEBUG] 더미 유저 조회 성공!")
-            return user
-        print("❌ [DEBUG] DB에 해당 usr_ ID가 존재하지 않음!")
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"테스트용 더미 유저({token})를 DB에서 찾을 수 없습니다."
-        )
+        if not IS_DEBUG:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="운영 환경에서는 테스트용 토큰 사용이 금지되어 있습니다."
+            )
+        try:
+            user = db.query(UserModel).filter(UserModel.user_id == token).first()
+            if user:
+                return user
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"테스트용 더미 유저({token})를 DB에서 찾을 수 없습니다."
+            )
+        except SQLAlchemyError as e:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"데이터베이스 연결 실패: {str(e)}"
+            )
 
     # 2. 구글 OAuth 토큰 검증 및 DB 저장 로직
     try:
@@ -67,13 +77,13 @@ def verify_google_token_and_get_user(
         full_provider_id = f"google_{provider_id_val}"
         user_id_val = f"usr_g_{provider_id_val}"
 
-        # GCP DB에서 회원 조회
+        # DB 회원 조회
         user = db.query(UserModel).filter(
             (UserModel.user_id == user_id_val) | 
             ((UserModel.provider == "GOOGLE") & (UserModel.provider_id == full_provider_id))
         ).first()
 
-        # GCP DB에 회원 정보가 없으면 신규 가입 진행
+        # GCP DB에 회원 정보가 없으면 신규 가입
         if not user:
             try:
                 user = UserModel(
@@ -92,21 +102,23 @@ def verify_google_token_and_get_user(
                     favorite_games="NONE"
                 )
                 db.add(user)
-                db.commit()      # 👈 GCP PostgreSQL에 저장 수행!
+                db.commit()
                 db.refresh(user)
-                print(f"🎉 [GCP DB] 신규 구글 회원 저장 완료: {user_id_val}")
             except IntegrityError:
-                # 동시 요청 등으로 인해 이미 생성된 경우 롤백 후 재조회
                 db.rollback()
                 user = db.query(UserModel).filter(UserModel.user_id == user_id_val).first()
 
         return user
 
     except ValueError as e:
-        print(f"❌ [DEBUG] 구글 토큰 검증 실패: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Google 토큰 인증 실패: {str(e)}",
+        )
+    except SQLAlchemyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"GCP 데이터베이스 접속 오류 (네트워크/방화벽 상태 확인 필요): {str(e)}"
         )
 
 
