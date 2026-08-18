@@ -41,31 +41,39 @@ export const FALLBACK_HOGAENG_RANK_DATA: RankCategoryData = {
   ],
 };
 
-// gameRankData.ts 내 fetchHogaengRankData 함수 교체
-
+// gameRankData.ts
 export const fetchHogaengRankData = async (): Promise<RankCategoryData> => {
   try {
-    // 1. /ranks API 호출
-    const rankRes = await fetch('http://127.0.0.1:8000/ranks');
-    const rankResult = await rankRes.json();
+    // 1. 랭킹 API와 게임목록 API를 동시에 병렬(Promise.all) 로출
+    const rankPromise = fetch('http://127.0.0.1:8000/ranks').then((r) => r.json());
 
-    // 2. BigQuery game_info 데이터를 가지고 있는 /games API 호출
+    // 캐시된 게임 목록 확인
     let gameIconMap: Record<string, string> = {};
-    try {
-      const gamesRes = await fetch('http://127.0.0.1:8000/games');
-      const gamesResult = await gamesRes.json();
-      if (gamesResult.status === 'ok' && Array.isArray(gamesResult.data)) {
-        gamesResult.data.forEach((g: any) => {
-          if (g.name && g.icon_url) {
-            gameIconMap[g.name.trim().toLowerCase()] = g.icon_url;
-          }
-        });
-      }
-    } catch (e) {
-      console.error('게임 아이콘 DB 조회 실패:', e);
+    const cachedGames = localStorage.getItem('cached_games_list');
+
+    let gamesPromise: Promise<any>;
+    if (cachedGames) {
+      // 캐시 데이터가 있으면 API 요청 없이 즉시 사용
+      const parsed = JSON.parse(cachedGames);
+      parsed.forEach((g: any) => {
+        if (g.name && g.icon_url) gameIconMap[g.name.trim().toLowerCase()] = g.icon_url;
+      });
+      gamesPromise = Promise.resolve(null);
+    } else {
+      gamesPromise = fetch('http://127.0.0.1:8000/games').then((r) => r.json());
     }
 
-    // 3. 랭킹 데이터 아이콘 매핑
+    const [rankResult, gamesResult] = await Promise.all([rankPromise, gamesPromise]);
+
+    if (gamesResult && gamesResult.status === 'ok' && Array.isArray(gamesResult.data)) {
+      localStorage.setItem('cached_games_list', JSON.stringify(gamesResult.data));
+      gamesResult.data.forEach((g: any) => {
+        if (g.name && g.icon_url) {
+          gameIconMap[g.name.trim().toLowerCase()] = g.icon_url;
+        }
+      });
+    }
+
     const rankList = Array.isArray(rankResult) ? rankResult : (rankResult.list || []);
     const updatedList = rankList.map((item: any) => {
       const cleanName = (item.name || '').trim().toLowerCase();
