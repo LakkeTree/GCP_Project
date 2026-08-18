@@ -317,7 +317,9 @@ export default function SearchResultPage() {
         const routeProviders: string[] = [];
         let adjustedRewardTotal = 0;
 
-        const stepsDetailed: StepDetail[] = route.steps.map((step) => {
+        const stepsDetailed: StepDetail[] = route.steps
+          .filter((step) => step.applied_amount > 0)
+          .map((step) => {
           const layerKorean = LAYER_NAME_MAP[step.layer] || step.layer;
           const providerKorean = REVERSE_PAYMENT_MAP[step.provider] || step.provider;
           if (providerKorean && !routeProviders.includes(providerKorean)) {
