@@ -423,11 +423,24 @@ const [useSpecialOptions, setUseSpecialOptions] = useState(initialSpecialCard !=
     );
   };
 
-  const fetchBackendData = useCallback(async (targetGameName?: string) => {
-    setLoading(true);
-    setError(null);
+  // SearchResultPage.tsx 내 fetchBackendData 함수 내부 상단에 추가
 
-    const gameToQuery = targetGameName || activeGameTitle;
+const fetchBackendData = useCallback(async (targetGameName?: string) => {
+  setLoading(true);
+  setError(null);
+
+  const gameToQuery = targetGameName || activeGameTitle;
+
+  // 💡 [추가] 검색 실행 시 백엔드로 검색 로그전송 (카운트 +1)
+  try {
+    fetch('http://127.0.0.1:8000/games/search-log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ game_name: gameToQuery }),
+    }).catch((err) => console.error('검색 로그 전송 실패:', err));
+  } catch (e) {}
+
+  // ... (기존 최저가 계산 연산 로직 유지를 위해 아래 동일)
     const selectedProviders: string[] = [];
 
     if (useCarriers) {
@@ -509,7 +522,9 @@ const [useSpecialOptions, setUseSpecialOptions] = useState(initialSpecialCard !=
         const routeProviders: string[] = [];
         let adjustedRewardTotal = 0;
 
-        const stepsDetailed: StepDetail[] = route.steps.map((step) => {
+        const stepsDetailed: StepDetail[] = route.steps
+          .filter((step) => step.applied_amount > 0)
+          .map((step) => {
           const layerKorean = LAYER_NAME_MAP[step.layer] || step.layer;
           const providerKorean = REVERSE_PAYMENT_MAP[step.provider] || step.provider;
           if (providerKorean && !routeProviders.includes(providerKorean)) {
@@ -1484,7 +1499,7 @@ const [useSpecialOptions, setUseSpecialOptions] = useState(initialSpecialCard !=
                           }}
                           className={`px-2.5 py-1.5 rounded text-xs transition-all ${
                             selected
-                              ? 'bg-gradient-to-r from-[#00D2B8]/15 via-cyan-50/90 to-[#00F5FF]/15 text-slate-950 font-black border-2 border-[#00D2B8] shadow-[0_2px_8px_rgba(0,210,184,0.25)] cursor-pointer'
+                              ? 'bg-white text-slate-900 font-black border-2 border-[#00D2B8] shadow-[0_2px_8px_rgba(0,210,184,0.35)] cursor-pointer'
                               : 'bg-slate-50 text-slate-600 font-bold border border-slate-200 cursor-pointer hover:border-[#00D2B8]/60'
                           }`}
                         >

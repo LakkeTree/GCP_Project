@@ -1,5 +1,8 @@
 import os
 from typing import Optional
+
+import cachecontrol
+import requests
 from dotenv import load_dotenv
 from fastapi import Depends, HTTPException, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -15,6 +18,13 @@ load_dotenv()
 security = HTTPBearer()
 optional_security = HTTPBearer(auto_error=False)
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+
+# Google 공개키(certs) 조회용 Request를 모듈 레벨에서 하나만 만들어 재사용한다.
+# CacheControl로 감싸서 Google 응답의 Cache-Control 헤더를 존중해 캐싱하므로,
+# 인증서가 실제로 바뀌기 전까지는(보통 하루 단위) 매 로그인 요청마다 구글 서버로
+# 왕복하지 않는다 (google-auth의 id_token 모듈 docstring이 공식 권장하는 방식).
+_cached_session = cachecontrol.CacheControl(requests.Session())
+_google_auth_request = google_requests.Request(session=_cached_session)
 
 
 def verify_google_token_and_get_user(
@@ -46,7 +56,7 @@ def verify_google_token_and_get_user(
     try:
         id_info = id_token.verify_oauth2_token(
             token,
-            google_requests.Request(),
+            _google_auth_request,
             GOOGLE_CLIENT_ID,
             clock_skew_in_seconds=10,
         )

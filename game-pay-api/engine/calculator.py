@@ -198,12 +198,18 @@ def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
                 if not giftcard_held and provider_code not in effective_held_methods:
                     continue
             else:
-                # 결제수단 코드 상호 포함 여부 검사 (예: NAVER_PAY <-> NAVER)
-                is_held = any(
-                    m in provider_code or provider_code in m 
-                    for m in effective_held_methods
-                )
-                if not is_held:
+                # 결제수단 코드 상호 검사 (단어 단위 토큰 비교로 "KT"가 "SKT"에 포함되는 오탐 차단)
+                def _is_method_matched(held_set, provider):
+                    p_tokens = set(provider.split("_"))
+                    for h in held_set:
+                        if h == provider:
+                            return True
+                        h_tokens = set(h.split("_"))
+                        if h_tokens & p_tokens:
+                            return True
+                    return False
+
+                if not _is_method_matched(effective_held_methods, provider_code):
                     continue
         else:
             provider_platform = STORE_PROVIDER_TO_PLATFORM.get(provider_code, provider_code)
@@ -522,6 +528,9 @@ def calculate_direct_payment_route(combo, base_amount):
             effect = benefit["benefit_value"]
         effect = apply_cap(effect, benefit)
 
+        if effect <= 0:
+            continue
+
         btype = benefit["benefit_type"]
         if btype == "DISCOUNT":
             effect = round(min(effect, remaining))
@@ -601,6 +610,16 @@ def apply_store_base_reward(route, store_reward_benefit):
     """경로 하나에 스토어 기본 적립을 추가로 반영한다."""
     if store_reward_benefit is None:
         return route
+
+    base = route["final_paid_amount"]
+    if store_reward_benefit["benefit_unit"] == "PERCENT":
+        effect = base * store_reward_benefit["benefit_value"] / 100
+    else:
+        effect = store_reward_benefit["benefit_value"]
+    effect = round(apply_cap(effect, store_reward_benefit))
+
+    if effect <= 0:
+        return route    
 
     base = route["final_paid_amount"]
     if store_reward_benefit["benefit_unit"] == "PERCENT":

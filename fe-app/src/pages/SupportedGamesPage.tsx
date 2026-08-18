@@ -4,12 +4,29 @@ export interface GameItem {
   id: string;
   name: string;
   company: string;
-  genre_tags: string[];
+  genre_tags: any;
   main_genre: string;
   description: string;
   icon_url: string;
   stores: string[];
 }
+
+const parseGenreTags = (tags: any): string[] => {
+  if (!tags) return [];
+
+  const rawStr = typeof tags === 'string' ? tags : JSON.stringify(tags);
+
+  const matches = [...rawStr.matchAll(/['"]v['"]\s*:\s*['"]([^'"]+)['"]/g)];
+  if (matches.length > 0) {
+    return matches.map((m) => m[1]);
+  }
+
+  if (Array.isArray(tags)) {
+    return tags.map((t) => (typeof t === 'object' && t?.v ? t.v : String(t)));
+  }
+
+  return typeof tags === 'string' && tags.trim() !== '' ? [tags] : [];
+};
 
 const getInitialGames = (): GameItem[] => {
   try {
@@ -44,8 +61,13 @@ export default function SupportedGamesPage() {
         const result = await res.json();
         
         if (isMounted && result.status === 'ok' && Array.isArray(result.data)) {
-          setGames(result.data);
-          localStorage.setItem('cached_games_list', JSON.stringify(result.data));
+          const processed = result.data.map((g: any) => ({
+            ...g,
+            genre_tags: parseGenreTags(g.genre_tags),
+          }));
+
+          setGames(processed);
+          localStorage.setItem('cached_games_list', JSON.stringify(processed));
         }
       } catch (err) {
         console.error('게임 데이터 로딩 실패:', err);
@@ -87,15 +109,16 @@ export default function SupportedGamesPage() {
   const genres = ['전체', 'RPG', '캐주얼', '스포츠', '액션', '전략', '시뮬레이션', '서브컬처'];
 
   const filtered = games.filter((g) => {
+    const cleanTags = parseGenreTags(g.genre_tags);
     const matchesSearch =
       g.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       g.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      g.genre_tags.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase()));
+      cleanTags.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase()));
 
     const matchesGenre =
       selectedGenre === '전체' ||
-      g.main_genre.includes(selectedGenre) ||
-      g.genre_tags.some((t) => t.includes(selectedGenre));
+      (g.main_genre && g.main_genre.includes(selectedGenre)) ||
+      cleanTags.some((t) => t.includes(selectedGenre));
 
     return matchesSearch && matchesGenre;
   });
@@ -109,10 +132,9 @@ export default function SupportedGamesPage() {
   };
 
   return (
-    /* 💡 overflow-hidden 제거하여 스티키 동작 복원 */
     <div className="bg-[#F8FAFC] min-h-screen py-6 md:py-8 relative">
       
-      {/* 은은한 불규칙 SVG 기하학 레이어 */}
+      {/* 💡 [수직 다층 기하학 모듈] 스크롤 깊이별로 배치된 5개의 은은한 SVG 다각형 무늬 */}
       <div className="absolute top-0 right-0 w-[550px] h-[550px] pointer-events-none opacity-[0.05] z-0">
         <svg viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
           <polygon points="120,20 480,80 380,420 40,300" fill="#00D2B8" />
@@ -120,10 +142,35 @@ export default function SupportedGamesPage() {
         </svg>
       </div>
 
+      <div className="absolute top-[20%] -left-16 w-[500px] h-[500px] pointer-events-none opacity-[0.04] z-0 rotate-12">
+        <svg viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="50,50 450,120 300,450 100,380" fill="#00D2B8" />
+          <polygon points="450,120 300,450 480,320" fill="#00E5FF" />
+        </svg>
+      </div>
+
+      <div className="absolute top-[45%] -right-20 w-[600px] h-[600px] pointer-events-none opacity-[0.05] z-0 -rotate-15">
+        <svg viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="80,100 420,30 350,480 60,320" fill="#00E5FF" />
+          <polygon points="420,30 350,480 490,250" fill="#0F172A" />
+        </svg>
+      </div>
+
+      <div className="absolute top-[70%] -left-20 w-[550px] h-[550px] pointer-events-none opacity-[0.04] z-0 rotate-45">
+        <svg viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="100,40 460,150 280,460 50,300" fill="#00D2B8" />
+        </svg>
+      </div>
+
+      <div className="absolute bottom-10 right-0 w-[500px] h-[500px] pointer-events-none opacity-[0.05] z-0">
+        <svg viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="150,30 450,100 390,450 80,350" fill="#00E5FF" />
+        </svg>
+      </div>
+
       <div className="max-w-[1400px] mx-auto px-4 md:px-6 relative z-10 space-y-6">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
           
-          {/* [좌측 10열] 메인 게임 카탈로그 */}
           <div className="lg:col-span-10 space-y-6">
             <header className="space-y-3">
               <div className="flex items-center justify-between">
@@ -152,7 +199,6 @@ export default function SupportedGamesPage() {
                   className="w-full max-w-md px-4 py-2.5 text-xs rounded border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-[#00D2B8] shadow-xs font-bold text-slate-800"
                 />
 
-                {/* 장르 선택 필터 바 */}
                 <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 no-scrollbar">
                   {genres.map((cat) => (
                     <button
@@ -172,7 +218,6 @@ export default function SupportedGamesPage() {
               </div>
             </header>
 
-            {/* 스켈레톤 로더 */}
             {loading ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 animate-pulse">
                 {[...Array(8)].map((_, i) => (
@@ -182,75 +227,79 @@ export default function SupportedGamesPage() {
             ) : (
               <>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                  {visibleGames.map((g, index) => (
-                    <div
-                      key={g.id || index}
-                      className="p-4 bg-white rounded-lg border border-slate-200/90 shadow-xs hover:border-[#00D2B8] hover:shadow-[0_4px_14px_rgba(0,210,184,0.25)] transition-all space-y-3 cursor-pointer flex flex-col justify-between"
-                    >
-                      <div className="space-y-2.5">
-                        <div className="flex items-center space-x-3">
-                          {g.icon_url ? (
-                            <img
-                              src={g.icon_url}
-                              alt={g.name}
-                              referrerPolicy="no-referrer"
-                              loading="lazy"
-                              decoding="async"
-                              onError={(e) => {
-                                e.currentTarget.onerror = null;
-                                e.currentTarget.style.display = 'none';
-                              }}
-                              className="w-12 h-12 rounded object-cover border border-slate-200 shrink-0 shadow-2xs bg-slate-100"
-                            />
-                          ) : (
-                            <div className="w-12 h-12 rounded bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-400 border border-slate-200 shrink-0">
-                              GAME
+                  {visibleGames.map((g, index) => {
+                    const cleanTags = parseGenreTags(g.genre_tags);
+
+                    return (
+                      <div
+                        key={g.id || index}
+                        className="p-4 bg-white rounded-lg border border-slate-200/90 shadow-xs hover:border-[#00D2B8] hover:shadow-[0_4px_14px_rgba(0,210,184,0.25)] transition-all space-y-3 cursor-pointer flex flex-col justify-between"
+                      >
+                        <div className="space-y-2.5">
+                          <div className="flex items-center space-x-3">
+                            {g.icon_url ? (
+                              <img
+                                src={g.icon_url}
+                                alt={g.name}
+                                referrerPolicy="no-referrer"
+                                loading="lazy"
+                                decoding="async"
+                                onError={(e) => {
+                                  e.currentTarget.onerror = null;
+                                  e.currentTarget.style.display = 'none';
+                                }}
+                                className="w-12 h-12 rounded object-cover border border-slate-200 shrink-0 shadow-2xs bg-slate-100"
+                              />
+                            ) : (
+                              <div className="w-12 h-12 rounded bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-400 border border-slate-200 shrink-0">
+                                GAME
+                              </div>
+                            )}
+                            
+                            <div className="min-w-0">
+                              <span className="text-[9.5px] font-black text-[#00A896] bg-gradient-to-r from-[#00D2B8]/15 to-[#00F5FF]/15 px-1.5 py-0.5 rounded border border-[#00D2B8]/30 truncate inline-block">
+                                {g.company}
+                              </span>
+                              <h3 className="text-xs md:text-sm font-extrabold text-slate-900 mt-1 truncate">
+                                {g.name}
+                              </h3>
                             </div>
-                          )}
-                          
-                          <div className="min-w-0">
-                            <span className="text-[9.5px] font-black text-[#00A896] bg-gradient-to-r from-[#00D2B8]/15 to-[#00F5FF]/15 px-1.5 py-0.5 rounded border border-[#00D2B8]/30 truncate inline-block">
-                              {g.company}
-                            </span>
-                            <h3 className="text-xs md:text-sm font-extrabold text-slate-900 mt-1 truncate">
-                              {g.name}
-                            </h3>
+                          </div>
+
+                          <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">
+                            {g.description}
+                          </p>
+                        </div>
+
+                        <div className="border-t border-slate-100 pt-2.5 space-y-2">
+                          <div className="flex flex-wrap gap-1">
+                            {(g.stores || []).map((s) => (
+                              <span key={s} className="text-[9px] font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200/60">
+                                {s}
+                              </span>
+                            ))}
+                          </div>
+
+                          <div className="flex flex-wrap gap-1">
+                            {cleanTags.slice(0, 3).map((tag, tIdx) => (
+                              <button
+                                key={tIdx}
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSearchQuery(tag);
+                                }}
+                                className="text-[9.5px] font-bold text-[#00A896] bg-gradient-to-r from-[#00D2B8]/10 to-[#00F5FF]/10 hover:bg-[#00D2B8]/20 active:scale-95 px-2 py-0.5 rounded border border-[#00D2B8]/30 transition-all cursor-pointer"
+                              >
+                                #{tag}
+                              </button>
+                            ))}
                           </div>
                         </div>
 
-                        <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">
-                          {g.description}
-                        </p>
                       </div>
-
-                      <div className="border-t border-slate-100 pt-2.5 space-y-2">
-                        <div className="flex flex-wrap gap-1">
-                          {g.stores.map((s) => (
-                            <span key={s} className="text-[9px] font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200/60">
-                              {s}
-                            </span>
-                          ))}
-                        </div>
-
-                        <div className="flex flex-wrap gap-1">
-                          {g.genre_tags.slice(0, 3).map((tag, tIdx) => (
-                            <button
-                              key={tIdx}
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSearchQuery(tag);
-                              }}
-                              className="text-[9.5px] font-bold text-[#00A896] bg-gradient-to-r from-[#00D2B8]/10 to-[#00F5FF]/10 hover:bg-[#00D2B8]/20 active:scale-95 px-2 py-0.5 rounded border border-[#00D2B8]/30 transition-all cursor-pointer"
-                            >
-                              #{tag}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 <div ref={observerTargetRef} className="h-10 w-full" />
@@ -258,7 +307,6 @@ export default function SupportedGamesPage() {
             )}
           </div>
 
-          {/* 💡 [우측 2열] 스티키 top-36 적용 완료 */}
           <aside className="lg:col-span-2 sticky top-36 bg-slate-900 rounded-lg border border-slate-800 h-[650px] w-full p-5 flex flex-col items-center justify-between text-center shadow-md">
             <span className="px-2.5 py-1 bg-slate-800 text-slate-300 font-bold text-[9px] rounded border border-slate-700 tracking-wider">
               ADVERTISEMENT
