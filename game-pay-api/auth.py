@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timedelta
 from typing import Optional
 
 import cachecontrol
@@ -27,6 +28,17 @@ IS_DEBUG = os.getenv("DEBUG", "False").lower() in ("true", "1", "t")
 _cached_session = cachecontrol.CacheControl(requests.Session())
 _google_auth_request = google_requests.Request(session=_cached_session)
 
+# 관리자 대시보드 활성 사용자(DAU/WAU/MAU) 집계용 last_login_at 갱신 주기.
+# 매 인증 요청마다 DB 쓰기가 발생하지 않도록 5분 단위로만 갱신한다.
+_LAST_LOGIN_THROTTLE = timedelta(minutes=5)
+
+
+def _touch_last_login(user: UserModel, db: Session) -> None:
+    now = datetime.utcnow()
+    if not user.last_login_at or (now - user.last_login_at) > _LAST_LOGIN_THROTTLE:
+        user.last_login_at = now
+        db.commit()
+
 
 def verify_google_token_and_get_user(
     credentials: HTTPAuthorizationCredentials = Security(security),
@@ -45,6 +57,7 @@ def verify_google_token_and_get_user(
         try:
             user = db.query(UserModel).filter(UserModel.user_id == token).first()
             if user:
+                _touch_last_login(user, db)
                 return user
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -111,6 +124,7 @@ def verify_google_token_and_get_user(
                 db.rollback()
                 user = db.query(UserModel).filter(UserModel.user_id == user_id_val).first()
 
+        _touch_last_login(user, db)
         return user
 
     except ValueError as e:
@@ -124,6 +138,18 @@ def verify_google_token_and_get_user(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"GCP 데이터베이스 접속 오류 (네트워크/방화벽 상태 확인 필요): {str(e)}"
         )
+
+
+def require_admin(
+    current_user: UserModel = Depends(verify_google_token_and_get_user),
+) -> UserModel:
+    """관리자 전용 API 접근 제어. UserModel.role == 'ROLE_ADMIN'인 회원만 통과시킨다."""
+    if current_user.role != "ROLE_ADMIN":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="관리자 권한이 필요합니다.",
+        )
+    return current_user
 
 
 def verify_google_token_optional(
