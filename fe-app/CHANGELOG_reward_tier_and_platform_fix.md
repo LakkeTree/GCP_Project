@@ -165,3 +165,45 @@ if tier_upper_bound is not None and amount > tier_upper_bound:
   1. "토스프라임 구독 중" 체크 해제 → 토스페이가 포함된 경로에 멤버십 적립(4%/1%)이 더 이상 안 잡히는지 확인
   2. "토스프라임 구독 중" 체크 + 결제 금액을 20만원 이하/초과로 각각 입력 → 해당 구간에 맞는 적립률(4% 또는 1%)만 나오는지, 30만원 입력 시 "20만원 이하" 문구가 더 이상 안 뜨는지 확인
   3. 특정 스토어만 지원하는 게임(예: 원스토어 미지원 게임)을 선택 → 필터의 스토어 선택 버튼에서 미지원 스토어가 회색으로 비활성화되고 클릭이 안 되는지 확인
+
+---
+
+## 4. 후속 조치 (2026-08-19 추가 요청): 네이버플러스 멤버십 기능 삭제 + "토스페이" → "토스페이 프라임" 표기 변경
+
+위 1번 항목을 실제로 테스트해보니, 네이버플러스 멤버십(+4%)은 확인 결과 게임 결제에는 적용되지 않는 것으로 파악되어 **기능 자체를 삭제**했고, 일반(비회원) 토스페이는 게임 결제 적립률이 사실상 0%라서 **"토스페이" 선택지 자체를 "토스페이 프라임"으로 바꿔** 별도 체크박스 없이 선택=프라임 회원으로 처리하도록 변경했습니다.
+
+### 네이버플러스 멤버십 삭제
+- `fe-app/src/hooks/useFilterState.ts` — `FilterState`/`emptyFilterState`/`deselectAll()`에서 `useNaverMembership` 필드 제거
+- `fe-app/src/components/FilterSection.tsx` — "네이버플러스 멤버십 가입 중 (+4% 추가 적립)" 체크박스 블록과, 그 표시 여부를 판단하던 `isNaverPaySelected` 변수 제거
+- `fe-app/src/pages/SearchPage.tsx` — `activeSubscriptions`에 네이버플러스 문구를 넣던 줄 제거
+- `fe-app/src/pages/SearchResultPage.tsx` — API payload에서 `has_naver_plus` 필드 제거
+- `fe-app/src/pages/MyProfilePage.tsx` — 프로필 저장 payload에서 `has_naver_plus` 필드 제거
+- `fe-app/src/constants/searchOptions.ts` — `SUBSCRIPTION_OPTIONS`에서 "네이버플러스 멤버십 (+4% 적립)" 항목 제거 (T멤버십 항목만 남김)
+- `game-pay-api/main.py` — `RouteRequest`에서 `has_naver_plus` 필드 제거, `get_optimal_routes`에서 전달하던 부분 제거
+- `game-pay-api/engine/calculator.py` — `VIP_MEMBERSHIP_FLAG_BY_PROVIDER`에서 `"NAVER_PAY": "has_naver_plus"` 매핑 제거, `filter_eligible_benefits`/`recommend_best_routes`에서 `has_naver_plus` 파라미터 제거
+
+`game-pay-api/main.py`의 `ProfileUpdateRequest`/`UserModel`(로그인 유저의 저장된 프로필 DB 컬럼)에 남아있는 `has_naver_plus` 필드는 이번 삭제 범위에서 제외했습니다. 이건 실제 경로 계산(`RouteRequest`)과는 무관한, 로그인 유저의 "내 보유 자산 프로필" 저장용 별도 컬럼이라 스키마/DB 컬럼 삭제(마이그레이션)까지는 이번 요청 범위를 벗어난다고 판단했습니다. 프론트에서 더 이상 이 값을 보내지 않으므로 항상 기본값(False)으로만 저장되어 실질적인 문제는 없습니다.
+
+### "토스페이" → "토스페이 프라임"
+- `fe-app/src/constants/searchOptions.ts`
+  - `PAY_OPTIONS`: `'토스페이'` → `'토스페이 프라임'`
+  - `PAYMENT_METHOD_MAP`: 키를 `'토스페이'` → `'토스페이 프라임'`으로 변경 (백엔드로 보내는 코드값 `TOSS_PAY`는 그대로)
+  - `SUBSCRIPTION_OPTIONS`에서 "토스프라임 (+4% 적립)" 항목 제거
+- `fe-app/src/components/FilterSection.tsx` — "토스프라임 구독 중 (+4% 추가 적립)" 체크박스 블록과 `isTossPaySelected` 변수 제거 (이제 "토스페이 프라임"을 고르는 것 자체가 곧 프라임 회원이라는 뜻)
+- `fe-app/src/pages/SearchPage.tsx` — `activeSubscriptions`에 토스프라임 문구를 넣던 줄 제거
+- `fe-app/src/pages/SearchResultPage.tsx`
+  - API payload의 `has_toss_prime`을 체크박스 값 대신 `filter.usePays && filter.pays.includes('토스페이 프라임')`으로 계산하도록 변경
+  - `formatMethodName`의 `TOSS_PAY` → 표시명을 `'토스페이 프라임'`으로 변경
+- `fe-app/src/pages/MyProfilePage.tsx` — 프로필 저장 payload의 `has_toss_prime`도 동일하게 `filter.pays.includes('토스페이 프라임')` 기준으로 변경
+
+백엔드(`game-pay-api/engine/calculator.py`, `main.py`)의 `has_toss_prime` 게이트 로직 자체는 3번(위 "1. 토스프라임/일반 토스페이 적립률이 구분되지 않는 문제")에서 이미 만들어둔 것을 그대로 재사용했습니다 — 이번엔 그 값을 프론트에서 어떻게 만들어 보내는지만 "체크박스" → "결제수단 선택 여부"로 바꾼 것입니다.
+
+### 검증
+- `python -c "import ast; ast.parse(...)"` 로 `main.py`, `calculator.py` 문법 확인
+- `filter_eligible_benefits`를 직접 호출해, 네이버페이 VIP_MEMBER 행은 어떤 플래그를 넘겨도 항상 제외되고(매핑 자체가 없으므로) 토스페이 VIP_MEMBER 행은 `has_toss_prime=True`일 때만 통과하는지 재확인
+- `has_naver_plus`를 키워드 인자로 넘기면 `TypeError`가 나는 것까지 확인해, 관련 파라미터가 코드에서 완전히 제거됐음을 검증
+- `npx tsc --noEmit` 통과 확인 (타입 에러 없음, `fe-app` 전체)
+- 수동 QA 권장 시나리오
+  1. 필터 화면에 "네이버플러스 멤버십" 체크박스가 더 이상 보이지 않는지 확인
+  2. "사용 간편결제" 목록에 "토스페이"가 아니라 "토스페이 프라임"으로 표시되는지, 별도의 "토스프라임 구독 중" 체크박스는 더 이상 없는지 확인
+  3. "토스페이 프라임"을 선택하고 검색 → 결과 경로에 토스프라임 멤버십 적립(4%/1%)이 정상적으로 계산되는지 확인 (체크박스 없이도 선택만으로 적용되는지)

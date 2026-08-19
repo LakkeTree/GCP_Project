@@ -6,7 +6,7 @@ import FilterSection from '../components/FilterSection';
 import type { OsType } from '../constants/searchOptions';
 import { getGameCode } from '../constants/gameMapping';
 import {
-  CARD_CODE_MAP,
+  resolveCardProviderCode,
   PLATFORM_CODE_MAP,
   PAYMENT_METHOD_MAP,
   LAYER_NAME_MAP,
@@ -65,7 +65,7 @@ const formatMethodName = (text: string) => {
     .replace(/APP_STORE/g, '앱스토어')
     .replace(/SAMSUNG_PAY/g, '삼성페이')
     .replace(/KAKAO_PAY/g, '카카오페이')
-    .replace(/TOSS_PAY/g, '토스페이')
+    .replace(/TOSS_PAY/g, '토스페이 프라임')
     .replace(/NAVER_PAY/g, '네이버페이');
 };
 
@@ -449,12 +449,7 @@ export default function SearchResultPage() {
       //    (전월 실적 충족 여부는 has_prev_spend 필드로 별도 전달되며, 카드 자체를
       //     결제수단 목록에 포함시키는 것과는 무관하다 — 카드를 골랐다면 실적 충족 여부와
       //     상관없이 항상 보유 결제수단으로 전송되어야 한다)
-      let cardCode = CARD_CODE_MAP[filter.selectedSpecialCard] || filter.selectedSpecialCard;
-      
-      if (cardCode === 'KB_NORI2_CARD' || cardCode.includes('NORI2')) {
-        cardCode = 'KB_KOOKMIN_CARD';
-      }
-      
+      const cardCode = resolveCardProviderCode(filter.selectedSpecialCard);
       selectedProviders.push(cardCode);
     }
 
@@ -485,8 +480,9 @@ export default function SearchResultPage() {
           has_prev_spend: filter.useSpecialOptions ? filter.hasPrevSpend : false,
           has_pre_applied: filter.hasPreApplied,
           use_game_benefits: filter.useGameBenefits,
-          has_naver_plus: filter.useNaverMembership,
-          has_toss_prime: filter.useTossPrime,
+          // 💡 "토스페이 프라임"을 결제수단으로 선택한 것 자체가 토스프라임 회원이라는
+          //    뜻이라, 별도 체크박스 없이 pays 선택 여부로 판단한다.
+          has_toss_prime: filter.usePays && filter.pays.includes('토스페이 프라임'),
         };
 
         return fetch(BACKEND_API_URL, {

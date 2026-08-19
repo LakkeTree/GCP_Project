@@ -82,7 +82,6 @@ class RouteRequest(BaseModel):
     has_pre_applied: Optional[bool] = Field(False)
     use_game_benefits: Optional[bool] = Field(True)
     has_subscription: Optional[bool] = Field(False)
-    has_naver_plus: Optional[bool] = Field(False)
     has_toss_prime: Optional[bool] = Field(False)
 
     @field_validator("platform")
@@ -208,7 +207,6 @@ def get_optimal_routes(
             has_pre_applied=request.has_pre_applied,
             use_game_benefits=request.use_game_benefits,
             has_subscription=request.has_subscription,
-            has_naver_plus=request.has_naver_plus,
             has_toss_prime=request.has_toss_prime,
         )
 

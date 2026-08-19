@@ -164,8 +164,6 @@ export default function SearchPage() {
 
     const activeSubscriptions: string[] = [];
     if (filter.useTMembership && filter.osType === 'ANDROID') activeSubscriptions.push('T멤버십 (원스토어 10% 할인/적립)');
-    if (filter.useNaverMembership) activeSubscriptions.push('네이버플러스 멤버십 (+4% 적립)');
-    if (filter.useTossPrime) activeSubscriptions.push('토스프라임 (+4% 적립)');
 
     const params = new URLSearchParams({
       game: gameTitle,

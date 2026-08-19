@@ -5,7 +5,10 @@ export type OsType = 'ANDROID' | 'IOS';
 // ==========================================
 export const ANDROID_STORE_OPTIONS = ['구글 플레이 스토어', '원스토어', '갤럭시 스토어'];
 export const CARRIER_OPTIONS = ['SKT', 'KT', 'LGU+'];
-export const PAY_OPTIONS = ['네이버페이', '카카오페이', '페이코', '토스페이', '삼성페이', '애플페이'];
+// 💡 일반(비회원) 토스페이는 게임 결제에 실질적인 적립률이 없어(0%), 토스프라임
+//    회원 전용 적립만 계산에 의미가 있다. 그래서 "토스페이"를 별도 체크박스로
+//    가입 여부를 다시 묻는 대신, 선택지 자체를 "토스페이 프라임"으로 표기한다.
+export const PAY_OPTIONS = ['네이버페이', '카카오페이', '페이코', '토스페이 프라임', '삼성페이', '애플페이'];
 export const VOUCHER_OPTIONS = [
   '컬쳐랜드(우회/캐시)',
   '구글 핀번 기프트코드',
@@ -41,8 +44,6 @@ export const SPECIAL_CARD_OPTIONS = [
 ];
 
 export const SUBSCRIPTION_OPTIONS = [
-  '네이버플러스 멤버십 (+4% 적립)',
-  '토스프라임 (+4% 적립)',
   'T멤버십 (원스토어 10% 할인/적립)',
 ];
 
@@ -72,6 +73,18 @@ export const CARD_CODE_MAP: Record<string, string> = {
   'HANA_CARD_ONESTORE': 'HANA_CARD',
 };
 
+// 💡 useFilterState.ts가 동적으로 만드는 카드 옵션의 value는
+//    "카드사코드::혜택id" 형태(예: "NH_NONGHYUP_CARD::BNF_CARD_NH_99945c93")다.
+//    같은 카드사 밑에 있는 서로 다른 카드 상품(혜택)을 <select>가 구분할 수 있게
+//    하려고 붙인 접미사이고, 백엔드는 카드사 코드만 이해하므로(계산은 카드사+플랫폼
+//    단위로만 이루어짐) 전송 직전엔 항상 이 함수로 카드사 코드만 잘라내야 한다.
+//    "::"가 없는 값(NONE, 위 CARD_CODE_MAP의 레거시 코드 등)은 그대로/매핑된 값을 반환한다.
+export function resolveCardProviderCode(selectedSpecialCard: string): string {
+  if (CARD_CODE_MAP[selectedSpecialCard]) return CARD_CODE_MAP[selectedSpecialCard];
+  const providerCode = selectedSpecialCard.split('::')[0];
+  return CARD_CODE_MAP[providerCode] || providerCode;
+}
+
 export const PLATFORM_CODE_MAP: Record<string, string> = {
   '구글 플레이 스토어': 'GOOGLE_PLAY',
   '원스토어': 'ONE_STORE',
@@ -86,7 +99,7 @@ export const PAYMENT_METHOD_MAP: Record<string, string> = {
   '네이버페이': 'NAVER_PAY',
   '카카오페이': 'KAKAO_PAY',
   '페이코': 'PAYCO',
-  '토스페이': 'TOSS_PAY',
+  '토스페이 프라임': 'TOSS_PAY',
   '삼성페이': 'SAMSUNG_PAY',
   '애플페이': 'APPLE_PAY',
   '컬쳐랜드(우회/캐시)': 'CULTURELAND_CASH',

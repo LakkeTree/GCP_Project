@@ -22,8 +22,6 @@ export interface FilterState {
   galaxyStoreTier: string;
   isPcVersion: boolean;
   useTMembership: boolean;
-  useNaverMembership: boolean;
-  useTossPrime: boolean;
   useGameBenefits: boolean;
   hasPreApplied: boolean;
   isFirstPayment: boolean;
@@ -47,8 +45,6 @@ export const emptyFilterState: FilterState = {
   galaxyStoreTier: 'STANDARD',
   isPcVersion: false,
   useTMembership: false,
-  useNaverMembership: false,
-  useTossPrime: false,
   useGameBenefits: false,
   hasPreApplied: false,
   isFirstPayment: false,
@@ -144,7 +140,17 @@ export function useFilterState(startEmpty: boolean = false) {
                     addedCardNames.add(cardName);
                     options.push({
                       label: cardName,  // 예: "원스토어1 하나카드", "KB국민 노리2 체크카드"
-                      value: m.code,
+                      // 💡 카드사 코드(m.code)만으로는 같은 카드사 밑의 서로 다른 카드
+                      //    상품(예: NH농협 zgm.play카드 vs GOODGAME 체크카드, KB 노리2
+                      //    구글플레이 버전 vs 앱스토어 버전)을 구분할 수 없다. 예전엔 모든
+                      //    옵션이 value: m.code를 그대로 써서, <select>가 동일 value를
+                      //    가진 옵션들을 구분 못 하고 무엇을 클릭해도 항상 첫 번째 옵션으로
+                      //    표시/적용되는 버그가 있었다. 혜택 고유 id(benefit_id)를 붙여
+                      //    상품별로 값이 겹치지 않게 한다. (백엔드로 보낼 때는
+                      //    resolveCardProviderCode()로 "::" 앞부분만 잘라 원래 카드사
+                      //    코드로 되돌린다 — 계산은 카드사+플랫폼 단위로만 이루어지므로
+                      //    상품 식별자는 UI 구분용으로만 쓰인다)
+                      value: `${m.code}::${b.benefit_id || cardName}`,
                     });
                   }
                 });
@@ -296,8 +302,6 @@ export function useFilterState(startEmpty: boolean = false) {
       hasPreApplied: false,
       isFirstPayment: false,
       useTMembership: false,
-      useNaverMembership: false,
-      useTossPrime: false,
       useSpecialOptions: false,
       selectedSpecialCard: 'NONE',
       hasPrevSpend: false,

@@ -48,11 +48,12 @@ UNREALISTIC_DISCOUNT_PERCENT_THRESHOLD = 100
 # null(None)로 따로 표기되므로 둘을 구분해서 처리한다.
 FALLBACK_PERCENT_CAP_KRW = 10000
 
-# user_segment == "VIP_MEMBER"인 혜택(예: 토스프라임 전용 적립, 네이버플러스 전용 적립)을
-# 실제로 어떤 유저 입력 플래그와 매칭할지 정의. 매핑에 없는 provider는 유저가 해당
-# 멤버십을 갖고 있는지 확인할 방법이 없으므로 보수적으로 제외한다(포함시키지 않는다).
+# user_segment == "VIP_MEMBER"인 혜택(예: 토스프라임 전용 적립)을 실제로 어떤 유저
+# 입력 플래그와 매칭할지 정의. 매핑에 없는 provider는 유저가 해당 멤버십을 갖고
+# 있는지 확인할 방법이 없으므로 보수적으로 제외한다(포함시키지 않는다).
+# 💡 네이버페이는 실제 크롤링 데이터에 게임 결제에 적용되는 "네이버플러스 멤버십
+#    전용 적립" 행 자체가 없어(일반 결제 적립 1%/1.5%/0.5%만 존재) 매핑에서 제외했다.
 VIP_MEMBERSHIP_FLAG_BY_PROVIDER = {
-    "NAVER_PAY": "has_naver_plus",
     "TOSS_PAY": "has_toss_prime",
 }
 
@@ -179,8 +180,7 @@ import datetime
 def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
                              held_methods, is_first_purchase, has_prev_spend=None,
                              has_pre_applied=False, use_game_benefits=True,
-                             has_subscription=False, has_naver_plus=False,
-                             has_toss_prime=False):
+                             has_subscription=False, has_toss_prime=False):
     eligible = []
     warnings = []
 
@@ -292,7 +292,6 @@ def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
         if b.get("user_segment") == "VIP_MEMBER":
             membership_flag_name = VIP_MEMBERSHIP_FLAG_BY_PROVIDER.get(provider_code)
             has_required_membership = {
-                "has_naver_plus": has_naver_plus,
                 "has_toss_prime": has_toss_prime,
             }.get(membership_flag_name, False)
             if not has_required_membership:
@@ -822,7 +821,6 @@ def recommend_best_routes(benefit_rows, platform_rows, platform, amount, held_me
     compat_index = build_compatibility_index(platform_rows)
 
     has_subscription_flag = kwargs.get("has_subscription", False)
-    has_naver_plus_flag = kwargs.get("has_naver_plus", False)
     has_toss_prime_flag = kwargs.get("has_toss_prime", False)
 
     eligible, warnings = filter_eligible_benefits(
@@ -831,7 +829,6 @@ def recommend_best_routes(benefit_rows, platform_rows, platform, amount, held_me
         has_pre_applied=has_pre_applied,
         use_game_benefits=use_game_benefits,
         has_subscription=has_subscription_flag,
-        has_naver_plus=has_naver_plus_flag,
         has_toss_prime=has_toss_prime_flag,
     )
 
