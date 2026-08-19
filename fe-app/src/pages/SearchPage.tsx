@@ -440,12 +440,6 @@ export default function SearchPage() {
                 onLoadSaved={handleLoadSavedFilter}
               />
 
-              {/* 💡 공통 필터 컴포넌트 적용 */}
-              <FilterSection
-                filterState={filterState}
-                onFilterChange={() => setIsDirty(true)}
-              />
-
               <div className="pt-4 space-y-3 border-t border-slate-200">
                 {isLoggedIn && (
                   <button

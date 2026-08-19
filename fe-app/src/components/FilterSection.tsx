@@ -14,7 +14,7 @@ interface FilterSectionProps {
   onFilterChange?: () => void;
   showSaveButton?: boolean;
   onSave?: () => void;
-  onLoadSaved?: () => void; // 💡 저장된 필터 불러오기 콜백 추가
+  onLoadSaved?: () => void;
 }
 
 export default function FilterSection({
@@ -187,10 +187,47 @@ export default function FilterSection({
         </div>
       </div>
 
-      {/* 보너스 이벤트 적용 여부 */}
+      {/* 💡 보너스 및 기타 혜택 적용 여부 (통신사 멤버십 보유 체크박스 이동 완료) */}
       <div className="bg-white rounded-lg border border-slate-200/90 p-5 shadow-xs space-y-3">
-        <h3 className="text-xs font-black text-slate-900 border-b border-slate-100 pb-2.5">보너스 이벤트 적용 여부</h3>
+        <h3 className="text-xs font-black text-slate-900 border-b border-slate-100 pb-2.5">보너스 및 혜택 적용 여부</h3>
         <div className="space-y-2">
+          {/* 통신사 멤버십 보유 중 체크박스 */}
+          <div className="space-y-2">
+            <label className="flex items-center space-x-2.5 p-2.5 bg-slate-50 rounded border border-slate-200 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={filter.useTMembership}
+                onChange={(e) => updateFilter('useTMembership', e.target.checked)}
+                className="w-4 h-4 text-[#00D2B8] rounded cursor-pointer"
+              />
+              <span className="text-xs font-bold text-slate-800">통신사 멤버십 혜택 포함</span>
+            </label>
+
+            {filter.useTMembership && (
+              <div className="pl-1 space-y-2 animate-fadeIn">
+                <div className="flex flex-wrap gap-1.5">
+                  {['SKT T멤버십', 'KT 멤버십', 'LGU+ 멤버십'].map((m) => {
+                    const selected = filter.carriers.includes(m);
+                    return (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => handleToggle('carriers', m)}
+                        className={`px-3 py-1.5 rounded text-xs transition-all ${
+                          selected
+                            ? 'bg-white text-slate-950 font-black border-2 border-[#00D2B8] shadow-[0_2px_8px_rgba(0,210,184,0.35)] cursor-pointer'
+                            : 'bg-slate-50 text-slate-500 font-bold border border-slate-200 cursor-pointer'
+                        }`}
+                      >
+                        {selected ? '✓ ' : '+ '}{m}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
           <label className="flex items-center space-x-2.5 p-2.5 bg-slate-50 rounded border border-slate-200 cursor-pointer">
             <input
               type="checkbox"
@@ -231,7 +268,7 @@ export default function FilterSection({
         </h3>
 
         <div className="space-y-4">
-          {/* 통신사 멤버십 */}
+          {/* 1. 휴대폰 결제 (통신사 소액결제) 선택 영역 */}
           <div className="space-y-2">
             <label className="flex items-center space-x-2 p-2.5 bg-slate-50 rounded border border-slate-200 cursor-pointer">
               <input
@@ -240,10 +277,10 @@ export default function FilterSection({
                 onChange={(e) => updateFilter('useCarriers', e.target.checked)}
                 className="w-4 h-4 text-[#00D2B8] rounded cursor-pointer"
               />
-              <span className="text-xs font-bold text-slate-800">통신사 멤버십 혜택 포함</span>
+              <span className="text-xs font-extrabold text-slate-800">휴대폰 결제 (통신사 소액결제) 선택</span>
             </label>
 
-            <div className={`flex flex-wrap gap-1.5 pl-1 ${filter.useCarriers ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+            <div className={`flex flex-wrap gap-1.5 pl-1 transition-all ${filter.useCarriers ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
               {CARRIER_OPTIONS.map((c) => {
                 const selected = filter.carriers.includes(c);
                 return (
@@ -254,8 +291,8 @@ export default function FilterSection({
                     onClick={() => handleToggle('carriers', c)}
                     className={`px-3 py-1.5 rounded text-xs transition-all ${
                       selected
-                        ? 'bg-white text-slate-950 font-black border-2 border-[#00D2B8] shadow-[0_2px_8px_rgba(0,210,184,0.35)]'
-                        : 'bg-slate-50 text-slate-500 font-bold border border-slate-200'
+                        ? 'bg-white text-slate-950 font-black border-2 border-[#00D2B8] shadow-[0_2px_8px_rgba(0,210,184,0.35)] cursor-pointer'
+                        : 'bg-slate-50 text-slate-500 font-bold border border-slate-200 cursor-pointer'
                     }`}
                   >
                     {selected ? '✓ ' : '+ '}{c}

@@ -373,86 +373,98 @@ def apply_cap(effect, benefit):
 # [단계 5] 경로 A: 상품권 경로
 # =============================================================================
 
-def find_min_overshoot_combo(denominations, target_amount):
+def find_min_overshoot_combo(denominations, target_amount, max_card_qty=3):
     """
-    동전 교환 문제: 주어진 권종으로 target_amount 이상을 최소 초과로 만든다.
-    denomination_list가 문자열("5000;10000")로 들어오는 경우를 대비해 파싱하되,
-    권종 정보가 아예 없거나 비정상 값이면 없는 권종을 지어내지 않고 조용히 제외한다.
-    반환값: (총 액면가, 사용 권종 리스트) 또는 불가능 시 None
+    주어진 권종(denominations)으로 target_amount 이상을 만드는 최소 초과 조합을 연산합니다.
+    max_card_qty: 조합에 사용할 수 있는 최대 카드 수량 (기본값: 3장)
     """
     if isinstance(denominations, str):
         denominations = [int(x) for x in denominations.split(";") if x.strip().isdigit()]
 
     if not denominations or target_amount <= 0:
         return None
-    if not isinstance(denominations, (list, tuple)):
-        return None
 
-    UNIT = 1000
-    if any(d % UNIT != 0 for d in denominations):
-        UNIT = 1
-    denom_units = [d // UNIT for d in denominations]
-    target_units = -(-target_amount // UNIT)   # 올림 나눗셈
-    upper_bound = target_units + max(denom_units)
+    # 중복 조합 탐색 (1장부터 max_card_qty장까지)
+    best_combo = None
+    best_sum = float('inf')
 
-    # reachable[s] = 금액 s를 만드는 권종 조합 (못 만들면 None)
-    reachable = [None] * (upper_bound + 1)
-    reachable[0] = []
-    for s in range(1, upper_bound + 1):
-        for d in denom_units:
-            if d <= s and reachable[s - d] is not None:
-                candidate = reachable[s - d] + [d]
-                if reachable[s] is None or len(candidate) < len(reachable[s]):
-                    reachable[s] = candidate
+    for k in range(1, max_card_qty + 1):
+        for combo in itertools.combinations_with_replacement(denominations, k):
+            s = sum(combo)
+            if s >= target_amount:
+                # 더 적은 금액으로 목표를 달성하거나, 금액이 같다면 수량이 적은 조합 우선
+                if s < best_sum or (s == best_sum and len(combo) < len(best_combo)):
+                    best_sum = s
+                    best_combo = list(combo)
+        # 딱 맞는 금액(best_sum == target_amount)을 찾았으면 조기 종료
+        if best_combo is not None and best_sum == target_amount:
+            break
 
-    for s in range(target_units, upper_bound + 1):
-        if reachable[s] is not None:
-            return s * UNIT, [d * UNIT for d in reachable[s]]
+    if best_combo is not None:
+        return best_sum, best_combo
     return None
 
 
 def build_giftcard_routes(giftcard_benefits, all_benefits, held_methods, platform, target_amount):
-    """
-    denomination_list 기반으로 목표 결제 금액(target_amount)을 충족하는 최소 권종 조합을 찾고,
-    선할인(DISCOUNT)과 추가적립(REWARD/CASHBACK)을 정확히 분리하여 체감가를 연산합니다.
-    """
     routes = []
 
     for benefit in giftcard_benefits:
-        # 1. denomination_list 파싱 및 최소 초과 권종 조합 산출
-        result = find_min_overshoot_combo(benefit.get("denomination_list"), target_amount)
+        raw_text = str(benefit.get("condition_raw_text") or "")
+        provider_code = str(benefit.get("provider_or_retailer") or "").upper()
+        channel_type = str(benefit.get("channel_type") or "").upper()
+
+        # 1. condition_raw_text에서 Denominations 파싱 (없는 경우 denomination_list fallback)
+        denoms = benefit.get("denomination_list")
+        denom_match = re.search(r'Denominations\s*:\s*([0-9;]+)', raw_text, re.IGNORECASE)
+        if denom_match:
+            parsed_denoms = [int(x) for x in denom_match.group(1).split(";") if x.strip().isdigit()]
+            if parsed_denoms:
+                denoms = parsed_denoms
+
+        if not denoms:
+            continue
+
+        # 2. 수량 한도(max_card_qty) 결정
+        # A. condition_raw_text 내 LimitNum: 숫자 파싱
+        limit_match = re.search(r'LimitNum\s*:\s*(\d+)', raw_text, re.IGNORECASE)
+        
+        is_offline = channel_type == "OFFLINE" or any(k in provider_code for k in ["CU", "GS25", "SEVEN", "CONVENIENCE"])
+
+        if is_offline:
+            max_qty = 1  # 🚫 오프라인/편의점 경로는 무조건 최대 1장
+        elif limit_match and int(limit_match.group(1)) > 0:
+            max_qty = int(limit_match.group(1))  # LimitNum 값이 있으면 해당 값 적용
+        else:
+            max_qty = 3  # 💡 기본 온라인 경로는 최대 3장 마지노선 적용
+
+        # 3. 파싱된 권종과 수량 한도로 최소 조합 탐색
+        result = find_min_overshoot_combo(denoms, target_amount, max_card_qty=max_qty)
         if result is None:
             continue
-        
-        face_total, combo = result  # face_total: 권종 합계 (액면가), combo: 구매한 권종 배열
+
+        face_total, combo = result
         btype = benefit.get("benefit_type")
         bunit = benefit.get("benefit_unit")
         bvalue = benefit.get("benefit_value", 0)
 
-        # 2. 혜택 금액 계산 (퍼센트 또는 정액)
         if bunit == "PERCENT":
             effect = face_total * bvalue / 100
         else:
             effect = bvalue
-        
+
         effect = round(apply_cap(effect, benefit))
 
-        # 3. DISCOUNT(선할인) vs REWARD/CASHBACK(추가 적립) 분기 연산
         if btype == "DISCOUNT":
-            # [선할인형]: 정가보다 저렴하게 구매 (지출액 감소, 적립 0)
             actual_spent = face_total - effect
             reward_amount = 0
         elif btype in ("REWARD", "CASHBACK"):
-            # [추가 적립형]: 정가 그대로 지출하고 보너스 포인트/적립금 받음
             actual_spent = face_total
             reward_amount = effect
         else:
             actual_spent = face_total
             reward_amount = 0
 
-        # 결제 후 남는 상품권 잔액
         leftover = face_total - target_amount
-        # 최종 실질 체감가 = 실제 지출액 - 잔액 - 적립금 가치
         net_cost = actual_spent - leftover - reward_amount
 
         steps = [{
@@ -472,13 +484,13 @@ def build_giftcard_routes(giftcard_benefits, all_benefits, held_methods, platfor
             "route_type": "GIFT_CARD",
             "base_amount": target_amount,
             "steps": steps,
-            "final_paid_amount": actual_spent,            # 결제창에서 실제 결제할 금액
-            "payment_method_reward_total": reward_amount,  # 추가 적립금액
+            "final_paid_amount": actual_spent,
+            "payment_method_reward_total": reward_amount,
             "store_reward_total": 0,
             "reward_total": reward_amount,
             "fee_total": 0,
-            "leftover_balance": leftover,                   # 남는 상품권 잔액
-            "net_cost": net_cost,                           # 최종 체감가
+            "leftover_balance": leftover,
+            "net_cost": net_cost,
         })
 
     return routes

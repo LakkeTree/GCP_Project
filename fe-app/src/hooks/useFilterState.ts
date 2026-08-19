@@ -244,14 +244,45 @@ export function useFilterState(startEmpty: boolean = false) {
     }));
   };
 
+// 💡 최소 1개 필수 유지 항목 체크
+  const toggleArrayItem = (key: 'androidStores' | 'carriers' | 'pays' | 'voucherBypasses', item: string) => {
+    setFilter((prev) => {
+      const list = prev[key];
+      const isSelected = list.includes(item);
+
+      // 🚫 1. 스토어 최소 1개 유지 방어
+      if (key === 'androidStores' && isSelected && list.length <= 1) {
+        alert('이용 가능한 스토어는 최소 1개 이상 선택해야 합니다.');
+        return prev;
+      }
+
+      // 🚫 2. 보유 결제수단 총합 최소 1개 유지 방어
+      if (isSelected && (key === 'carriers' || key === 'pays' || key === 'voucherBypasses')) {
+        const totalSelected =
+          (prev.useCarriers ? prev.carriers.length : 0) +
+          (prev.usePays ? prev.pays.length : 0) +
+          (prev.useVoucherBypasses ? prev.voucherBypasses.length : 0);
+
+        if (totalSelected <= 1) {
+          alert('보유 결제 수단은 최소 1개 이상 선택해야 합니다.');
+          return prev;
+        }
+      }
+
+      const nextList = isSelected ? list.filter((i) => i !== item) : [...list, item];
+      return { ...prev, [key]: nextList };
+    });
+  };
+
+  // 💡 [모든 선택 취소] 시에도 기본 스토어 1개와 기본 결제수단 1개는 남겨두도록 설정
   const deselectAll = () => {
     setFilter((prev) => ({
       ...prev,
-      androidStores: [],
+      androidStores: ['구글 플레이 스토어'], // 기본 스토어 1개 유지
       useCarriers: false,
       carriers: [],
-      usePays: false,
-      pays: [],
+      usePays: true,
+      pays: ['카카오페이'], // 기본 결제수단 1개 유지
       useVoucherBypasses: false,
       voucherBypasses: [],
       useGameBenefits: false,
@@ -264,14 +295,6 @@ export function useFilterState(startEmpty: boolean = false) {
       selectedSpecialCard: 'NONE',
       hasPrevSpend: false,
     }));
-  };
-
-  const toggleArrayItem = (key: 'androidStores' | 'carriers' | 'pays' | 'voucherBypasses', item: string) => {
-    setFilter((prev) => {
-      const list = prev[key];
-      const nextList = list.includes(item) ? list.filter((i) => i !== item) : [...list, item];
-      return { ...prev, [key]: nextList };
-    });
   };
 
   return {
