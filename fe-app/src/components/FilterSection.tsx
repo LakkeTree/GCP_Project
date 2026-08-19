@@ -187,47 +187,10 @@ export default function FilterSection({
         </div>
       </div>
 
-      {/* 💡 보너스 및 기타 혜택 적용 여부 (통신사 멤버십 보유 체크박스 이동 완료) */}
+      {/* 보너스 및 혜택 적용 여부 */}
       <div className="bg-white rounded-lg border border-slate-200/90 p-5 shadow-xs space-y-3">
         <h3 className="text-xs font-black text-slate-900 border-b border-slate-100 pb-2.5">보너스 및 혜택 적용 여부</h3>
         <div className="space-y-2">
-          {/* 통신사 멤버십 보유 중 체크박스 */}
-          <div className="space-y-2">
-            <label className="flex items-center space-x-2.5 p-2.5 bg-slate-50 rounded border border-slate-200 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={filter.useTMembership}
-                onChange={(e) => updateFilter('useTMembership', e.target.checked)}
-                className="w-4 h-4 text-[#00D2B8] rounded cursor-pointer"
-              />
-              <span className="text-xs font-bold text-slate-800">통신사 멤버십 혜택 포함</span>
-            </label>
-
-            {filter.useTMembership && (
-              <div className="pl-1 space-y-2 animate-fadeIn">
-                <div className="flex flex-wrap gap-1.5">
-                  {['SKT T멤버십', 'KT 멤버십', 'LGU+ 멤버십'].map((m) => {
-                    const selected = filter.carriers.includes(m);
-                    return (
-                      <button
-                        key={m}
-                        type="button"
-                        onClick={() => handleToggle('carriers', m)}
-                        className={`px-3 py-1.5 rounded text-xs transition-all ${
-                          selected
-                            ? 'bg-white text-slate-950 font-black border-2 border-[#00D2B8] shadow-[0_2px_8px_rgba(0,210,184,0.35)] cursor-pointer'
-                            : 'bg-slate-50 text-slate-500 font-bold border border-slate-200 cursor-pointer'
-                        }`}
-                      >
-                        {selected ? '✓ ' : '+ '}{m}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-
           <label className="flex items-center space-x-2.5 p-2.5 bg-slate-50 rounded border border-slate-200 cursor-pointer">
             <input
               type="checkbox"
@@ -268,16 +231,20 @@ export default function FilterSection({
         </h3>
 
         <div className="space-y-4">
-          {/* 1. 휴대폰 결제 (통신사 소액결제) 선택 영역 */}
+          {/* 1. 통신사 멤버십 및 휴대폰 결제 통합 선택 영역 */}
           <div className="space-y-2">
             <label className="flex items-center space-x-2 p-2.5 bg-slate-50 rounded border border-slate-200 cursor-pointer">
               <input
                 type="checkbox"
                 checked={filter.useCarriers}
-                onChange={(e) => updateFilter('useCarriers', e.target.checked)}
+                onChange={(e) => {
+                  const val = e.target.checked;
+                  setFilter((prev) => ({ ...prev, useCarriers: val, useTMembership: val }));
+                  if (onFilterChange) onFilterChange();
+                }}
                 className="w-4 h-4 text-[#00D2B8] rounded cursor-pointer"
               />
-              <span className="text-xs font-extrabold text-slate-800">휴대폰 결제 (통신사 소액결제) 선택</span>
+              <span className="text-xs font-extrabold text-slate-800">통신사 멤버십 및 휴대폰 결제 사용</span>
             </label>
 
             <div className={`flex flex-wrap gap-1.5 pl-1 transition-all ${filter.useCarriers ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
@@ -418,13 +385,52 @@ export default function FilterSection({
         {filter.useSpecialOptions && (
           <div className="space-y-3 pt-1">
             <select
-              value={filter.selectedSpecialCard}
-              onChange={(e) => updateFilter('selectedSpecialCard', e.target.value)}
+              value={
+                filter.selectedSpecialCard.includes('NORI2')
+                  ? 'KB_NORI2_CARD'
+                  : filter.selectedSpecialCard
+              }
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === 'KB_NORI2_CARD') {
+                  const targetCard =
+                    filter.osType === 'IOS'
+                      ? 'KB_NORI2_APPSTORE'
+                      : 'KB_NORI2_PLAYSTORE';
+                  updateFilter('selectedSpecialCard', targetCard);
+                } else {
+                  updateFilter('selectedSpecialCard', val);
+                }
+              }}
               className="w-full px-3 py-2 text-xs rounded border border-slate-300 bg-white font-medium text-slate-800"
             >
-              {dynamicCardOptions.map((card, idx) => (
-                <option key={`${card.value}-${idx}`} value={card.value}>{card.label}</option>
-              ))}
+              {(() => {
+                const filtered = dynamicCardOptions.filter(
+                  (card) =>
+                    card.value !== 'SAMSUNG_PAY' &&
+                    card.value !== 'SAMSUNG_PAYMENT' &&
+                    card.label.toUpperCase() !== 'SAMSUNG PAY' &&
+                    card.label !== '삼성페이' &&
+                    !card.value.includes('NORI2')
+                );
+
+                const hasNori2 = dynamicCardOptions.some((card) =>
+                  card.value.includes('NORI2')
+                );
+
+                if (hasNori2) {
+                  filtered.splice(2, 0, {
+                    value: 'KB_NORI2_CARD',
+                    label: 'KB국민 노리2 체크카드 (구글플레이/앱스토어)',
+                  });
+                }
+
+                return filtered.map((card, idx) => (
+                  <option key={`${card.value}-${idx}`} value={card.value}>
+                    {card.label}
+                  </option>
+                ));
+              })()}
             </select>
 
             {filter.selectedSpecialCard !== 'NONE' && (

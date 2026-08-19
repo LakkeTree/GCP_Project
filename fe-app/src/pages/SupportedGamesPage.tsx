@@ -108,7 +108,7 @@ export default function SupportedGamesPage() {
     return () => observer.disconnect();
   }, [games]);
 
-  const genres = ['전체', 'RPG', '캐주얼', '스포츠', '액션', '전략', '시뮬레이션', '서브컬처'];
+  const genres = ['전체', 'RPG', '캐주얼', '스포츠', '액션', '전략', '시뮬레이션'];
 
   const filtered = games.filter((g) => {
     const cleanTags = parseGenreTags(g.genre_tags);

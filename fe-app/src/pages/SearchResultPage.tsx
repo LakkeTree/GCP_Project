@@ -439,8 +439,14 @@ export default function SearchResultPage() {
       });
     }
 
-    if (filter.useSpecialOptions && filter.selectedSpecialCard !== 'NONE') {
-      const cardCode = CARD_CODE_MAP[filter.selectedSpecialCard] || filter.selectedSpecialCard;
+    if (filter.useSpecialOptions && filter.selectedSpecialCard !== 'NONE' && filter.hasPrevSpend) {
+      // 💡 유저가 선택한 정확한 카드의 코드 1개만 매핑해서 백엔드로 전송 (전월 실적 충족 체크 시에만 작동)
+      let cardCode = CARD_CODE_MAP[filter.selectedSpecialCard] || filter.selectedSpecialCard;
+      
+      if (cardCode === 'KB_NORI2_CARD' || cardCode.includes('NORI2')) {
+        cardCode = 'KB_KOOKMIN_CARD';
+      }
+      
       selectedProviders.push(cardCode);
     }
 
@@ -467,7 +473,7 @@ export default function SearchResultPage() {
           payment_methods: selectedProviders,
           game: getGameCode(gameToQuery),
           membership_tier: tier,
-          has_subscription: filter.useTMembership,
+          has_subscription: filter.useCarriers, // 💡 통신사 통합 체크박스 상태 연동
           has_prev_spend: filter.useSpecialOptions ? filter.hasPrevSpend : false,
           has_pre_applied: filter.hasPreApplied,
           use_game_benefits: filter.useGameBenefits,

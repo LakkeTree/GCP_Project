@@ -151,88 +151,70 @@ import datetime
 
 def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
                              held_methods, is_first_purchase, has_prev_spend=None,
-                             has_pre_applied=False, use_game_benefits=True):
+                             has_pre_applied=False, use_game_benefits=True,
+                             has_subscription=False):
     eligible = []
     warnings = []
 
     req_platform = str(platform).upper()
-
-
-def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
-                             held_methods, is_first_purchase, has_prev_spend=None,
-                             has_pre_applied=False, use_game_benefits=True):
-    """
-    has_prev_spend: None=모름(경고와 함께 포함), True=충족(경고 없이 포함),
-                    False=미충족(제외).
-    has_pre_applied: 사전 응모를 완료했는지. requires_pre_app 혜택은 이게 True여야 포함.
-    use_game_benefits: False면 target_game이 특정 게임 전용인 혜택 자체를 배제한다.
-
-    반환값: (통과한 혜택 리스트, 유저가 직접 확인해야 하는 조건 경고 리스트)
-    """
-    eligible = []
-    warnings = []
-
-    req_platform = str(platform).upper()
-
-    # 💡 오늘 날짜 기준 문자열 (YYYY-MM-DD)
-    today_str = datetime.date.today().strftime("%Y-%m-%d")
-
-    # 💡 오늘 날짜 기준 ISO 문자열 생성 (예: "2026-08-19")
     today_str = datetime.date.today().isoformat()
 
     for b in benefits:
-        # 0. 💡 이벤트 기간(start_date ~ end_date) 유효성 검증
+        # 0. 이벤트 기간 검증
         start_d = str(b.get("start_date") or "").strip()
         end_d = str(b.get("end_date") or "").strip()
 
-        # 시작일이 존재하고 오늘보다 미래인 경우 -> 아직 시작 전이므로 제외
         if start_d and start_d not in ("NONE", "null") and start_d > today_str:
             continue
-
-        # 종료일이 존재하고 오늘보다 과거인 경우 -> 종료된 이벤트이므로 제외
-        # (end_date가 없거나 Null/None/NONE인 경우는 영구/상시 혜택으로 간주하여 자동 통과)
         if end_d and end_d not in ("NONE", "null") and end_d < today_str:
             continue
 
-        # 1. 스토어 등급 기본 적립 데이터는 별도 함수에서 처리하므로 제외
+        # 1. 스토어 등급 기본 적립 제외
         if b.get("category") in ("REWARD_STORE", "SUMMARY_STORE_TIER_REWARD_RATES"):
             continue
 
         target_p = str(b.get("target_platform") or "").upper()
         provider_code = str(b.get("provider_or_retailer") or "").upper()
+        raw_cond_str = str(b.get("condition_raw_text") or "").upper()
+        item_event_str = str(b.get("item_or_event_name") or "").upper()
+        category_str = str(b.get("category") or "").upper()
+        restriction_str = str(b.get("payment_method_restriction") or "").upper()
+
+        # 💡 [핵심] 통신사 결제/멤버십 혜택 필터링 (통신사 체크박스 오프 시 100% 차단)
+        TELECOM_KEYWORDS = ["휴대폰결제", "휴대폰 결제", "소액결제", "통신사결제", "통신사 결제", "SKT", "KT", "LGU", "통신사", "T멤버십", "T_MEMBERSHIP", "TELECOM"]
+        requires_telecom = (
+            restriction_str == "PHONE_BILLING_ONLY" or
+            "BILLING" in category_str or
+            "BILLING" in provider_code or
+            "TELECOM" in category_str or
+            "TELECOM" in provider_code or
+            "T_MEMBERSHIP" in provider_code or
+            any(kw in raw_cond_str or kw in item_event_str or kw in provider_code for kw in TELECOM_KEYWORDS) or
+            provider_code in ("SKT", "KT", "LGU_PLUS", "TELECOM_DISCOUNT", "SKT_TELECOM", "KT_TELECOM", "LGU_TELECOM", "T_MEMBERSHIP", "TELECOM")
+        )
+
+        if requires_telecom:
+            telecom_keys = {"TELECOM_DISCOUNT", "SKT", "KT", "LGU_PLUS", "SKT_TELECOM", "KT_TELECOM", "LGU_TELECOM", "TELECOM", "T_MEMBERSHIP"}
+            has_telecom_held = any(m in telecom_keys for m in held_methods)
+            if not has_telecom_held or not has_subscription:
+                continue  # 🚫 통신사 옵션 해제 시 배제
+
         event_name = str(b.get("item_or_event_name") or "").upper()
 
-        # 2. [완벽 차단] 타 스토어 혜택 및 T멤버십 교차 유입 철저 차단
+        # 2. 타 스토어 혜택 교차 유입 차단
         if req_platform == "GOOGLE_PLAY":
-            # 구글 연산 시 원스토어, T멤버십, 갤스, 앱스토어 키워드가 포함된 모든 혜택 차단
             if any(k in target_p or k in provider_code or k in event_name for k in ["ONE_STORE", "ONESTORE", "원스토어", "T_MEMBERSHIP", "T멤버십", "GALAXY", "갤스", "APP_STORE"]):
                 continue
         elif req_platform == "ONE_STORE":
-            # 원스토어 연산 시 구글, 갤스, 앱스토어 전용 혜택 차단
             if any(k in target_p or k in provider_code or k in event_name for k in ["GOOGLE_PLAY", "GOOGLE", "GALAXY", "갤스", "APP_STORE"]):
                 continue
         elif req_platform == "GALAXY_STORE":
-            # 갤럭시 스토어 연산 시 구글, 원스토어, 앱스토어 전용 혜택 차단
             if any(k in target_p or k in provider_code or k in event_name for k in ["GOOGLE_PLAY", "GOOGLE", "ONE_STORE", "ONESTORE", "원스토어", "T_MEMBERSHIP", "T멤버십", "APP_STORE"]):
                 continue
         elif req_platform == "APP_STORE":
-            # 앱스토어 연산 시 구글, 원스토어, 갤스 전용 혜택 차단
             if any(k in target_p or k in provider_code or k in event_name for k in ["GOOGLE_PLAY", "GOOGLE", "ONE_STORE", "ONESTORE", "원스토어", "T_MEMBERSHIP", "T멤버십", "GALAXY", "갤스"]):
                 continue
 
-        # 2. [핵심] 다른 스토어 전용 쿠폰이 교차로 유입되는 현상 영구 차단
-        if req_platform == "GOOGLE_PLAY":
-            if "ONE_STORE" in target_p or "ONE_STORE" in provider_code or "GALAXY" in target_p or "GALAXY" in provider_code:
-                continue
-        elif req_platform == "ONE_STORE":
-            if "GOOGLE_PLAY" in target_p or "GALAXY" in target_p or "APP_STORE" in target_p:
-                continue
-        elif req_platform == "GALAXY_STORE":
-            if "GOOGLE_PLAY" in target_p or "ONE_STORE" in target_p or "APP_STORE" in target_p:
-                continue
-        elif req_platform == "APP_STORE":
-            if "GOOGLE_PLAY" in target_p or "ONE_STORE" in target_p or "GALAXY" in target_p:
-                continue
         if b["benefit_type"] not in CALCULABLE_TYPES:
             continue
         if b["disbursement_type"] in EXCLUDED_DISBURSEMENT:
@@ -245,16 +227,9 @@ def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
         if b["target_platform"] != "ALL" and b["target_platform"] != platform:
             continue
 
-        # 보유 결제수단 검증. STORE_COUPON 계층은 provider_or_retailer에 "결제수단"이
-        # 아니라 "스토어 이름"이 들어있어 별도 처리한다. GIFT_CARD/VOUCHER_PURCHASE는
-        # 문화상품권 등 우회 보유 수단(컬쳐랜드 캐시/상품권, 각종 상품권 판매처)을
-        # 갖고 있어도 적용 가능하다.
-        # 스토어 관련 제공자(GOOGLE_PLAY, ONE_STORE 등)는 자동으로 보유 수단으로 인정
         effective_held_methods = set(held_methods) | {platform, "GOOGLE_PLAY", "ONE_STORE", "GALAXY_STORE", "APP_STORE"}
-        
-        provider_code = str(b.get("provider_or_retailer") or "").upper()
-        
-        # 보유 결제수단 검증 (유연 유효 매칭)
+
+        # 일반 결제수단 검증
         norm_layer = _normalize_layer(b.get("stacking_layer"))
         if norm_layer != "STORE_COUPON":
             if b.get("category") in ("GIFT_CARD", "VOUCHER_PURCHASE"):
@@ -262,14 +237,13 @@ def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
                 if not giftcard_held and provider_code not in effective_held_methods:
                     continue
             else:
-                # 결제수단 코드 상호 검사 (단어 단위 토큰 비교로 "KT"가 "SKT"에 포함되는 오탐 차단)
+                # 💡 선택하지 않은 타 제휴 카드가 오버랩되어 계산되는 현상을 막기 위해 완전 일치 검증 적용
                 def _is_method_matched(held_set, provider):
-                    p_tokens = set(provider.split("_"))
                     for h in held_set:
                         if h == provider:
                             return True
-                        h_tokens = set(h.split("_"))
-                        if h_tokens & p_tokens:
+                        # 카드사/결제 수단 식별자가 정확히 완전 일치하는 경우만 허용
+                        if h.startswith("BNF_CARD_") and h == provider:
                             return True
                     return False
 
@@ -283,13 +257,12 @@ def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
         if b.get("requires_pre_app") and not has_pre_applied:
             continue
 
-        # 💡 target_game의 NOT: / EXCEPT: / EXCLUDE: 제외 게임 로직 파싱
+        # 게임 전용 혜택 검증
         b_target_raw = str(b.get("target_game") or "ALL").strip()
         req_game_norm = _normalize_game_string(game)
 
         prefix_match = re.match(r'^(NOT|EXCEPT|EXCLUDE)\s*:\s*(.*)$', b_target_raw, re.IGNORECASE)
         if prefix_match:
-            # NOT: 접두사가 있을 경우 지정된 제외 대상 게임 리스트 추출
             excluded_games = [g.strip() for g in re.split(r'[,;/]', prefix_match.group(2)) if g.strip()]
             is_excluded = False
             for ex_game in excluded_games:
@@ -298,7 +271,7 @@ def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
                     is_excluded = True
                     break
             if is_excluded:
-                continue  # 🚫 제외 대상 게임이면 혜택에서 차단
+                continue
         else:
             b_target_norm = _normalize_game_string(b_target_raw)
             if not use_game_benefits:
@@ -321,7 +294,6 @@ def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
         if b["is_first_purchase"] and not is_first_purchase:
             continue
 
-        # 누적 실적 조건이 텍스트에만 있고 구조화 안 된 경우, 검증 불가로 보고 제외한다.
         UNSTRUCTURED_THRESHOLD_KEYWORDS = ("월간 누적", "연간 누적", "전월 누적")
         text = b.get("condition_raw_text") or ""
         if b["min_prev_month_spend_krw"] is None and \
@@ -351,6 +323,7 @@ def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
         eligible.append(b)
 
     return eligible, warnings
+
 
 
 # =============================================================================
@@ -596,13 +569,26 @@ def generate_combinations(benefits):
 
     valid_combos = []
     for combo in all_combos:
-        # PAYMENT_LAYER_ORDER = ["STORE_COUPON", "PAYMENT_PG", "PAYMENT_E_PAY", "CARD_ISSUER"]
         store_coupon, payment_pg, payment_epay, card_issuer = combo
         
-        # 💡 [핵심 수정] 스토어 쿠폰을 제외한 결제 수단(통신사/PG, 간편결제, 카드사) 중 2개 이상 동시 중첩 차단
+        # 1. 결제 수단 중 2개 이상 동시 중첩 차단
         selected_payments = [m for m in (payment_pg, payment_epay, card_issuer) if m is not None]
         if len(selected_payments) > 1:
             continue
+
+        # 💡 [핵심] 쿠폰 혜택 2개 이상 중복 적용 차단 (8월 월간 쿠폰 + 첫 결제 쿠폰 중첩 방지)
+        active_benefits = [b for b in combo if b is not None]
+        coupon_count = 0
+        for b in active_benefits:
+            b_cat = str(b.get("category") or "").upper()
+            b_layer = _normalize_layer(b.get("stacking_layer"))
+            b_title = f"{b.get('item_or_event_name', '')} {b.get('condition_raw_text', '')}"
+            
+            if b_cat == "COUPON" or b_layer == "STORE_COUPON" or "쿠폰" in b_title or "COUPON" in b_title.upper() or "첫 결제" in b_title or "첫결제" in b_title:
+                coupon_count += 1
+
+        if coupon_count > 1:
+            continue  # 🚫 쿠폰 2개 이상 동시 적용 차단
 
         valid_combos.append(combo)
 
@@ -785,11 +771,14 @@ def recommend_best_routes(benefit_rows, platform_rows, platform, amount, held_me
                           use_game_benefits=True, **kwargs):
     compat_index = build_compatibility_index(platform_rows)
 
+    has_subscription_flag = kwargs.get("has_subscription", False)
+
     eligible, warnings = filter_eligible_benefits(
         benefit_rows, compat_index, platform, game, amount, held_methods, is_first_purchase,
         has_prev_spend=has_prev_spend,
         has_pre_applied=has_pre_applied,
         use_game_benefits=use_game_benefits,
+        has_subscription=has_subscription_flag,
     )
 
     giftcard_benefits = [b for b in eligible if b.get("category") == "GIFT_CARD"]
