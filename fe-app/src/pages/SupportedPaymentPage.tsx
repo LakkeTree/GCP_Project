@@ -58,6 +58,7 @@ export interface PaymentMethodItem {
   name: string;
   icon: string;
   icon_url?: string;
+  payment_method_icon_url?: string;
   category: MethodCategory;
   tag: string;
   benefit_count: number;
@@ -72,7 +73,7 @@ const getInitialPayments = (): PaymentMethodItem[] => {
       const parsed = JSON.parse(localData);
       if (Array.isArray(parsed) && parsed.length > 0) return parsed;
     }
-  } catch (e) {}
+  } catch (e) { }
   return [];
 };
 
@@ -80,7 +81,7 @@ export default function SupportedPaymentPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<MethodCategory>('ALL');
   const [modalType, setModalType] = useState<'terms' | 'privacy' | 'contact' | null>(null);
-  
+
   const initialData = getInitialPayments();
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodItem[]>(initialData);
   const [loading, setLoading] = useState<boolean>(initialData.length === 0);
@@ -94,62 +95,57 @@ export default function SupportedPaymentPage() {
       .then((res) => res.json())
       .then((result) => {
         if (isMounted && result.status === 'ok' && Array.isArray(result.data)) {
-          // SupportedPaymentPage.tsx 내부 useEffect 데이터 처리 로직 수정
+          const VOUCHER_KEYWORDS = [
+            'GIFTCARD', 'GIFT_CARD', 'GIFT', 'SSG', '11STREET', 'GMARKET',
+            'CONVENIENCE', 'CU_', 'GS25', 'SEVEN', 'ZEROPIN', 'NAVER_STORE', 'APPLE_GIFT', 'VOUCHER', 'CULTURELAND', 'BOOKNLIFE'
+          ];
 
-        const VOUCHER_KEYWORDS = [
-          'GIFTCARD', 'GIFT_CARD', 'GIFT', 'SSG', '11STREET', 'GMARKET',
-          'CONVENIENCE', 'CU_', 'GS25', 'SEVEN', 'ZEROPIN', 'NAVER_STORE', 'APPLE_GIFT', 'VOUCHER', 'CULTURELAND', 'BOOKNLIFE'
-        ];
+          const processedData = result.data.map((m: PaymentMethodItem) => {
+            const codeUpper = (m.code || '').toUpperCase();
+            const mappedInfo = KOREAN_PAYMENT_MAP[codeUpper];
 
-        // SupportedPaymentPage.tsx 의 useEffect 내부 처리 부분
+            const commonBenefits = (m.benefits || []).filter(
+              (b) => !b.target_game || b.target_game === 'ALL'
+            );
 
-        const processedData = result.data.map((m: PaymentMethodItem) => {
-          const codeUpper = (m.code || '').toUpperCase();
-          const mappedInfo = KOREAN_PAYMENT_MAP[codeUpper];
+            const isVoucher = VOUCHER_KEYWORDS.some(
+              (kw) => codeUpper.includes(kw) || m.name.toUpperCase().includes(kw)
+            );
 
-          // 💡 특정 게임 전용 혜택(target_game !== 'ALL') 제거 및 공통 혜택만 유지
-          const commonBenefits = (m.benefits || []).filter(
-            (b) => !b.target_game || b.target_game === 'ALL'
-          );
+            const isPay = codeUpper.includes('PAY') || codeUpper === 'SAMSUNG_PAY';
 
-          const isVoucher = VOUCHER_KEYWORDS.some(
-            (kw) => codeUpper.includes(kw) || m.name.toUpperCase().includes(kw)
-          );
+            const isCard = !isVoucher && !isPay && (
+              m.category === 'CARD' ||
+              codeUpper.includes('CARD') ||
+              codeUpper.includes('SHINHAN') ||
+              codeUpper.includes('KB') ||
+              codeUpper.includes('HANA') ||
+              codeUpper.includes('NH')
+            );
 
-          const isPay = codeUpper.includes('PAY') || codeUpper === 'SAMSUNG_PAY';
+            let finalCategory: MethodCategory = m.category;
+            let finalTag = m.tag;
 
-          const isCard = !isVoucher && !isPay && (
-            m.category === 'CARD' ||
-            codeUpper.includes('CARD') ||
-            codeUpper.includes('SHINHAN') ||
-            codeUpper.includes('KB') ||
-            codeUpper.includes('HANA') ||
-            codeUpper.includes('NH')
-          );
+            if (isVoucher) {
+              finalCategory = 'VOUCHER';
+              finalTag = '상품권 우회';
+            } else if (isPay) {
+              finalCategory = 'PAY';
+              finalTag = '간편결제';
+            } else if (isCard) {
+              finalCategory = 'CARD';
+              finalTag = '제휴 카드';
+            }
 
-          let finalCategory: MethodCategory = m.category;
-          let finalTag = m.tag;
-
-          if (isVoucher) {
-            finalCategory = 'VOUCHER';
-            finalTag = '상품권 우회';
-          } else if (isPay) {
-            finalCategory = 'PAY';
-            finalTag = '간편결제';
-          } else if (isCard) {
-            finalCategory = 'CARD';
-            finalTag = '제휴 카드';
-          }
-
-          return {
-            ...m,
-            name: mappedInfo ? mappedInfo.name : m.name,
-            category: finalCategory,
-            tag: finalTag,
-            benefits: commonBenefits, // 공통 혜택으로 교체
-            benefit_count: commonBenefits.length, // 혜택 개수 재집계
-          };
-        });
+            return {
+              ...m,
+              name: mappedInfo ? mappedInfo.name : m.name,
+              category: finalCategory,
+              tag: finalTag,
+              benefits: commonBenefits,
+              benefit_count: commonBenefits.length,
+            };
+          });
 
           setPaymentMethods(processedData);
           localStorage.setItem('cached_payments_list', JSON.stringify(processedData));
@@ -174,25 +170,22 @@ export default function SupportedPaymentPage() {
   ] as const;
 
   const filtered = paymentMethods.filter((m) => {
-    // 💡 1. 스토어 자체 수단 및 더미 결제수단 코드 제외
     const EXCLUDE_CODES = [
       'CREDIT_CHECK_CARD',
       'STORE_MEMBERSHIP_REWARD',
       'CULTURELAND_PAYMENT',
       'TELECOM_DISCOUNT',
       'QUICK_BANK_TRANSFER',
-      'ONE_STORE',       // 원스토어 자체 수단 제외
-      'GOOGLE_PLAY',     // 구글플레이 자체 수단 제외
-      'GALAXY_STORE',    // 갤럭시스토어 자체 수단 제외
-      'APP_STORE'        // 앱스토어 자체 수단 제외
+      'ONE_STORE',
+      'GOOGLE_PLAY',
+      'GALAXY_STORE',
+      'APP_STORE'
     ];
     if (EXCLUDE_CODES.includes(m.code.toUpperCase())) return false;
 
-    // 2. 공통 혜택이 0개인 결제 수단 제외
     const benefitCount = m.benefit_count || (m.benefits ? m.benefits.length : 0);
     if (benefitCount === 0) return false;
 
-    // 3. 카테고리 및 검색어 필터링
     const matchesCategory = activeCategory === 'ALL' || m.category === activeCategory;
     const matchesSearch =
       m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -262,7 +255,7 @@ export default function SupportedPaymentPage() {
               <p className="text-xs text-slate-500 font-medium">
                 실시간 최저가 연산 및 혜택 중첩이 가능한 결제 수단 리스트입니다.
               </p>
-              
+
               <div className="pt-2 space-y-3">
                 <input
                   type="text"
@@ -303,6 +296,7 @@ export default function SupportedPaymentPage() {
                 {filtered.map((item) => {
                   const benefitCount = item.benefit_count || (item.benefits ? item.benefits.length : 0);
                   const hasBenefits = benefitCount > 0;
+                  const itemImgUrl = item.icon_url || item.payment_method_icon_url;
 
                   return (
                     <div
@@ -312,10 +306,11 @@ export default function SupportedPaymentPage() {
                     >
                       <div className="space-y-3">
                         <div className="flex items-center justify-between">
-                          {item.icon_url && item.icon_url.startsWith('http') ? (
+                          {itemImgUrl ? (
                             <img
-                              src={item.icon_url}
+                              src={itemImgUrl}
                               alt={item.name}
+                              referrerPolicy="no-referrer"
                               className="w-10 h-10 object-contain rounded shrink-0 border border-slate-100 p-0.5 bg-white shadow-2xs"
                               onError={(e) => {
                                 e.currentTarget.style.display = 'none';
@@ -328,7 +323,7 @@ export default function SupportedPaymentPage() {
 
                           <div
                             className="w-10 h-10 rounded-lg bg-gradient-to-br from-slate-100 to-slate-200 items-center justify-center text-slate-700 border border-slate-300/80 shrink-0 shadow-xs"
-                            style={{ display: item.icon_url && item.icon_url.startsWith('http') ? 'none' : 'flex' }}
+                            style={{ display: itemImgUrl ? 'none' : 'flex' }}
                           >
                             <svg className="w-5 h-5 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
                               <rect x="2" y="5" width="20" height="14" rx="3" ry="3" />
@@ -402,7 +397,7 @@ export default function SupportedPaymentPage() {
               </div>
             </div>
 
-            <button 
+            <button
               type="button"
               onClick={() => setModalType('contact')}
               className="w-full py-2.5 bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] hover:brightness-105 text-slate-950 font-black text-xs rounded transition-all shadow-md cursor-pointer"
@@ -424,8 +419,13 @@ export default function SupportedPaymentPage() {
           >
             <div className="flex items-center justify-between border-b pb-3">
               <div className="flex items-center space-x-3">
-                {selectedMethodForDetail.icon_url && selectedMethodForDetail.icon_url.startsWith('http') ? (
-                  <img src={selectedMethodForDetail.icon_url} alt={selectedMethodForDetail.name} className="w-8 h-8 object-contain" />
+                {selectedMethodForDetail.icon_url || selectedMethodForDetail.payment_method_icon_url ? (
+                  <img
+                    src={selectedMethodForDetail.icon_url || selectedMethodForDetail.payment_method_icon_url}
+                    alt={selectedMethodForDetail.name}
+                    referrerPolicy="no-referrer"
+                    className="w-8 h-8 object-contain"
+                  />
                 ) : (
                   <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center text-slate-600 border border-slate-200">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">

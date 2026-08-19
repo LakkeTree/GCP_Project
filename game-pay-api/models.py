@@ -62,3 +62,11 @@ class OutboundClickLogModel(Base):
     selected_route_id = Column(String(100), nullable=False)
     saved_amount = Column(Integer, default=0)
     clicked_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # [신규] 2차 PRD: 검색 카운트 수집 로그
+class GameSearchLogModel(Base):
+    __tablename__ = "game_search_logs"  # PostgreSQL에 별도로 생길 테이블명
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    game_name = Column(String(100), nullable=False, index=True)
+    searched_at = Column(DateTime(timezone=True), server_default=func.now())
