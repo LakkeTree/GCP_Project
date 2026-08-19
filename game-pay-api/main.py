@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import List, Optional
 
@@ -13,10 +14,6 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import func
 from google.cloud import bigquery
 
-from auth import verify_google_token_and_get_user, verify_google_token_optional
-from database import Base, engine, get_db
-from engine.loader import get_client, recommend_best_routes
-
 # -----------------------------------------------------------------------------
 # 1. 내부 모듈 Import (인증, DB, 모델)
 # -----------------------------------------------------------------------------
@@ -24,10 +21,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 if str(BASE_DIR) not in sys.path:
     sys.path.append(str(BASE_DIR))
 
-from auth import verify_google_token_and_get_user, verify_google_token_optional
+from auth import require_admin, verify_google_token_and_get_user, verify_google_token_optional
 from database import Base, engine, get_db
 from engine.loader import get_client, recommend_best_routes
-from models import GameRequestLogModel, GameSearchLogModel, OutboundClickLogModel, UserModel
+from models import GameRequestLogModel, GameSearchLogModel, OutboundClickLogModel, UserGameActivityLogModel, UserModel
 
 PROJECT_ID = os.getenv("GCP_PROJECT_ID", "positive-tuner-504502-m5")
 DATASET_ID = os.getenv("BIGQUERY_DATASET_ID", "benefit")
@@ -190,9 +187,13 @@ def get_supported_games(search: Optional[str] = None):
 
 # [최저가 추천 연산 API]
 @app.post("/routes", summary="최적 결제 경로 계산")
-def get_optimal_routes(request: RouteRequest):
+def get_optimal_routes(
+    request: RouteRequest,
+    current_user: Optional[UserModel] = Depends(verify_google_token_optional),
+    db: Session = Depends(get_db),
+):
     try:
-        return recommend_best_routes(
+        result = recommend_best_routes(
             platform=request.platform,
             amount=request.amount,
             held_methods=list(request.payment_methods),
@@ -204,6 +205,17 @@ def get_optimal_routes(request: RouteRequest):
             has_pre_applied=request.has_pre_applied,
             use_game_benefits=request.use_game_benefits,
         )
+
+        # 관리자 대시보드용 유저별 게임 이용 로그 (로그인 유저만 적재)
+        if current_user and request.game and request.game != "ALL":
+            db.add(UserGameActivityLogModel(
+                user_id=current_user.user_id,
+                game_name=request.game,
+                event_type="ROUTE_CALC",
+            ))
+            db.commit()
+
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"계산 엔진 처리 오류: {str(e)}")
 
@@ -253,6 +265,7 @@ def get_user_profile(current_user: UserModel = Depends(verify_google_token_and_g
             "email": current_user.email,
             "nickname": current_user.nickname,
             "provider": current_user.provider,
+            "role": current_user.role,
             "telecom": current_user.telecom,
             "use_t_membership": getattr(current_user, "use_t_membership", False),
             "held_epay": parse_db_list(current_user.held_epay),
@@ -484,14 +497,27 @@ def get_supported_payment_methods():
 
 # [게임 검색 카운트 수집 API]
 @app.post("/games/search-log", summary="게임 검색 카운트 수집")
-def log_game_search(req: GameSearchLogRequest, db: Session = Depends(get_db)):
+def log_game_search(
+    req: GameSearchLogRequest,
+    current_user: Optional[UserModel] = Depends(verify_google_token_optional),
+    db: Session = Depends(get_db),
+):
     game_name = req.game_name.strip()
     if not game_name:
         return {"status": "ignored"}
-    
+
     try:
         log_entry = GameSearchLogModel(game_name=game_name)
         db.add(log_entry)
+
+        # 관리자 대시보드용 유저별 게임 이용 로그 (로그인 유저만 적재)
+        if current_user:
+            db.add(UserGameActivityLogModel(
+                user_id=current_user.user_id,
+                game_name=game_name,
+                event_type="SEARCH",
+            ))
+
         db.commit()
         return {"status": "success", "message": f"'{game_name}' 검색 카운트 기록 완료"}
     except SQLAlchemyError as e:
@@ -549,3 +575,199 @@ def get_game_ranks(category: str = "HOGAENG", db: Session = Depends(get_db)):
                 {"rank": 3, "name": "오딘: 발할라 라이징", "benefitText": "검색량 급상승", "rankChange": "UP", "rankChangeText": "▲2", "badge": "상승"},
             ]
         }
+
+
+# -----------------------------------------------------------------------------
+# 관리자 대시보드 API (UserModel.role == "ROLE_ADMIN" 회원만 접근 가능)
+# -----------------------------------------------------------------------------
+
+@app.get("/admin/stats/summary", summary="[관리자] 총 이용자 수 & 활성 사용자 수 통계")
+def get_admin_stats_summary(
+    current_admin: UserModel = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    total_users = db.query(func.count(UserModel.user_id)).scalar() or 0
+
+    now = datetime.now(timezone.utc)
+    dau_cutoff = now - timedelta(days=1)
+    wau_cutoff = now - timedelta(days=7)
+    mau_cutoff = now - timedelta(days=30)
+
+    active_daily = db.query(func.count(UserModel.user_id)).filter(UserModel.last_login_at >= dau_cutoff).scalar() or 0
+    active_weekly = db.query(func.count(UserModel.user_id)).filter(UserModel.last_login_at >= wau_cutoff).scalar() or 0
+    active_monthly = db.query(func.count(UserModel.user_id)).filter(UserModel.last_login_at >= mau_cutoff).scalar() or 0
+
+    return {
+        "status": "success",
+        "data": {
+            "total_users": total_users,
+            "active_users_daily": active_daily,
+            "active_users_weekly": active_weekly,
+            "active_users_monthly": active_monthly,
+            "generated_at": now.isoformat(),
+        },
+    }
+
+
+@app.get("/admin/users", summary="[관리자] 유저 로그 모니터링 테이블 (가입일/최근 로그인/선호 게임 랭킹)")
+def get_admin_user_logs(
+    limit: int = 50,
+    offset: int = 0,
+    current_admin: UserModel = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    total_count = db.query(func.count(UserModel.user_id)).scalar() or 0
+    users = (
+        db.query(UserModel)
+        .order_by(UserModel.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    user_ids = [u.user_id for u in users]
+
+    games_by_user: dict[str, list[dict]] = {}
+    if user_ids:
+        activity_rows = (
+            db.query(
+                UserGameActivityLogModel.user_id,
+                UserGameActivityLogModel.game_name,
+                func.count(UserGameActivityLogModel.id).label("play_count"),
+            )
+            .filter(UserGameActivityLogModel.user_id.in_(user_ids))
+            .group_by(UserGameActivityLogModel.user_id, UserGameActivityLogModel.game_name)
+            .order_by(UserGameActivityLogModel.user_id, func.count(UserGameActivityLogModel.id).desc())
+            .all()
+        )
+        for uid, game_name, play_count in activity_rows:
+            bucket = games_by_user.setdefault(uid, [])
+            if len(bucket) < 3:
+                bucket.append({"game_name": game_name, "play_count": play_count})
+
+    now = datetime.now(timezone.utc)
+    user_rows = []
+    for u in users:
+        top_games = games_by_user.get(u.user_id)
+        if not top_games:
+            top_games = [
+                {"game_name": g, "play_count": 0}
+                for g in parse_db_list(u.favorite_games)[:3]
+            ]
+
+        # Postgres(timestamptz)는 timezone-aware 값을 돌려주지만, 예전 SQLite 데이터가 섞여있으면
+        # naive일 수 있어 UTC로 간주해 맞춰준다 (naive - aware는 TypeError).
+        last_login = u.last_login_at
+        if last_login and last_login.tzinfo is None:
+            last_login = last_login.replace(tzinfo=timezone.utc)
+
+        user_rows.append({
+            "user_id": u.user_id,
+            "email": u.email,
+            "nickname": u.nickname,
+            "provider": u.provider,
+            "role": u.role,
+            "created_at": u.created_at.isoformat() if u.created_at else None,
+            "last_login_at": u.last_login_at.isoformat() if u.last_login_at else None,
+            "is_active_7d": bool(last_login and (now - last_login) <= timedelta(days=7)),
+            "top_games": top_games,
+        })
+
+    return {
+        "status": "success",
+        "data": {
+            "total_count": total_count,
+            "limit": limit,
+            "offset": offset,
+            "users": user_rows,
+        },
+    }
+
+
+# -----------------------------------------------------------------------------
+# 관리자 대시보드: 크롤링 데이터 신선도 모니터링 (BigQuery crawl_log)
+# -----------------------------------------------------------------------------
+
+STALE_THRESHOLD_HOURS = 24
+
+
+@app.get("/admin/data-status", summary="[관리자] 크롤러별 데이터 최신성/성공-실패 모니터링")
+def get_admin_data_status(
+    current_admin: UserModel = Depends(require_admin),
+):
+    try:
+        client = get_client()
+
+        # 도메인(크롤러 그룹)별 가장 최근 실행 1건
+        latest_query = f"""
+            SELECT domain, status, scraper_name, provider_or_retailer,
+                   rows_extracted, error_type, error_message, finished_at
+            FROM (
+                SELECT *,
+                       ROW_NUMBER() OVER (PARTITION BY domain ORDER BY finished_at DESC) AS rn
+                FROM `{PROJECT_ID}.{DATASET_ID}.crawl_log`
+            )
+            WHERE rn = 1
+            ORDER BY domain
+        """
+        latest_rows = list(client.query(latest_query).result())
+
+        # 화면 하단 상세 로그용 최근 실행 이력
+        recent_query = f"""
+            SELECT run_id, domain, scraper_name, provider_or_retailer, status,
+                   rows_extracted, error_type, error_message,
+                   started_at, finished_at, duration_seconds, trigger_source
+            FROM `{PROJECT_ID}.{DATASET_ID}.crawl_log`
+            ORDER BY finished_at DESC
+            LIMIT 100
+        """
+        recent_rows = list(client.query(recent_query).result())
+
+        now = datetime.now(timezone.utc)
+        stale_cutoff = timedelta(hours=STALE_THRESHOLD_HOURS)
+
+        domains = []
+        for row in latest_rows:
+            finished_at = row["finished_at"]
+            hours_since = (now - finished_at).total_seconds() / 3600 if finished_at else None
+            domains.append({
+                "domain": row["domain"],
+                "last_status": row["status"],
+                "last_scraper_name": row["scraper_name"],
+                "last_provider_or_retailer": row["provider_or_retailer"],
+                "last_rows_extracted": row["rows_extracted"],
+                "last_error_type": row["error_type"],
+                "last_error_message": row["error_message"],
+                "last_finished_at": finished_at.isoformat() if finished_at else None,
+                "hours_since_last_run": round(hours_since, 1) if hours_since is not None else None,
+                "is_stale": bool(finished_at and (now - finished_at) > stale_cutoff),
+            })
+
+        recent_logs = [
+            {
+                "run_id": row["run_id"],
+                "domain": row["domain"],
+                "scraper_name": row["scraper_name"],
+                "provider_or_retailer": row["provider_or_retailer"],
+                "status": row["status"],
+                "rows_extracted": row["rows_extracted"],
+                "error_type": row["error_type"],
+                "error_message": row["error_message"],
+                "started_at": row["started_at"].isoformat() if row["started_at"] else None,
+                "finished_at": row["finished_at"].isoformat() if row["finished_at"] else None,
+                "duration_seconds": row["duration_seconds"],
+                "trigger_source": row["trigger_source"],
+            }
+            for row in recent_rows
+        ]
+
+        return {
+            "status": "success",
+            "data": {
+                "stale_threshold_hours": STALE_THRESHOLD_HOURS,
+                "domains": domains,
+                "recent_logs": recent_logs,
+                "generated_at": now.isoformat(),
+            },
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"크롤링 로그 조회 실패: {str(e)}")

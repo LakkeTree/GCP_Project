@@ -95,3 +95,26 @@
 #### `fe-app/src/components/Header.tsx`
 - `fetchUserProfile()`에서 `role`을 받아 `user` 상태에 저장
 - 로그인 상태 + `role === 'ROLE_ADMIN'`일 때만, 프로필 버튼 왼쪽에 "관리자 대시보드" 버튼을 표시하고 `/admin`으로 링크. 일반 유저에게는 보이지 않음
+
+---
+
+## 4차 변경: 팀원 브랜치 merge로 유실된 관리자 기능 재융합
+
+### 배경
+`develop` 브랜치를 다시 merge하면서 관리자 대시보드 관련 코드(`auth.py`, `models.py`, `main.py`의 관리자 로직, `Header.tsx`의 role/버튼)가 또 사라졌음. merge 전 백업해둔 파일과 현재(merge 후) 파일을 비교해서, **팀원이 그 사이 추가한 개선사항은 그대로 두고 관리자 기능만 다시 얹는 방식**으로 복원.
+
+### 함께 보존된 팀원 측 개선사항 (건드리지 않음)
+- `models.py`: `GameSearchLogModel`(검색 로그 전용 테이블) 신설
+- `main.py`: `/ranks`가 하드코딩 대신 `GameSearchLogModel` 기반 실시간 집계로 동작(+ `fallback_rank` 폴백), `/payments` 쿼리가 `UNION` + 윈도우 함수로 개선
+- `Header.tsx`: 로고가 이미지+글자 조합으로 교체, 프로필 조회 중 스켈레톤 로더(`isAuthLoading`) 추가, 신규 유저 자동 가입(POST 업서트) 흐름 추가
+- `AdminDashboardPage.tsx`, `App.tsx`, `fe-app/src/api/routeApi.ts`는 이번 merge로 손상되지 않아 그대로 유지
+
+### 이번에 다시 얹은 것
+- `auth.py`: 끝부분에 병합 사고로 `database.py` 전체 내용이 잘못 붙어있던 것을 제거, `_touch_last_login`/`require_admin` 재적용
+- `models.py`: `UserModel.last_login_at`, `UserGameActivityLogModel` 재적용
+- `main.py`: 중복 import 블록 정리, `/user/profile`에 `role` 추가, `/routes`·`/games/search-log`에 유저별 활동 로그 적재 재적용(팀원의 `GameSearchLogModel` 로직은 유지), `/admin/stats/summary`·`/admin/users`·`/admin/data-status` 3개 엔드포인트 재적용
+- `Header.tsx`: `role` 상태 저장(정상 로그인 + 자동가입 두 경로 모두), 관리자 버튼 재적용
+- `SearchResultPage.tsx`: 검색 로그 요청에 `Authorization` 헤더 재적용 (이 파일은 팀원 쪽에서 `filter.X` 구조로 이미 리팩터링되어 있어, 그 구조는 그대로 두고 헤더만 추가)
+
+### 검증
+SQLite로 우회한 end-to-end 테스트로 `/user/profile`(role 포함), `/routes`(로그 적재), `/games/search-log`, `/admin/stats/summary`, `/admin/users`(유저별 top_games 집계 확인), 403 처리까지 전부 정상 동작 확인. `/admin/data-status`는 실제 BigQuery `crawl_log`에 재접속해 정상 응답 확인. 프론트는 `tsc -b` 통과(기존부터 있던 `GameRankPage.tsx`의 무관한 에러 제외).

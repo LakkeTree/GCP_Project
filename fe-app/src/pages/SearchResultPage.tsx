@@ -409,10 +409,15 @@ export default function SearchResultPage() {
 
     const gameToQuery = targetGameName || activeGameTitle;
 
+    // 로그인 유저는 관리자 대시보드용 유저별 게임 이용 로그도 함께 적재하기 위해 토큰을 실어 보낸다
     try {
+      const searchLogToken = localStorage.getItem('google_token');
       fetch('http://127.0.0.1:8000/games/search-log', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(searchLogToken ? { Authorization: `Bearer ${searchLogToken}` } : {}),
+        },
         body: JSON.stringify({ game_name: gameToQuery }),
       }).catch((err) => console.error('검색 로그 전송 실패:', err));
     } catch (e) {}
