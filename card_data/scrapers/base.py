@@ -4,6 +4,7 @@
 불러와서 재사용한다 — 크롤링할 때마다 다시 로그인하지 않기 위함.
 """
 
+import os
 from pathlib import Path
 
 from playwright.sync_api import BrowserContext, sync_playwright
@@ -19,7 +20,11 @@ def auth_state_path(provider_code: str) -> Path:
 class ScraperSession:
     """`with ScraperSession(provider_code) as page:` 형태로 로그인된 세션의 페이지를 얻는다."""
 
-    def __init__(self, provider_code: str, *, headless: bool = False, require_login: bool = True):
+    def __init__(self, provider_code: str, *, headless: bool | None = None, require_login: bool = True):
+        if headless is None:
+            # 로컬 디버깅은 headed가 기본(env var 없음). 크롤러 컨테이너는
+            # SCRAPER_HEADLESS=true로 headless 실행.
+            headless = os.environ.get("SCRAPER_HEADLESS", "false").lower() == "true"
         self.provider_code = provider_code
         self.headless = headless
         self.require_login = require_login

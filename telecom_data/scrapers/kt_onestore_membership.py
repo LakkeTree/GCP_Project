@@ -48,7 +48,10 @@ EXTRA_HINT = (
 
 def scrape() -> list[dict]:
     with ScraperSession(PROVIDER_CODE, require_login=REQUIRE_LOGIN) as page:
-        page.goto(BENEFIT_PAGE_URL)
+        # 기본 wait_until="load"는 이 페이지에서 영영 안 끝남(어떤 리소스가 load
+        # 이벤트를 막는 것으로 추정 — requests.get()으로는 1초 만에 정상 200
+        # 응답이 오는 걸 확인했으니 서버 차단은 아님). domcontentloaded로 낮춤.
+        page.goto(BENEFIT_PAGE_URL, wait_until="domcontentloaded")
         try:
             page.wait_for_load_state("networkidle", timeout=10000)
         except Exception:

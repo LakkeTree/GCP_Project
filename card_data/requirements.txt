@@ -3,3 +3,5 @@ google-genai
 pydantic
 python-dotenv
 google-cloud-storage
+google-cloud-bigquery
+google-cloud-secret-manager
