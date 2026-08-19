@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { OsType } from '../constants/searchOptions';
 import {
   ANDROID_STORE_OPTIONS,
@@ -8,6 +8,12 @@ import {
 } from '../constants/searchOptions';
 
 const FILTER_STORAGE_KEY = 'user_search_filter_settings';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+export interface CardOption {
+  label: string;
+  value: string;
+}
 
 export interface FilterState {
   osType: OsType;
@@ -82,6 +88,87 @@ export function useFilterState(startEmpty: boolean = false) {
     return { ...emptyFilterState, ...savedObj };
   });
 
+  // 💡 카드 목록 동적 수급 및 고유 정제 상태
+  const [cardOptions, setCardOptions] = useState<CardOption[]>([
+    { label: '선택 안 함 (일반 신용/체크카드 / 기본 결제)', value: 'NONE' },
+  ]);
+
+  // 💡 API에서 카드를 수급하여 이상한 혜택 문구 없이 카드사명으로만 정제
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/payments`)
+      .then((res) => res.json())
+      .then((result) => {
+        if (result.status === 'ok' && Array.isArray(result.data)) {
+          const options: CardOption[] = [
+            { label: '선택 안 함 (일반 신용/체크카드 / 기본 결제)', value: 'NONE' },
+          ];
+
+          // 💡 비카드 수단 제외 키워드
+          const EXCLUDE_KEYWORDS = [
+            'GIFTCARD', 'GIFT_CARD', 'SSG', '11STREET', 'GMARKET',
+            'CONVENIENCE', 'CU_', 'GS25', 'SEVEN', 'ZEROPIN', 'NAVER_STORE', 'APPLE_GIFT',
+            'CREDIT_CHECK_CARD', 'CULTURE', 'BOOK', 'TRANSFER', 'BANK', 'CARRIER', 'TELECOM'
+          ];
+
+          // 💡 카드 상품명이 아니거나 더미 혜택 제목 제외 키워드
+          const EXCLUDE_TITLES = [
+            'CREDIT CHECK CARD', '삼성페이', '결제수단별', '기본 적립률', '기본/이벤트 혜택',
+            '페이백', '첫 결제', '월간 적립', '100%'
+          ];
+
+          const addedCardNames = new Set<string>();
+
+          result.data.forEach((m: any) => {
+            const codeUpper = (m.code || '').toUpperCase();
+            const catUpper = (m.category || '').toUpperCase();
+
+            const isCard =
+              catUpper === 'CARD' ||
+              codeUpper.endsWith('_CARD') ||
+              codeUpper.includes('SHINHAN') ||
+              codeUpper.includes('KB') ||
+              codeUpper.includes('HANA') ||
+              codeUpper.includes('NH') ||
+              codeUpper.includes('SAMSUNG');
+
+            const isExcluded = EXCLUDE_KEYWORDS.some((kw) => codeUpper.includes(kw));
+
+            if (isCard && !isExcluded) {
+              // c.benefits 안의 상세 카드 상품명(b.title) 또는 m.name 추출
+              if (m.benefits && m.benefits.length > 0) {
+                m.benefits.forEach((b: any) => {
+                  const cardName = (b.title || m.name).trim();
+                  const isTitleExcluded = EXCLUDE_TITLES.some((t) => cardName.includes(t));
+
+                  if (cardName && !addedCardNames.has(cardName) && !isTitleExcluded) {
+                    addedCardNames.add(cardName);
+                    options.push({
+                      label: cardName,  // 예: "원스토어1 하나카드", "KB국민 노리2 체크카드"
+                      value: m.code,
+                    });
+                  }
+                });
+              } else {
+                const cardName = m.name.trim();
+                const isTitleExcluded = EXCLUDE_TITLES.some((t) => cardName.includes(t));
+
+                if (cardName && !addedCardNames.has(cardName) && !isTitleExcluded) {
+                  addedCardNames.add(cardName);
+                  options.push({
+                    label: cardName,
+                    value: m.code,
+                  });
+                }
+              }
+            }
+          });
+
+          setCardOptions(options);
+        }
+      })
+      .catch((err) => console.error('카드 옵션 로드 실패:', err));
+  }, []);
+
   const saveFilterSettings = () => {
     localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(filter));
     alert('기본 검색 조건 및 설정이 성공적으로 저장되었습니다!');
@@ -104,7 +191,6 @@ export function useFilterState(startEmpty: boolean = false) {
     return false;
   };
 
-  // 💡 즐겨찾기 추가 (최대 10개 제한)
   const addFavoriteGame = (gameName: string) => {
     setFilter((prev) => {
       if (prev.favoriteGames.includes(gameName)) return prev;
@@ -123,12 +209,11 @@ export function useFilterState(startEmpty: boolean = false) {
     }));
   };
 
-  // 💡 최근 검색어 추가 (중복 제거 후 최신순 최대 5개 제한)
   const addRecentGame = (gameName: string) => {
     if (!gameName.trim()) return;
     setFilter((prev) => {
       const filtered = (prev.recentGames || []).filter((g: string) => g !== gameName.trim());
-      const updatedList = [gameName.trim(), ...filtered].slice(0, 5); // 최근 검색 5개 제한
+      const updatedList = [gameName.trim(), ...filtered].slice(0, 5);
       const updatedState = { ...prev, recentGames: updatedList };
       localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(updatedState));
       return updatedState;
@@ -192,6 +277,7 @@ export function useFilterState(startEmpty: boolean = false) {
   return {
     filter,
     setFilter,
+    cardOptions, // 💡 이제 카드 옵션이 훅에서 기본으로 수급됩니다!
     saveFilterSettings,
     loadSavedFilter,
     addFavoriteGame,

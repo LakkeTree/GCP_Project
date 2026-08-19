@@ -145,6 +145,19 @@ def is_method_supported(compat_index, payment_method, platform):
 # [단계 3] 자격 필터링
 # =============================================================================
 
+import datetime
+
+import datetime
+
+def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
+                             held_methods, is_first_purchase, has_prev_spend=None,
+                             has_pre_applied=False, use_game_benefits=True):
+    eligible = []
+    warnings = []
+
+    req_platform = str(platform).upper()
+
+
 def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
                              held_methods, is_first_purchase, has_prev_spend=None,
                              has_pre_applied=False, use_game_benefits=True):
@@ -161,7 +174,26 @@ def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
 
     req_platform = str(platform).upper()
 
+    # 💡 오늘 날짜 기준 문자열 (YYYY-MM-DD)
+    today_str = datetime.date.today().strftime("%Y-%m-%d")
+
+    # 💡 오늘 날짜 기준 ISO 문자열 생성 (예: "2026-08-19")
+    today_str = datetime.date.today().isoformat()
+
     for b in benefits:
+        # 0. 💡 이벤트 기간(start_date ~ end_date) 유효성 검증
+        start_d = str(b.get("start_date") or "").strip()
+        end_d = str(b.get("end_date") or "").strip()
+
+        # 시작일이 존재하고 오늘보다 미래인 경우 -> 아직 시작 전이므로 제외
+        if start_d and start_d not in ("NONE", "null") and start_d > today_str:
+            continue
+
+        # 종료일이 존재하고 오늘보다 과거인 경우 -> 종료된 이벤트이므로 제외
+        # (end_date가 없거나 Null/None/NONE인 경우는 영구/상시 혜택으로 간주하여 자동 통과)
+        if end_d and end_d not in ("NONE", "null") and end_d < today_str:
+            continue
+
         # 1. 스토어 등급 기본 적립 데이터는 별도 함수에서 처리하므로 제외
         if b.get("category") in ("REWARD_STORE", "SUMMARY_STORE_TIER_REWARD_RATES"):
             continue
@@ -251,25 +283,38 @@ def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
         if b.get("requires_pre_app") and not has_pre_applied:
             continue
 
-        # ✅ 새로 넣을 코드 (121개 전체 게임 100% 동적 매칭)
-        b_target_norm = _normalize_game_string(b.get("target_game"))
+        # 💡 target_game의 NOT: / EXCEPT: / EXCLUDE: 제외 게임 로직 파싱
+        b_target_raw = str(b.get("target_game") or "ALL").strip()
         req_game_norm = _normalize_game_string(game)
 
-        if not use_game_benefits:
-            # 게임 전용 혜택 옵션을 끈 경우: 공통(ALL) 혜택만 포함
-            if b_target_norm != "ALL":
-                continue
+        prefix_match = re.match(r'^(NOT|EXCEPT|EXCLUDE)\s*:\s*(.*)$', b_target_raw, re.IGNORECASE)
+        if prefix_match:
+            # NOT: 접두사가 있을 경우 지정된 제외 대상 게임 리스트 추출
+            excluded_games = [g.strip() for g in re.split(r'[,;/]', prefix_match.group(2)) if g.strip()]
+            is_excluded = False
+            for ex_game in excluded_games:
+                ex_norm = _normalize_game_string(ex_game)
+                if ex_norm and (ex_norm == req_game_norm or ex_norm in req_game_norm or req_game_norm in ex_norm):
+                    is_excluded = True
+                    break
+            if is_excluded:
+                continue  # 🚫 제외 대상 게임이면 혜택에서 차단
         else:
-            # 게임 전용 혜택 옵션을 켠 경우: DB의 target_game이 ALL이 아닐 때 동적 대조
-            if b_target_norm != "ALL":
-                # 특수문자/공백/언더바가 제거된 정규화 문자열 간 순수 동적 매칭 (완전일치 또는 부분포함)
-                is_matched = (
-                    b_target_norm == req_game_norm or
-                    b_target_norm in req_game_norm or
-                    req_game_norm in b_target_norm
-                )
-                if not is_matched:
+            b_target_norm = _normalize_game_string(b_target_raw)
+            if not use_game_benefits:
+                if b_target_norm != "ALL":
                     continue
+            else:
+                if b_target_norm != "ALL":
+                    allowed_games = [g.strip() for g in re.split(r'[,;/]', b_target_raw) if g.strip()]
+                    is_matched = False
+                    for app_game in allowed_games:
+                        app_norm = _normalize_game_string(app_game)
+                        if app_norm and (app_norm == req_game_norm or app_norm in req_game_norm or req_game_norm in app_norm):
+                            is_matched = True
+                            break
+                    if not is_matched:
+                        continue
 
         if amount < b["min_spend_krw"]:
             continue

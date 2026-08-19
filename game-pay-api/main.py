@@ -385,32 +385,39 @@ def get_bigquery_benefits(table: str = "benefit_info_staging"):
 
 
 
-# [공통] BigQuery platform_connection & benefit_info 연동 결제 수단 API
+# [공통] BigQuery platform_connection & benefit_info 연동 결제 수단 API (안전한 UNION JOIN)
 @app.get("/payments", summary="지원 결제 수단 및 세부 혜택 목록 동적 조회")
 def get_supported_payment_methods():
     try:
         client = get_client()
+        # 💡 MAX() OVER (PARTITION BY) 구문으로 null인 행에도 이미지 URL을 강제 전파!
         query = f"""
+            WITH all_methods AS (
+              SELECT payment_method FROM `{PROJECT_ID}.{DATASET_ID}.platform_connection`
+              UNION DISTINCT
+              SELECT provider_or_retailer AS payment_method FROM `{PROJECT_ID}.{DATASET_ID}.benefit_info`
+              WHERE provider_or_retailer IS NOT NULL AND provider_or_retailer != ''
+            )
             SELECT
-                p.payment_method,
-                p.platform,
-                p.is_supported,
-                p.note,
-                b.benefit_id,
-                b.category,
-                b.item_or_event_name,
-                b.condition_raw_text,
-                b.benefit_type,
-                b.benefit_value,
-                b.benefit_unit,
-                b.target_game,
-                b.payment_method_icon_url
-            FROM `{PROJECT_ID}.{DATASET_ID}.platform_connection` p
-            LEFT JOIN `{PROJECT_ID}.{DATASET_ID}.benefit_info` b
-              ON p.payment_method = b.provider_or_retailer
+              m.payment_method,
+              p.platform AS p_platform,
+              CAST(p.is_supported AS STRING) AS p_is_supported_str,
+              p.note,
+              b.benefit_id,
+              b.category,
+              b.item_or_event_name,
+              b.target_platform AS b_target_platform,
+              b.condition_raw_text,
+              b.benefit_type,
+              CAST(b.benefit_value AS STRING) AS benefit_value,
+              b.benefit_unit,
+              b.target_game,
+              MAX(b.payment_method_icon_url) OVER (PARTITION BY m.payment_method) AS payment_method_icon_url
+            FROM all_methods m
+            LEFT JOIN `{PROJECT_ID}.{DATASET_ID}.platform_connection` p ON m.payment_method = p.payment_method
+            LEFT JOIN `{PROJECT_ID}.{DATASET_ID}.benefit_info` b ON m.payment_method = b.provider_or_retailer
         """
         df = client.query(query).to_dataframe().fillna("")
-
 
         STORE_NAME_MAP = {
             "GOOGLE_PLAY": "구글",
@@ -419,35 +426,45 @@ def get_supported_payment_methods():
             "APP_STORE": "앱스토어"
         }
 
-
         def determine_category(method: str, cat: str) -> tuple:
             method_upper = method.upper()
-            if any(k in method_upper for k in ["PAY", "NAVER", "KAKAO", "TOSS", "SAMSUNG_PAY", "PAYCO", "APPLE_PAY"]):
+            cat_upper = cat.upper()
+            
+            is_card_keyword = any(k in method_upper for k in ["CARD", "SHINHAN", "SAMSUNG", "KB", "NH", "HANA", "KOOKMIN", "NONGHYUP", "LOTTE", "HYUNDAI", "BC"])
+            
+            if any(k in method_upper for k in ["PAY", "NAVER", "KAKAO", "TOSS", "SAMSUNG_PAY", "PAYCO", "APPLE_PAY"]) and not is_card_keyword:
                 return "PAY", "간편결제", "💸"
             elif any(k in method_upper for k in ["SKT", "KT", "LGU", "CARRIER"]):
                 return "CARRIER", "통신사", "📶"
-            elif any(k in method_upper for k in ["CARD", "SHINHAN", "SAMSUNG", "KB", "NH", "HANA"]):
+            elif "CARD" in cat_upper or is_card_keyword:
                 return "CARD", "신용/체크카드", "💳"
             elif any(k in method_upper for k in ["CULTURELAND", "VOUCHER", "GIFTCARD", "BOOKNLIFE", "ZEROPIN"]):
                 return "VOUCHER", "상품권 우회", "🎟️"
             return "PAY", "기타", "💸"
 
-
         methods_map = {}
         for idx, row in df.iterrows():
             m_code = str(row.get("payment_method") or "").strip()
-            platform = str(row.get("platform") or "").strip()
-            is_supported = str(row.get("is_supported")).strip().lower() in ["true", "1", "t", "y"]
+            p_platform = str(row.get("p_platform") or "").strip()
+            b_platform = str(row.get("b_target_platform") or "").strip()
+            platform = p_platform or b_platform
+            
+            p_supp_str = str(row.get("p_is_supported_str") or "").strip().lower()
+            if p_supp_str in ["true", "1", "t", "y"]:
+                is_supported = True
+            elif p_supp_str in ["false", "0", "f", "n"]:
+                is_supported = False
+            else:
+                is_supported = True if b_platform else False
+
             note = str(row.get("note") or "").strip()
             category_raw = str(row.get("category") or "").strip()
             event_name = str(row.get("item_or_event_name") or "").strip()
             condition_text = str(row.get("condition_raw_text") or "").strip()
             icon_url = str(row.get("payment_method_icon_url") or "").strip()
 
-
             if not m_code:
                 continue
-
 
             if m_code not in methods_map:
                 cat_id, tag_name, icon_emoji = determine_category(m_code, category_raw)
@@ -462,14 +479,19 @@ def get_supported_payment_methods():
                     "stores": set(),
                     "benefits": []
                 }
+            else:
+                if icon_url and not methods_map[m_code]["icon_url"]:
+                    methods_map[m_code]["icon_url"] = icon_url
 
-
-            if is_supported and platform in STORE_NAME_MAP:
-                methods_map[m_code]["stores"].add(STORE_NAME_MAP[platform])
-
+            if is_supported:
+                if platform == "ALL":
+                    for st_name in STORE_NAME_MAP.values():
+                        methods_map[m_code]["stores"].add(st_name)
+                elif platform in STORE_NAME_MAP:
+                    methods_map[m_code]["stores"].add(STORE_NAME_MAP[platform])
 
             benefit_id = str(row.get("benefit_id") or "").strip()
-            if condition_text or event_name or note:
+            if condition_text or event_name:
                 b_item = {
                     "benefit_id": benefit_id or f"BNF_{len(methods_map[m_code]['benefits'])+1}",
                     "title": event_name or f"{m_code} 기본 혜택",
@@ -479,9 +501,8 @@ def get_supported_payment_methods():
                     "benefit_unit": str(row.get("benefit_unit") or "PERCENT").strip(),
                     "target_game": str(row.get("target_game") or "ALL").strip(),
                 }
-                if not any(existing["condition"] == b_item["condition"] for existing in methods_map[m_code]["benefits"]):
+                if not any(existing["condition"] == b_item["condition"] and existing["title"] == b_item["title"] for existing in methods_map[m_code]["benefits"]):
                     methods_map[m_code]["benefits"].append(b_item)
-
 
         result_list = []
         for item in methods_map.values():
@@ -499,9 +520,7 @@ def get_supported_payment_methods():
                 "stores": stores_list if stores_list else ["구글"]
             })
 
-
         return {"status": "ok", "total_count": len(result_list), "data": result_list}
-
 
     except Exception as e:
         raise HTTPException(
