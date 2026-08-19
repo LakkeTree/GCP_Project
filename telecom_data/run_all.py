@@ -9,19 +9,25 @@ CSV로 합쳐 GCS incoming/에 업로드한다.
   python -m telecom_data.run_all skt_billing_membership  # 하나만 실행
 """
 
-import importlib
+import os
 import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
 
 from card_data.common import normalize
+from card_data.common.crawl_log import run_and_log
 from card_data.common.gcs_upload import upload_to_incoming
 
 load_dotenv()
 
+DOMAIN = "telecom_data"
 OUTPUT_PATH = Path(__file__).resolve().parent / "output" / "Telecom_Benefit_Info_DB.csv"
-DEST_FILENAME = "Telecom_Benefit_Info_DB.csv"
+# lgu_event_board는 headless 봇 차단 때문에 이 run_all(Cloud Run Job)이 아니라
+# Xvfb+headed GCE VM에서 별도로 돌린다 — 그쪽은 같은 GCS 목적지에 동시 업로드하면
+# 서로 덮어쓸 수 있어 DEST_FILENAME_OVERRIDE로 다른 파일명을 쓴다
+# (bigquery/main.py의 TARGETS에 그 파일명이 등록돼 있어야 함).
+DEST_FILENAME = os.environ.get("DEST_FILENAME_OVERRIDE") or "Telecom_Benefit_Info_DB.csv"
 
 SCRAPERS = {
     "skt_billing_membership": "telecom_data.scrapers.skt_billing_membership",
@@ -37,9 +43,8 @@ def main() -> None:
     targets = sys.argv[1:] or list(SCRAPERS.keys())
     all_rows = []
     for name in targets:
-        module = importlib.import_module(SCRAPERS[name])
         print(f"[{name}] 크롤링 시작")
-        rows = module.scrape()
+        rows = run_and_log(domain=DOMAIN, scraper_name=name, module_path=SCRAPERS[name])
         print(f"[{name}] {len(rows)}건 추출")
         all_rows.extend(rows)
 

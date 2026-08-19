@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import LegalModals from '../components/LegalModals';
 
 const KOREAN_PAYMENT_MAP: Record<string, { name: string }> = {
   // 🔽 한국어로 변환할 수단들
@@ -51,6 +52,8 @@ export interface BenefitDetailItem {
   target_game: string;
 }
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 export interface PaymentMethodItem {
   id: number;
   code: string;
@@ -63,6 +66,7 @@ export interface PaymentMethodItem {
   benefits: BenefitDetailItem[];
   stores: string[];
 }
+
 
 const getInitialPayments = (): PaymentMethodItem[] => {
   try {
@@ -78,6 +82,7 @@ const getInitialPayments = (): PaymentMethodItem[] => {
 export default function SupportedPaymentPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<MethodCategory>('ALL');
+  const [modalType, setModalType] = useState<'terms' | 'privacy' | 'contact' | null>(null);
   
   const initialData = getInitialPayments();
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodItem[]>(initialData);
@@ -88,7 +93,7 @@ export default function SupportedPaymentPage() {
     let isMounted = true;
     if (paymentMethods.length === 0) setLoading(true);
 
-    fetch('http://127.0.0.1:8000/payments')
+    fetch(`${API_BASE_URL}/payments`)
       .then((res) => res.json())
       .then((result) => {
         if (isMounted && result.status === 'ok' && Array.isArray(result.data)) {
@@ -116,13 +121,15 @@ export default function SupportedPaymentPage() {
 
           const isPay = codeUpper.includes('PAY') || codeUpper === 'SAMSUNG_PAY';
 
+          const catUpper = (m.category || '').toUpperCase();
           const isCard = !isVoucher && !isPay && (
-            m.category === 'CARD' ||
+            catUpper.includes('CARD') ||
             codeUpper.includes('CARD') ||
             codeUpper.includes('SHINHAN') ||
             codeUpper.includes('KB') ||
             codeUpper.includes('HANA') ||
-            codeUpper.includes('NH')
+            codeUpper.includes('NH') ||
+            codeUpper.includes('SAMSUNG')
           );
 
           let finalCategory: MethodCategory = m.category;
@@ -185,10 +192,6 @@ export default function SupportedPaymentPage() {
       'APP_STORE'        // 앱스토어 자체 수단 제외
     ];
     if (EXCLUDE_CODES.includes(m.code.toUpperCase())) return false;
-
-    // 2. 공통 혜택이 0개인 결제 수단 제외
-    const benefitCount = m.benefit_count || (m.benefits ? m.benefits.length : 0);
-    if (benefitCount === 0) return false;
 
     // 3. 카테고리 및 검색어 필터링
     const matchesCategory = activeCategory === 'ALL' || m.category === activeCategory;
@@ -310,7 +313,7 @@ export default function SupportedPaymentPage() {
                     >
                       <div className="space-y-3">
                         <div className="flex items-center justify-between">
-                          {item.icon_url && item.icon_url.startsWith('http') ? (
+                          {item.icon_url ? (
                             <img
                               src={item.icon_url}
                               alt={item.name}
@@ -400,7 +403,11 @@ export default function SupportedPaymentPage() {
               </div>
             </div>
 
-            <button className="w-full py-2.5 bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] hover:brightness-105 text-slate-950 font-black text-xs rounded transition-all shadow-md cursor-pointer">
+            <button 
+              type="button"
+              onClick={() => setModalType('contact')}
+              className="w-full py-2.5 bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] hover:brightness-105 text-slate-950 font-black text-xs rounded transition-all shadow-md cursor-pointer"
+            >
               광고/제휴 신청하기
             </button>
           </aside>
@@ -482,6 +489,9 @@ export default function SupportedPaymentPage() {
           </div>
         </div>
       )}
+
+      {/* 제휴 및 광고 문의 모달 */}
+      <LegalModals type={modalType} onClose={() => setModalType(null)} />
     </div>
   );
 }

@@ -23,18 +23,34 @@ export default function Header() {
   const navigate = useNavigate();
 
   const [user, setUser] = useState<any>(null);
+  // 💡 1. 로딩 상태 추가 (토큰이 있으면 프로필 조회 완료 전까지 로딩 상태 유지)
+  const [isAuthLoading, setIsAuthLoading] = useState<boolean>(() => {
+    const token = localStorage.getItem('google_token');
+    return !!(token && token !== 'undefined' && token !== 'null');
+  });
+
   const [isScrolled, setIsScrolled] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const fetchUserProfile = async (token: string) => {
-    try {
-      const googleData = parseGoogleToken(token);
-      const googleNick = googleData?.given_name || googleData?.name || '유저';
+  // API BASE URL 선언 (환경변수 또는 로컬)
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
-      const res = await fetch('http://127.0.0.1:8000/user/profile', {
-        headers: { 'Authorization': `Bearer ${token}` }
+  const fetchUserProfile = async (token: string) => {
+    if (!token || token === 'undefined' || token === 'null') {
+      setUser(null);
+      setIsAuthLoading(false);
+      return;
+    }
+
+    const googleData = parseGoogleToken(token);
+    const googleNick = googleData?.given_name || googleData?.name || '유저';
+
+    try {
+      // 1. 프로필 정보 조회 (GET)
+      const res = await fetch(`${API_BASE_URL}/user/profile`, {
+        headers: { 'Authorization': `Bearer ${token}` },
       });
 
       if (res.ok) {
@@ -44,25 +60,56 @@ export default function Header() {
           nickname: result.data?.nickname || googleNick,
           picture: googleData?.picture || null,
           provider: 'GOOGLE',
+          role: result.data?.role || 'ROLE_USER',
         });
-      } else {
-        setUser({
-          email: googleData?.email || '이메일 없음',
-          nickname: googleNick,
-          picture: googleData?.picture || null,
-          provider: 'GOOGLE',
+      } else if (res.status === 401 || res.status === 404) {
+        // 2. 백엔드 DB에 유저가 없는 신규 회원일 경우 POST 요청으로 백엔드 자동 가입(Upsert) 실행
+        const registerRes = await fetch(`${API_BASE_URL}/user/profile`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({ nickname: googleNick }),
         });
+
+        if (registerRes.ok) {
+          const regResult = await registerRes.json();
+          setUser({
+            email: regResult.data?.email || googleData?.email || '이메일 없음',
+            nickname: regResult.data?.nickname || googleNick,
+            picture: googleData?.picture || null,
+            provider: 'GOOGLE',
+            role: regResult.data?.role || 'ROLE_USER',
+          });
+        } else {
+          setUser({
+            email: googleData?.email || '이메일 없음',
+            nickname: googleNick,
+            picture: googleData?.picture || null,
+            provider: 'GOOGLE',
+            role: 'ROLE_USER',
+          });
+        }
       }
     } catch (error) {
-      console.error("백엔드 서버 연동 실패:", error);
+      console.warn("백엔드 서버 미연결 (구글 로컬 정보 사용):", error);
+      setUser({
+        email: googleData?.email || '이메일 없음',
+        nickname: googleNick,
+        picture: googleData?.picture || null,
+        provider: 'GOOGLE',
+        role: 'ROLE_USER',
+      });
+    } finally {
+      // 💡 2. 로딩 끝남 처리 (성공/실패 상관없이 실행)
+      setIsAuthLoading(false);
     }
   };
 
-    // ✅ 수정 코드 (대체 대상)
+
   useEffect(() => {
     const token = localStorage.getItem('google_token');
-    
-    // 토큰이 없거나, 문자열 'undefined'/'null'로 들어있으면 서버 호출하지 않음 (401 에러 방지)
     if (token && token !== 'undefined' && token !== 'null') {
       fetchUserProfile(token);
     }
@@ -139,34 +186,52 @@ export default function Header() {
       <div className="max-w-[1400px] mx-auto px-4 md:px-6 space-y-3 transition-all duration-300">
         <div className="flex items-center justify-between gap-4">
           
-          {/* 브랜드 로고 (그라데이션 타이틀 텍스트 적용) */}
+          {/* 메인페이지 이동 로고 (도미노 감소형 + 황금 수평 1자 맞춤) */}
           <Link
             to="/"
-            className="group shrink-0 flex items-center gap-3 transition-transform duration-200 active:scale-95"
+            title="메인페이지로 이동"
+            className="group shrink-0 flex items-end transition-transform duration-200 active:scale-95 cursor-pointer select-none"
           >
-            <div className="w-12 h-12 md:w-13 md:h-13 bg-gradient-to-br from-[#00D2B8]/15 to-[#00E5FF]/15 border border-[#00D2B8]/40 rounded-md flex items-center justify-center text-[#00D2B8] shadow-md group-hover:border-[#00D2B8] transition-all p-2">
-              <svg
-                className="w-8 h-8 md:w-9 md:h-9 stroke-[2.2]"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"
-                />
-              </svg>
-            </div>
+            {/* 1. 호 (가장 큼, 바닥 1자선 기준점) */}
+            <img 
+              src="/logo.png" 
+              alt="호" 
+              className="h-13 md:h-15 w-auto object-contain shrink-0 block" 
+            />
 
-            <span className="font-black text-xl md:text-2xl bg-gradient-to-r from-[#00D2B8] to-[#00E5FF] bg-clip-text text-transparent tracking-tight">
-              호갱탈출
+            {/* 2. 갱 (살짝 아래로 하향 조절) */}
+            <span className="font-black text-3xl md:text-4xl bg-gradient-to-r from-[#00D2B8] to-[#00DCBD] bg-clip-text text-transparent tracking-tight -ml-2.5 md:-ml-3.5 leading-none -translate-y-[6px] md:-translate-y-[8px]">
+              갱
+            </span>
+
+            {/* 3. 탈 (기준점 유지 - 딱 좋았던 값 그대로) */}
+            <span className="font-black text-2xl md:text-3xl bg-gradient-to-r from-[#00DCBD] to-[#00E8DF] bg-clip-text text-transparent tracking-tight leading-none -translate-y-[8px] md:-translate-y-[10px]">
+              탈
+            </span>
+
+            {/* 4. 출 (살짝 위로 상향 조절) */}
+            <span className="font-black text-xl md:text-2xl bg-gradient-to-r from-[#00E8DF] to-[#00F5FF] bg-clip-text text-transparent tracking-tight leading-none -translate-y-[8px] md:-translate-y-[10px]">
+              출
             </span>
           </Link>
 
           {/* 프로필 및 구글 로그인 버튼 */}
           <div className="shrink-0 flex items-center gap-2">
-            {user ? (
+            {!isAuthLoading && user && user.role === 'ROLE_ADMIN' && (
+              <Link
+                to="/admin"
+                className="flex items-center gap-1.5 bg-slate-800 border border-[#00D2B8]/50 rounded-md px-3 py-1.5 shadow-sm hover:bg-slate-750 hover:border-[#00D2B8] transition-all text-[11px] font-black text-[#00D2B8]"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>관리자 대시보드</span>
+              </Link>
+            )}
+            {isAuthLoading ? (
+              /* 💡 프로필 불러오는 찰나의 순간 동안 보여줄 스켈레톤 로더 */
+              <div className="w-28 h-9 bg-slate-800 animate-pulse rounded-md border border-slate-700/50" />
+            ) : user ? (
               <div className="relative" ref={dropdownRef}>
                 <button
                   type="button"
@@ -254,7 +319,7 @@ export default function Header() {
                       </button>
                     </div>
 
-                    {/* 💡 기본 검색 필터링 메뉴 추가 */}
+                    {/* 기본 검색 필터링 메뉴 */}
                     <div className="relative z-20">
                       <button
                         type="button"
@@ -305,6 +370,7 @@ export default function Header() {
                   <GoogleLogin
                     onSuccess={handleGoogleSuccess}
                     onError={() => alert('구글 로그인 중 오류가 발생했습니다.')}
+                    useOneTap={false}
                   />
                 </div>
               </div>

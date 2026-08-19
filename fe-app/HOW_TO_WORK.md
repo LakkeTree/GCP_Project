@@ -24,3 +24,12 @@ npm install
 
 # 3. 프론트엔드 개발 서버 실행
 npm run dev
+
+# 위에것들을 했을경우
+cd game-pay-api
+gcloud auth application-default login 
+.\venv\Scripts\python.exe -m uvicorn main:app --reload --port 8000
+
+# 새창에서
+cd fe-app
+npm run dev

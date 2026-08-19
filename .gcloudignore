@@ -1,0 +1,26 @@
+# 크롤러 Docker 빌드 컨텍스트에서 제외할 것들.
+# .gitignore를 자동으로 따라가지 않도록(=커밋 안 됐지만 필요한 bigquery/schemas/*.json이
+# 빠지는 사고를 막기 위해) 이 파일로 명시적으로 관리한다.
+.git/
+.gitignore
+
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+fe-app/
+node_modules/
+game-pay-api/
+
+datas/
+files/
+
+card_data/.auth/
+card_data/output/
+epay_data/output/
+store_data/output/
+voucher_data/output/
+telecom_data/output/
+
+*.log

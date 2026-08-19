@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import GameRankBoard from '../components/GameRankBoard';
+import LegalModals from '../components/LegalModals';
 
 export interface EventDetailItem {
   id: number;
@@ -12,6 +13,8 @@ export interface EventDetailItem {
 }
 
 export default function MainPage() {
+  const [modalType, setModalType] = useState<'terms' | 'privacy' | 'contact' | null>(null);
+
   const getInitialEvents = (): EventDetailItem[] => {
     try {
       const cached = localStorage.getItem('cached_main_events');
@@ -307,13 +310,21 @@ export default function MainPage() {
                 </p>
               </div>
             </div>
-            <button className="w-full py-2.5 bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] hover:brightness-105 text-slate-950 font-black text-xs rounded transition-all shadow-md cursor-pointer">
+            <button 
+              type="button"
+              onClick={() => setModalType('contact')}
+              className="w-full py-2.5 bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] hover:brightness-105 text-slate-950 font-black text-xs rounded transition-all shadow-md cursor-pointer"
+            >
               신청하기
             </button>
           </aside>
+
         </div>
 
       </div>
+
+      {/* 제휴 및 광고 문의 모달 */}
+      <LegalModals type={modalType} onClose={() => setModalType(null)} />
 
       {/* 이벤트 상세 정보 모달 */}
       {selectedEventForDetail && (
