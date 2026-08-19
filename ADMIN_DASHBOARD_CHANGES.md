@@ -79,3 +79,19 @@
 
 ### 검증
 로컬 샌드박스에서 실제 GCP BigQuery `crawl_log` 테이블에 직접 연결해 `GET /admin/data-status` 엔드포인트를 end-to-end로 테스트 완료. 응답 스키마와 각 도메인의 `is_stale` 계산이 정상 동작함을 확인.
+
+---
+
+## 3차 변경: 헤더에 관리자 대시보드 진입 버튼 추가
+
+### 배경
+관리자 페이지는 URL에 `/admin`을 직접 입력해야만 접근 가능했음. 관리자 계정으로 로그인했을 때 계정 버튼 옆에서 바로 이동할 수 있게 해달라는 요청.
+
+### 수정 파일
+
+#### `game-pay-api/main.py`
+- `GET /user/profile` 응답에 `role` 필드 추가 (기존엔 안 내려주고 있었음)
+
+#### `fe-app/src/components/Header.tsx`
+- `fetchUserProfile()`에서 `role`을 받아 `user` 상태에 저장
+- 로그인 상태 + `role === 'ROLE_ADMIN'`일 때만, 프로필 버튼 왼쪽에 "관리자 대시보드" 버튼을 표시하고 `/admin`으로 링크. 일반 유저에게는 보이지 않음

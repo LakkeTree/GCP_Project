@@ -44,6 +44,7 @@ export default function Header() {
           nickname: result.data?.nickname || googleNick,
           picture: googleData?.picture || null,
           provider: 'GOOGLE',
+          role: result.data?.role || 'ROLE_USER',
         });
       } else {
         setUser({
@@ -166,6 +167,17 @@ export default function Header() {
 
           {/* 프로필 및 구글 로그인 버튼 */}
           <div className="shrink-0 flex items-center gap-2">
+            {user && user.role === 'ROLE_ADMIN' && (
+              <Link
+                to="/admin"
+                className="flex items-center gap-1.5 bg-slate-800 border border-[#00D2B8]/50 rounded-md px-3 py-1.5 shadow-sm hover:bg-slate-750 hover:border-[#00D2B8] transition-all text-[11px] font-black text-[#00D2B8]"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>관리자 대시보드</span>
+              </Link>
+            )}
             {user ? (
               <div className="relative" ref={dropdownRef}>
                 <button

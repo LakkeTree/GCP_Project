@@ -308,6 +308,7 @@ def get_user_profile(current_user: UserModel = Depends(verify_google_token_and_g
             "email": current_user.email,
             "nickname": current_user.nickname,
             "provider": current_user.provider,
+            "role": current_user.role,
             "telecom": current_user.telecom,
             "use_t_membership": getattr(current_user, "use_t_membership", False),
             "held_epay": parse_db_list(current_user.held_epay),
