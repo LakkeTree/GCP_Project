@@ -67,14 +67,23 @@ export default function Footer() {
           </form>
         </div>
 
-        {/* 브랜드 하단 정보 & 팝업 링크 버튼들 */}
+        {/* 브랜드 하단 정보 (푸터 로고: 호+갱탈출 동일 사이즈 수평 1자 정렬) */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-t border-slate-800 pt-8 text-xs text-slate-400">
           <div className="space-y-1">
-            <div className="flex items-center space-x-2">
-              <span className="text-base font-black bg-gradient-to-r from-[#00D2B8] to-[#00E5FF] bg-clip-text text-transparent tracking-tight">
-                호갱탈출
+            <div className="flex items-center">
+              {/* 로고 '호' - 위로 1.5px 올려 수직 위치 교정 */}
+              <img
+                src="/logo.png"
+                alt="호"
+                className="h-6 w-auto object-contain shrink-0 block -translate-y-[1.5px]"
+              />
+              {/* 마진을 -ml-1로 조절하여 겹침 현상을 풀고 적정 자간 확보 */}
+              <span className="text-base font-black bg-gradient-to-r from-[#00D2B8] to-[#00E5FF] bg-clip-text text-transparent tracking-tight leading-none -ml-1">
+                갱탈출
               </span>
-              <span className="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-slate-400 border border-slate-700 font-bold">v1.0.0</span>
+              <span className="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-slate-400 border border-slate-700 font-bold ml-2">
+                v1.0.0
+              </span>
             </div>
             <p className="text-[11px] opacity-70">
               호갱탈출은 스토어/카드사/상품권 우회 혜택을 실시간 조합해 최적가를 비교 안내합니다.

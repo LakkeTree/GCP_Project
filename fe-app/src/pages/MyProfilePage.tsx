@@ -19,6 +19,8 @@ interface GameItem {
   stores?: string[];
 }
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 export default function MyProfilePage() {
   const [searchParams] = useSearchParams();
   const [activeSection, setActiveSection] = useState<'profile' | 'filter'>('profile');
@@ -48,8 +50,9 @@ export default function MyProfilePage() {
     { label: '선택 안 함 (일반 신용/체크카드 / 기본 결제)', value: 'NONE' }
   ]);
 
+  // 1. 카드 목록 동적 로드
   useEffect(() => {
-    fetch('http://127.0.0.1:8000/payments')
+    fetch(`${API_BASE_URL}/payments`)
       .then((res) => res.json())
       .then((result) => {
         if (result.status === 'ok' && Array.isArray(result.data)) {
@@ -138,17 +141,29 @@ export default function MyProfilePage() {
     }
   };
 
+  // 💡 2. 게임 DB 로드 & 로컬 캐싱 적용 (아이콘 즉시 표출)
   useEffect(() => {
-    fetch('http://127.0.0.1:8000/games')
+    // A. 캐시된 게임 데이터가 있으면 먼저 즉시 로드하여 아이콘 로딩 지연 해결
+    const cachedGames = localStorage.getItem('cached_games_list');
+    if (cachedGames) {
+      try {
+        setAllGames(JSON.parse(cachedGames));
+      } catch (e) {}
+    }
+
+    // B. 최신 게임 데이터 비동기 백그라운드 갱신
+    fetch(`${API_BASE_URL}/games`)
       .then((res) => res.json())
       .then((result) => {
         if (result.status === 'ok' && Array.isArray(result.data)) {
           setAllGames(result.data);
+          localStorage.setItem('cached_games_list', JSON.stringify(result.data));
         }
       })
       .catch((err) => console.error('게임 DB 목록 로드 실패:', err));
   }, []);
 
+  // 💡 3. 프로필 로드 및 신규 가입 (Upsert) 로직 (err 경고 완벽 해결)
   useEffect(() => {
     const savedFilterStr = localStorage.getItem('user_filter_settings');
     if (savedFilterStr) {
@@ -160,7 +175,6 @@ export default function MyProfilePage() {
 
     const token = localStorage.getItem('google_token');
     
-    // 💡 유효한 토큰이 있을 때만 서버에 프로필을 요청하도록 수정 (401 에러 완전 차단)
     if (token && token !== 'undefined' && token !== 'null') {
       let googleNick = '유저';
       try {
@@ -173,11 +187,12 @@ export default function MyProfilePage() {
         googleNick = parsed.given_name || parsed.name || '유저';
       } catch (e) {}
 
-      fetch('http://127.0.0.1:8000/user/profile', {
+      // A. 기존 프로필 조회 (GET)
+      fetch(`${API_BASE_URL}/user/profile`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
         .then((res) => {
-          if (!res.ok) throw new Error('Unauthorized');
+          if (!res.ok) throw new Error('NewUserOrUnauthorized');
           return res.json();
         })
         .then((result) => {
@@ -203,18 +218,42 @@ export default function MyProfilePage() {
           }
         })
         .catch((err) => {
-          console.error("프로필 로드 실패/미인증:", err);
-          setUserProfile({ email: '로그인 필요', nickname: '게스트', provider: 'GOOGLE' });
-          setNicknameInput(googleNick);
-          setOriginalNickname(googleNick);
+          // 💡 err 변수를 로그에 사용하여 ts(6133) 경고를 해결
+          console.log("기존 프로필 미확인, 신규 유저 DB 등록 시도중...", err);
+          fetch(`${API_BASE_URL}/user/profile`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({ nickname: googleNick }),
+          })
+            .then((res) => {
+              if (!res.ok) {
+                localStorage.removeItem('google_token');
+                throw new Error('Invalid Token');
+              }
+              return res.json();
+            })
+            .then((regResult) => {
+              setUserProfile({
+                email: regResult.data?.email || '구글 계정',
+                nickname: googleNick,
+                provider: 'GOOGLE',
+              });
+              setNicknameInput(googleNick);
+              setOriginalNickname(googleNick);
+            })
+            .catch((e) => {
+              console.error("신규 유저 자동 가입 실패:", e);
+              setUserProfile({ email: '로그인 필요', nickname: '게스트', provider: 'GOOGLE' });
+            });
         });
     } else {
-      // 💡 토큰이 없는 게스트 상태일 때는 서버 요청을 보내지 않고 게스트 상태 설정
       setUserProfile({ email: '로그인 필요', nickname: '게스트', provider: 'GOOGLE' });
     }
   }, []);
 
-  
   useEffect(() => {
     const tabParam = searchParams.get('tab');
     if (tabParam === 'filter') {
@@ -309,7 +348,7 @@ export default function MyProfilePage() {
         favorite_games: newFavoriteGames,
       };
 
-      await fetch('http://127.0.0.1:8000/user/profile', {
+      await fetch(`${API_BASE_URL}/user/profile`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -336,7 +375,7 @@ export default function MyProfilePage() {
         favorite_games: filter.favoriteGames,
       };
 
-      const res = await fetch('http://127.0.0.1:8000/user/profile', {
+      const res = await fetch(`${API_BASE_URL}/user/profile`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -379,7 +418,7 @@ export default function MyProfilePage() {
           favorite_games: filter.favoriteGames,
         };
 
-        await fetch('http://127.0.0.1:8000/user/profile', {
+        await fetch(`${API_BASE_URL}/user/profile`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -459,7 +498,7 @@ export default function MyProfilePage() {
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 items-start">
           
-          {/* 💡 [요청 반영] 좌측 사이드바 선택 탭: 화이트 바탕 + 민트 테두리 + 민트 그림자 스타일 */}
+          {/* 좌측 사이드바 선택 탭 */}
           <aside className="md:col-span-1 space-y-2 sticky top-36 self-start z-20">
             <button
               type="button"
@@ -521,7 +560,7 @@ export default function MyProfilePage() {
                   />
                 </div>
 
-                {/* 2. 연동된 소셜 계정 + 바로 옆 로그아웃 버튼 */}
+                {/* 2. 연동된 소셜 계정 + 로그아웃 */}
                 <div className="space-y-1.5">
                   <label className="block text-xs font-bold text-slate-600">연동된 소셜 계정</label>
                   <div className="flex items-center gap-2">
@@ -585,7 +624,7 @@ export default function MyProfilePage() {
                 </div>
               )}
 
-              {/* 즐겨찾기 게임 영역 */}
+              {/* 즐겨찾기 게임 영역 (즉시 로딩 최적화 적용) */}
               <div className="pt-4 border-t border-slate-100 space-y-3">
                 <label className="block text-xs font-bold text-slate-600 flex items-center gap-1.5">
                   <svg className="w-4 h-4 text-amber-400" fill="currentColor" viewBox="0 0 20 20">
@@ -629,6 +668,7 @@ export default function MyProfilePage() {
                                   src={gameItem.icon_url}
                                   alt={gameItem.name}
                                   referrerPolicy="no-referrer"
+                                  loading="eager"
                                   className="w-8 h-8 rounded object-cover border border-slate-200 shrink-0 shadow-2xs"
                                   onError={(e) => {
                                     e.currentTarget.onerror = null;
@@ -680,6 +720,7 @@ export default function MyProfilePage() {
                                   src={matchedGame.icon_url}
                                   alt={gameName}
                                   referrerPolicy="no-referrer"
+                                  loading="eager"
                                   className="w-7 h-7 rounded object-cover border border-slate-200 shrink-0 shadow-2xs"
                                   onError={(e) => {
                                     e.currentTarget.onerror = null;
@@ -687,7 +728,7 @@ export default function MyProfilePage() {
                                   }}
                                 />
                               ) : (
-                                <div className="w-7 h-7 rounded bg-[#00D2B8]/15 border border-[#00D2B8]/30 text-[#00A896] flex items-center justify-center font-bold text-xs shrink-0">
+                                <div className="w-7 h-7 rounded bg-[#00D2B8]/15 border border-[#00D2B8]/30 text-[#00A896] flex items-center justify-center font-bold text-xs shrink-0 animate-pulse">
                                   🎮
                                 </div>
                               )}
@@ -720,7 +761,6 @@ export default function MyProfilePage() {
                   )}
                 </div>
               </div>
-              
             </section>
 
             {/* SECTION 2: 기본 검색 조건 필터링 */}
@@ -739,9 +779,7 @@ export default function MyProfilePage() {
 
               {/* 일괄 필터 설정 바 */}
               <div className="flex items-center justify-between bg-slate-100/90 p-3.5 rounded-lg border border-slate-200">
-                <span className="text-xs font-extrabold text-slate-700">
-                  한 번에 필터 설정:
-                </span>
+                <span className="text-xs font-extrabold text-slate-700">한 번에 필터 설정:</span>
                 <div className="flex items-center space-x-2">
                   <button
                     type="button"
@@ -784,14 +822,11 @@ export default function MyProfilePage() {
 
                 {filter.osType === 'ANDROID' && (
                   <div className="p-3.5 bg-slate-50 rounded-lg border border-slate-200 space-y-2.5">
-                    <span className="text-xs font-bold text-slate-700 block">
-                      이용 가능한 스토어 선택
-                    </span>
+                    <span className="text-xs font-bold text-slate-700 block">이용 가능한 스토어 선택</span>
                     <div className="flex flex-wrap gap-1.5">
                       {ANDROID_STORE_OPTIONS.map((store) => {
                         const selected = filter.androidStores.includes(store);
                         return (
-                          /* 💡 [요청 반영] 화이트 바탕 + 민트 보더 + 민트 후광 그림자 스타일 적용 */
                           <button
                             type="button"
                             key={store}
@@ -807,31 +842,10 @@ export default function MyProfilePage() {
                         );
                       })}
                     </div>
-
-                    <div className={`flex flex-wrap gap-1.5 pl-1 ${filter.useCarriers ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
-                      {CARRIER_OPTIONS.map((c) => {
-                        const selected = filter.carriers.includes(c);
-                        return (
-                          <button
-                            key={c}
-                            type="button"
-                            disabled={!filter.useCarriers}
-                            onClick={() => toggleArrayItem('carriers', c)}
-                            className={`px-3 py-1.5 rounded text-xs transition-all ${
-                              selected
-                                ? 'bg-white text-slate-950 font-black border-2 border-[#00D2B8] shadow-[0_2px_8px_rgba(0,210,184,0.35)]'
-                                : 'bg-slate-50 text-slate-500 font-bold border border-slate-200'
-                            }`}
-                          >
-                            {selected ? '✓ ' : '+ '}{c}
-                          </button>
-                        );
-                      })}
-                    </div>
                   </div>
                 )}
 
-                {/* 💡 서브 등급 선택 박스 약한 그라데이션 틴트 적용 */}
+                {/* 서브 등급 및 PC버전 선택 박스 */}
                 {(isGoogleSelected || isGalaxySelected) && (
                   <div className="p-3.5 bg-gradient-to-r from-[#00D2B8]/10 via-slate-50 to-[#00F5FF]/10 rounded-lg border border-[#00D2B8]/30 space-y-3 shadow-2xs">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -923,7 +937,7 @@ export default function MyProfilePage() {
               <div className="space-y-4 pt-2 border-t border-slate-100">
                 <label className="block text-xs font-bold text-slate-700">보유 결제 수단 & 마일리지/구독 멤버십</label>
 
-                {/* 통신사 멤버십 영역 */}
+                {/* 통신사 멤버십 */}
                 <div className="space-y-2">
                   <label className="flex items-center space-x-2 p-2.5 bg-slate-50 rounded border border-slate-200 cursor-pointer">
                     <input
@@ -932,9 +946,7 @@ export default function MyProfilePage() {
                       onChange={(e) => updateFilter('useCarriers', e.target.checked)}
                       className="w-4 h-4 text-[#00D2B8] rounded cursor-pointer"
                     />
-                    <span className="text-xs font-bold text-slate-800">
-                      통신사 멤버십 혜택 포함
-                    </span>
+                    <span className="text-xs font-bold text-slate-800">통신사 멤버십 혜택 포함</span>
                   </label>
 
                   <div className={`flex flex-wrap gap-1.5 pl-1 ${filter.useCarriers ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
@@ -959,7 +971,7 @@ export default function MyProfilePage() {
                   </div>
                 </div>
 
-                {/* 간편결제 버블 칩 */}
+                {/* 간편결제 페이 */}
                 <div className="space-y-2 pt-2 border-t border-slate-100">
                   <label className="flex items-center space-x-2 p-2.5 bg-slate-50 rounded border border-slate-200 cursor-pointer">
                     <input
@@ -974,7 +986,6 @@ export default function MyProfilePage() {
                     {PAY_OPTIONS.map((p) => {
                       const selected = filter.pays.includes(p);
                       return (
-                        /* 💡 [요청 반영] 화이트 바탕 + 민트 보더 + 민트 후광 그림자 스타일 */
                         <button
                           key={p}
                           type="button"
@@ -1021,7 +1032,7 @@ export default function MyProfilePage() {
                   )}
                 </div>
 
-                {/* 문화상품권 우회 버블 칩 */}
+                {/* 문화상품권 우회 충전 */}
                 <div className="space-y-2 pt-2 border-t border-slate-100">
                   <label className="flex items-center space-x-2 p-2.5 bg-slate-50 rounded border border-slate-200 cursor-pointer">
                     <input
@@ -1036,7 +1047,6 @@ export default function MyProfilePage() {
                     {VOUCHER_OPTIONS.map((v) => {
                       const selected = filter.voucherBypasses.includes(v);
                       return (
-                        /* 💡 [요청 반영] 화이트 바탕 + 민트 보더 + 민트 후광 그림자 스타일 */
                         <button
                           key={v}
                           type="button"
@@ -1100,7 +1110,7 @@ export default function MyProfilePage() {
                 )}
               </div>
 
-              {/* 필터 설정 전용 저장 버튼 */}
+              {/* 필터 저장 버튼 */}
               <div className="pt-4 flex justify-end border-t border-slate-100">
                 <button
                   type="button"
@@ -1136,14 +1146,14 @@ export default function MyProfilePage() {
                       const token = localStorage.getItem('google_token');
                       if (token) {
                         try {
-                          await fetch('http://127.0.0.1:8000/user/profile', {
+                          await fetch(`${API_BASE_URL}/user/withdraw`, {
                             method: 'DELETE',
                             headers: { 'Authorization': `Bearer ${token}` }
                           });
                         } catch (e) {}
                       }
                       localStorage.removeItem('google_token');
-                      localStorage.removeItem('user_search_filter_settings');
+                      localStorage.removeItem('user_filter_settings');
                       alert('계정이 성공적으로 삭제되었습니다.');
                       window.location.href = '/';
                     }
