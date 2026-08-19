@@ -1,6 +1,14 @@
 import { useState, useEffect } from 'react';
+import LegalModals from '../components/LegalModals';
 
 const KOREAN_PAYMENT_MAP: Record<string, { name: string }> = {
+  // 🔽 한국어로 변환할 수단들
+  CULTURELAND_VOUCHER: { name: '컬쳐랜드 문화상품권' },
+  CU_CONVENIENCE_STORE: { name: 'CU 편의점 기프트카드' },
+  GOOGLE_PLAY_NAVER_STORE: { name: '구글플레이 네이버스토어' },
+  KCP_BANK_ACCOUNT: { name: 'KCP 계좌이체' },
+
+  // 기존 한글 매핑 목록
   CULTURELAND_CASH: { name: '컬쳐랜드 캐시 (우회)' },
   CULTURELAND_BYPASS: { name: '컬쳐랜드 상품권 우회' },
   GALAXY_STORE_GIFTCARD: { name: '갤럭시 스토어 기프트카드' },
@@ -71,6 +79,7 @@ const getInitialPayments = (): PaymentMethodItem[] => {
 export default function SupportedPaymentPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<MethodCategory>('ALL');
+  const [modalType, setModalType] = useState<'terms' | 'privacy' | 'contact' | null>(null);
   
   const initialData = getInitialPayments();
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodItem[]>(initialData);
@@ -85,31 +94,62 @@ export default function SupportedPaymentPage() {
       .then((res) => res.json())
       .then((result) => {
         if (isMounted && result.status === 'ok' && Array.isArray(result.data)) {
-          const VOUCHER_KEYWORDS = [
-            'GIFTCARD', 'GIFT_CARD', 'GIFT', 'SSG', '11STREET', 'GMARKET',
-            'CONVENIENCE', 'CU_', 'GS25', 'SEVEN', 'ZEROPIN', 'NAVER_STORE', 'APPLE_GIFT', 'VOUCHER'
-          ];
+          // SupportedPaymentPage.tsx 내부 useEffect 데이터 처리 로직 수정
 
-          const processedData = result.data.map((m: PaymentMethodItem) => {
-            const isVoucher = VOUCHER_KEYWORDS.some(
-              (kw) => m.code.toUpperCase().includes(kw) || m.name.toUpperCase().includes(kw)
-            );
+        const VOUCHER_KEYWORDS = [
+          'GIFTCARD', 'GIFT_CARD', 'GIFT', 'SSG', '11STREET', 'GMARKET',
+          'CONVENIENCE', 'CU_', 'GS25', 'SEVEN', 'ZEROPIN', 'NAVER_STORE', 'APPLE_GIFT', 'VOUCHER', 'CULTURELAND', 'BOOKNLIFE'
+        ];
 
-            const mappedInfo = KOREAN_PAYMENT_MAP[m.code.toUpperCase()] || {
-              name: m.name.replace(/_/g, ' '),
-            };
+        // SupportedPaymentPage.tsx 의 useEffect 내부 처리 부분
 
-            return {
-              ...m,
-              name: mappedInfo.name,
-              category: isVoucher
-                ? ('VOUCHER' as MethodCategory)
-                : (m.category === 'CARD' || m.code.includes('CARD') ? 'CARD' : m.category),
-              tag: isVoucher
-                ? '상품권/기프트카드'
-                : (m.category === 'CARD' || m.code.includes('CARD') ? '제휴 카드' : m.tag),
-            };
-          });
+        const processedData = result.data.map((m: PaymentMethodItem) => {
+          const codeUpper = (m.code || '').toUpperCase();
+          const mappedInfo = KOREAN_PAYMENT_MAP[codeUpper];
+
+          // 💡 특정 게임 전용 혜택(target_game !== 'ALL') 제거 및 공통 혜택만 유지
+          const commonBenefits = (m.benefits || []).filter(
+            (b) => !b.target_game || b.target_game === 'ALL'
+          );
+
+          const isVoucher = VOUCHER_KEYWORDS.some(
+            (kw) => codeUpper.includes(kw) || m.name.toUpperCase().includes(kw)
+          );
+
+          const isPay = codeUpper.includes('PAY') || codeUpper === 'SAMSUNG_PAY';
+
+          const isCard = !isVoucher && !isPay && (
+            m.category === 'CARD' ||
+            codeUpper.includes('CARD') ||
+            codeUpper.includes('SHINHAN') ||
+            codeUpper.includes('KB') ||
+            codeUpper.includes('HANA') ||
+            codeUpper.includes('NH')
+          );
+
+          let finalCategory: MethodCategory = m.category;
+          let finalTag = m.tag;
+
+          if (isVoucher) {
+            finalCategory = 'VOUCHER';
+            finalTag = '상품권 우회';
+          } else if (isPay) {
+            finalCategory = 'PAY';
+            finalTag = '간편결제';
+          } else if (isCard) {
+            finalCategory = 'CARD';
+            finalTag = '제휴 카드';
+          }
+
+          return {
+            ...m,
+            name: mappedInfo ? mappedInfo.name : m.name,
+            category: finalCategory,
+            tag: finalTag,
+            benefits: commonBenefits, // 공통 혜택으로 교체
+            benefit_count: commonBenefits.length, // 혜택 개수 재집계
+          };
+        });
 
           setPaymentMethods(processedData);
           localStorage.setItem('cached_payments_list', JSON.stringify(processedData));
@@ -134,11 +174,30 @@ export default function SupportedPaymentPage() {
   ] as const;
 
   const filtered = paymentMethods.filter((m) => {
+    // 💡 1. 스토어 자체 수단 및 더미 결제수단 코드 제외
+    const EXCLUDE_CODES = [
+      'CREDIT_CHECK_CARD',
+      'STORE_MEMBERSHIP_REWARD',
+      'CULTURELAND_PAYMENT',
+      'TELECOM_DISCOUNT',
+      'QUICK_BANK_TRANSFER',
+      'ONE_STORE',       // 원스토어 자체 수단 제외
+      'GOOGLE_PLAY',     // 구글플레이 자체 수단 제외
+      'GALAXY_STORE',    // 갤럭시스토어 자체 수단 제외
+      'APP_STORE'        // 앱스토어 자체 수단 제외
+    ];
+    if (EXCLUDE_CODES.includes(m.code.toUpperCase())) return false;
+
+    // 2. 공통 혜택이 0개인 결제 수단 제외
+    const benefitCount = m.benefit_count || (m.benefits ? m.benefits.length : 0);
+    if (benefitCount === 0) return false;
+
+    // 3. 카테고리 및 검색어 필터링
     const matchesCategory = activeCategory === 'ALL' || m.category === activeCategory;
     const matchesSearch =
       m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       m.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      m.tag.toLowerCase().includes(searchQuery.toLowerCase());
+      (m.tag && m.tag.toLowerCase().includes(searchQuery.toLowerCase()));
 
     return matchesCategory && matchesSearch;
   });
@@ -151,8 +210,6 @@ export default function SupportedPaymentPage() {
 
   return (
     <div className="bg-[#F8FAFC] min-h-screen py-6 md:py-8 relative">
-      
-      {/* 💡 [수직 다층 기하학 모듈] 스크롤 깊이별로 배치된 5개의 은은한 SVG 다각형 무늬 */}
       <div className="absolute top-0 right-0 w-[550px] h-[550px] pointer-events-none opacity-[0.05] z-0">
         <svg viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
           <polygon points="120,20 480,80 380,420 40,300" fill="#00D2B8" />
@@ -188,7 +245,6 @@ export default function SupportedPaymentPage() {
 
       <div className="max-w-[1400px] mx-auto px-4 md:px-6 relative z-10 space-y-6">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-          
           <div className="lg:col-span-10 space-y-6">
             <header className="space-y-3">
               <div className="flex items-center justify-between">
@@ -271,12 +327,13 @@ export default function SupportedPaymentPage() {
                           ) : null}
 
                           <div
-                            className="w-10 h-10 rounded bg-slate-100 items-center justify-center text-slate-600 border border-slate-200 shrink-0"
+                            className="w-10 h-10 rounded-lg bg-gradient-to-br from-slate-100 to-slate-200 items-center justify-center text-slate-700 border border-slate-300/80 shrink-0 shadow-xs"
                             style={{ display: item.icon_url && item.icon_url.startsWith('http') ? 'none' : 'flex' }}
                           >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                              <rect x="2" y="5" width="20" height="14" rx="2" />
+                            <svg className="w-5 h-5 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                              <rect x="2" y="5" width="20" height="14" rx="3" ry="3" />
                               <line x1="2" y1="10" x2="22" y2="10" />
+                              <line x1="6" y1="15" x2="10" y2="15" strokeWidth="2" strokeLinecap="round" />
                             </svg>
                           </div>
 
@@ -345,11 +402,14 @@ export default function SupportedPaymentPage() {
               </div>
             </div>
 
-            <button className="w-full py-2.5 bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] hover:brightness-105 text-slate-950 font-black text-xs rounded transition-all shadow-md cursor-pointer">
+            <button 
+              type="button"
+              onClick={() => setModalType('contact')}
+              className="w-full py-2.5 bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] hover:brightness-105 text-slate-950 font-black text-xs rounded transition-all shadow-md cursor-pointer"
+            >
               광고/제휴 신청하기
             </button>
           </aside>
-
         </div>
       </div>
 
@@ -428,6 +488,9 @@ export default function SupportedPaymentPage() {
           </div>
         </div>
       )}
+
+      {/* 제휴 및 광고 문의 모달 */}
+      <LegalModals type={modalType} onClose={() => setModalType(null)} />
     </div>
   );
 }

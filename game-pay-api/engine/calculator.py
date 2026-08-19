@@ -60,16 +60,48 @@ STORE_PROVIDER_TO_PLATFORM = {
 
 # 스토어 등급 매칭용 키워드 사전. 한글/영문 표기가 섞여 들어올 수 있어
 # (프론트는 한글, 데이터는 "Cond: 브론즈 / ..." 형태 등) 양쪽 다 등록해둔다.
+# DB condition_raw_text 및 item_or_event_name 파싱용 통합 등급 키워드 맵
 TIER_MAP = {
-    "BRONZE": ["브론즈", "BRONZE"],
-    "SILVER": ["실버", "SILVER"],
-    "GOLD": ["골드", "GOLD"],
-    "PLATINUM": ["플래티넘", "PLATINUM"],
-    "DIAMOND": ["다이아몬드", "DIAMOND"],
-    "STANDARD": ["기본", "상시", "STANDARD"],
-    "PRESTIGE": ["프레스티지", "PRESTIGE"],
-    "ROYAL_BLUE": ["로열블루", "ROYAL_BLUE"],
+    "BRONZE": ["브론즈", "BRONZE", "10원당 1PT", "10원당 1.0PT"],
+    "SILVER": ["실버", "SILVER", "10원당 1.1PT"],
+    "GOLD": ["골드", "GOLD", "10원당 1.3PT"],
+    "PLATINUM": ["플래티넘", "PLATINUM", "10원당 1.4PT"],
+    "DIAMOND": ["다이아몬드", "DIAMOND", "10원당 1.6PT"],
+    "STANDARD": ["일반", "기본", "상시", "STANDARD", "1%"],
+    "VIP": ["VIP", "2%"],
+    "VVIP": ["VVIP", "3%"],
+    "ROYAL_BLUE": ["로열블루", "ROYAL_BLUE", "10%"],
 }
+
+def get_store_base_reward(benefit_rows, platform, store_tier=None):
+    """
+    Database(benefit_info)에 저장되어 있는 스토어 등급별 기본 적립 혜택을 100% 매칭하여 조회합니다.
+    """
+    # 1. DB에서 해당 스토어(GOOGLE_PLAY, GALAXY_STORE 등)의 등급 적립 카테고리 데이터만 추출
+    candidates = [
+        r for r in benefit_rows
+        if r.get("category") in ("REWARD_STORE", "SUMMARY_STORE_TIER_REWARD_RATES")
+        and STORE_PROVIDER_TO_PLATFORM.get(r.get("provider_or_retailer")) == platform
+    ]
+    
+    if not candidates:
+        return None
+
+    # 2. 유저가 선택한 등급(store_tier: 예 - DIAMOND, BRONZE, ROYAL_BLUE 등)이 전달된 경우 DB 매칭 실행
+    if store_tier:
+        tier_str = str(store_tier).upper()
+        keywords = TIER_MAP.get(tier_str, [tier_str])
+
+        for cand in candidates:
+            # DB의 이벤트명, 상세조건 text를 가져와 대문자로 통합
+            text_to_search = f"{cand.get('item_or_event_name', '')} {cand.get('condition_raw_text', '')}".upper()
+            
+            # DB 데이터 조건문에 매칭 키워드가 들어있는 행(Row)을 찾아 리턴
+            if any(kw.upper() in text_to_search for kw in keywords):
+                return cand
+
+    # 3. 매칭되는 특별 등급 데이터가 없으면 DB 내 최소 적립률 기본행(브론즈/일반) 적용
+    return min(candidates, key=lambda r: r.get("benefit_value", 0))
 
 
 # =============================================================================
@@ -336,39 +368,51 @@ def find_min_overshoot_combo(denominations, target_amount):
 
 def build_giftcard_routes(giftcard_benefits, all_benefits, held_methods, platform, target_amount):
     """
-    상품권 제공처마다 독립적으로 경로를 하나씩 만든다.
-    할인(DISCOUNT)과 적립(CASHBACK/REWARD)을 분리 계산한다: 할인은 결제액 자체를
-    낮추지만, 적립은 액면가 그대로 지출하고 별도로 되돌려받는 금액이기 때문이다
-    (예: 편의점 상품권 캐시백은 정가를 그대로 내고 나중에 페이백으로 돌려받는다).
+    denomination_list 기반으로 목표 결제 금액(target_amount)을 충족하는 최소 권종 조합을 찾고,
+    선할인(DISCOUNT)과 추가적립(REWARD/CASHBACK)을 정확히 분리하여 체감가를 연산합니다.
     """
     routes = []
 
     for benefit in giftcard_benefits:
+        # 1. denomination_list 파싱 및 최소 초과 권종 조합 산출
         result = find_min_overshoot_combo(benefit.get("denomination_list"), target_amount)
         if result is None:
             continue
-        face_total, combo = result
+        
+        face_total, combo = result  # face_total: 권종 합계 (액면가), combo: 구매한 권종 배열
+        btype = benefit.get("benefit_type")
+        bunit = benefit.get("benefit_unit")
+        bvalue = benefit.get("benefit_value", 0)
 
-        btype = benefit["benefit_type"]
-        if benefit["benefit_unit"] == "PERCENT":
-            effect = face_total * benefit["benefit_value"] / 100
+        # 2. 혜택 금액 계산 (퍼센트 또는 정액)
+        if bunit == "PERCENT":
+            effect = face_total * bvalue / 100
         else:
-            effect = benefit["benefit_value"]
+            effect = bvalue
+        
         effect = round(apply_cap(effect, benefit))
 
+        # 3. DISCOUNT(선할인) vs REWARD/CASHBACK(추가 적립) 분기 연산
         if btype == "DISCOUNT":
-            spent = face_total - effect
-            reward = 0
+            # [선할인형]: 정가보다 저렴하게 구매 (지출액 감소, 적립 0)
+            actual_spent = face_total - effect
+            reward_amount = 0
         elif btype in ("REWARD", "CASHBACK"):
-            spent = face_total
-            reward = effect
+            # [추가 적립형]: 정가 그대로 지출하고 보너스 포인트/적립금 받음
+            actual_spent = face_total
+            reward_amount = effect
         else:
-            spent = face_total
-            reward = 0
+            actual_spent = face_total
+            reward_amount = 0
+
+        # 결제 후 남는 상품권 잔액
+        leftover = face_total - target_amount
+        # 최종 실질 체감가 = 실제 지출액 - 잔액 - 적립금 가치
+        net_cost = actual_spent - leftover - reward_amount
 
         steps = [{
-            "benefit_id": benefit["benefit_id"],
-            "provider": benefit["provider_or_retailer"],
+            "benefit_id": benefit.get("benefit_id"),
+            "provider": benefit.get("provider_or_retailer"),
             "layer": "GIFT_CARD",
             "type": btype,
             "applied_amount": effect,
@@ -379,20 +423,17 @@ def build_giftcard_routes(giftcard_benefits, all_benefits, held_methods, platfor
             "target_game": benefit.get("target_game", "ALL"),
         }]
 
-        leftover = face_total - target_amount
-        net_cost = spent - leftover - reward   # 체감가 = 실제 지출액 - 잔액 - 적립금액
-
         routes.append({
             "route_type": "GIFT_CARD",
             "base_amount": target_amount,
             "steps": steps,
-            "final_paid_amount": spent,
-            "payment_method_reward_total": 0,
+            "final_paid_amount": actual_spent,            # 결제창에서 실제 결제할 금액
+            "payment_method_reward_total": reward_amount,  # 추가 적립금액
             "store_reward_total": 0,
-            "reward_total": reward,
+            "reward_total": reward_amount,
             "fee_total": 0,
-            "leftover_balance": leftover,
-            "net_cost": net_cost,
+            "leftover_balance": leftover,                   # 남는 상품권 잔액
+            "net_cost": net_cost,                           # 최종 체감가
         })
 
     return routes

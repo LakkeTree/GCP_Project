@@ -41,21 +41,54 @@ export const FALLBACK_HOGAENG_RANK_DATA: RankCategoryData = {
   ],
 };
 
-// 백엔드 DB 기반 검색 랭킹 수집 유틸리티
+// gameRankData.ts
 export const fetchHogaengRankData = async (): Promise<RankCategoryData> => {
-  const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
-  
   try {
-    const res = await fetch(`${API_BASE}/ranks?category=HOGAENG`, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
+    // 1. 랭킹 API와 게임목록 API를 동시에 병렬(Promise.all) 로출
+    const rankPromise = fetch('http://127.0.0.1:8000/ranks').then((r) => r.json());
+
+    // 캐시된 게임 목록 확인
+    let gameIconMap: Record<string, string> = {};
+    const cachedGames = localStorage.getItem('cached_games_list');
+
+    let gamesPromise: Promise<any>;
+    if (cachedGames) {
+      // 캐시 데이터가 있으면 API 요청 없이 즉시 사용
+      const parsed = JSON.parse(cachedGames);
+      parsed.forEach((g: any) => {
+        if (g.name && g.icon_url) gameIconMap[g.name.trim().toLowerCase()] = g.icon_url;
+      });
+      gamesPromise = Promise.resolve(null);
+    } else {
+      gamesPromise = fetch('http://127.0.0.1:8000/games').then((r) => r.json());
+    }
+
+    const [rankResult, gamesResult] = await Promise.all([rankPromise, gamesPromise]);
+
+    if (gamesResult && gamesResult.status === 'ok' && Array.isArray(gamesResult.data)) {
+      localStorage.setItem('cached_games_list', JSON.stringify(gamesResult.data));
+      gamesResult.data.forEach((g: any) => {
+        if (g.name && g.icon_url) {
+          gameIconMap[g.name.trim().toLowerCase()] = g.icon_url;
+        }
+      });
+    }
+
+    const rankList = Array.isArray(rankResult) ? rankResult : (rankResult.list || []);
+    const updatedList = rankList.map((item: any) => {
+      const cleanName = (item.name || '').trim().toLowerCase();
+      return {
+        ...item,
+        icon: item.icon || gameIconMap[cleanName] || null
+      };
     });
 
-    if (!res.ok) throw new Error('DB 검색 랭킹 조회 실패');
-    
-    const data = await res.json();
-    return data;
+    return {
+      title: rankResult.title || FALLBACK_HOGAENG_RANK_DATA.title,
+      list: updatedList
+    };
   } catch (err) {
+    console.error('랭킹 데이터 로드 실패:', err);
     return FALLBACK_HOGAENG_RANK_DATA;
   }
 };

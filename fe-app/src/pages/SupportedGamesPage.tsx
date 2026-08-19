@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import LegalModals from '../components/LegalModals';
 
 export interface GameItem {
   id: string;
@@ -14,18 +15,18 @@ export interface GameItem {
 const parseGenreTags = (tags: any): string[] => {
   if (!tags) return [];
 
-  const rawStr = typeof tags === 'string' ? tags : JSON.stringify(tags);
+  // 모든 괄호([], {}), 작은따옴표('), 큰따옴표(") 제거
+  const cleanStr = String(typeof tags === 'string' ? tags : JSON.stringify(tags))
+    .replace(/[\[\]{}'"]/g, '')
+    .trim();
 
-  const matches = [...rawStr.matchAll(/['"]v['"]\s*:\s*['"]([^'"]+)['"]/g)];
-  if (matches.length > 0) {
-    return matches.map((m) => m[1]);
-  }
+  if (!cleanStr) return [];
 
-  if (Array.isArray(tags)) {
-    return tags.map((t) => (typeof t === 'object' && t?.v ? t.v : String(t)));
-  }
-
-  return typeof tags === 'string' && tags.trim() !== '' ? [tags] : [];
+  // 쉼표(,) 단위로만 분리 (슬래시 / 는 유지)
+  return cleanStr
+    .split(',')
+    .map((t) => t.trim())
+    .filter(Boolean);
 };
 
 const getInitialGames = (): GameItem[] => {
@@ -42,6 +43,7 @@ const getInitialGames = (): GameItem[] => {
 export default function SupportedGamesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGenre, setSelectedGenre] = useState('전체');
+  const [modalType, setModalType] = useState<'terms' | 'privacy' | 'contact' | null>(null);
   
   const initialData = getInitialGames();
   const [games, setGames] = useState<GameItem[]>(initialData);
@@ -331,13 +333,19 @@ export default function SupportedGamesPage() {
               </div>
             </div>
 
-            <button className="w-full py-2.5 bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] hover:brightness-105 text-slate-950 font-black text-xs rounded transition-all shadow-md cursor-pointer">
+            <button 
+              type="button"
+              onClick={() => setModalType('contact')}
+              className="w-full py-2.5 bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] hover:brightness-105 text-slate-950 font-black text-xs rounded transition-all shadow-md cursor-pointer"
+            >
               광고/제휴 신청하기
             </button>
           </aside>
 
         </div>
       </div>
+
+      <LegalModals type={modalType} onClose={() => setModalType(null)} />
     </div>
   );
 }

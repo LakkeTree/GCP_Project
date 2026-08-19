@@ -19,6 +19,8 @@ interface GameItem {
   stores?: string[];
 }
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 export default function MyProfilePage() {
   const [searchParams] = useSearchParams();
   const [activeSection, setActiveSection] = useState<'profile' | 'filter'>('profile');
@@ -44,13 +46,13 @@ export default function MyProfilePage() {
     provider: 'GOOGLE',
   });
   
-// BigQuery 기반 제휴 카드 동적 목록 State & Effect
   const [dynamicCardOptions, setDynamicCardOptions] = useState<{ label: string; value: string }[]>([
     { label: '선택 안 함 (일반 신용/체크카드 / 기본 결제)', value: 'NONE' }
   ]);
 
+  // 1. 카드 목록 동적 로드
   useEffect(() => {
-    fetch('http://127.0.0.1:8000/payments')
+    fetch(`${API_BASE_URL}/payments`)
       .then((res) => res.json())
       .then((result) => {
         if (result.status === 'ok' && Array.isArray(result.data)) {
@@ -109,9 +111,6 @@ export default function MyProfilePage() {
   }, []);
 
   const [nicknameInput, setNicknameInput] = useState('');
-
-
-
   const [originalNickname, setOriginalNickname] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
@@ -142,17 +141,29 @@ export default function MyProfilePage() {
     }
   };
 
+  // 💡 2. 게임 DB 로드 & 로컬 캐싱 적용 (아이콘 즉시 표출)
   useEffect(() => {
-    fetch('http://127.0.0.1:8000/games')
+    // A. 캐시된 게임 데이터가 있으면 먼저 즉시 로드하여 아이콘 로딩 지연 해결
+    const cachedGames = localStorage.getItem('cached_games_list');
+    if (cachedGames) {
+      try {
+        setAllGames(JSON.parse(cachedGames));
+      } catch (e) {}
+    }
+
+    // B. 최신 게임 데이터 비동기 백그라운드 갱신
+    fetch(`${API_BASE_URL}/games`)
       .then((res) => res.json())
       .then((result) => {
         if (result.status === 'ok' && Array.isArray(result.data)) {
           setAllGames(result.data);
+          localStorage.setItem('cached_games_list', JSON.stringify(result.data));
         }
       })
       .catch((err) => console.error('게임 DB 목록 로드 실패:', err));
   }, []);
 
+  // 💡 3. 프로필 로드 및 신규 가입 (Upsert) 로직 (err 경고 완벽 해결)
   useEffect(() => {
     const savedFilterStr = localStorage.getItem('user_filter_settings');
     if (savedFilterStr) {
@@ -163,7 +174,8 @@ export default function MyProfilePage() {
     }
 
     const token = localStorage.getItem('google_token');
-    if (token) {
+    
+    if (token && token !== 'undefined' && token !== 'null') {
       let googleNick = '유저';
       try {
         const base64Url = token.split('.')[1];
@@ -175,11 +187,12 @@ export default function MyProfilePage() {
         googleNick = parsed.given_name || parsed.name || '유저';
       } catch (e) {}
 
-      fetch('http://127.0.0.1:8000/user/profile', {
+      // A. 기존 프로필 조회 (GET)
+      fetch(`${API_BASE_URL}/user/profile`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
         .then((res) => {
-          if (!res.ok) throw new Error('Unauthorized');
+          if (!res.ok) throw new Error('NewUserOrUnauthorized');
           return res.json();
         })
         .then((result) => {
@@ -194,14 +207,47 @@ export default function MyProfilePage() {
             setOriginalNickname(finalNick);
             
             if (result.data.favorite_games) {
-              setFilter((prev) => ({ ...prev, favoriteGames: result.data.favorite_games }));
+              const favList = Array.isArray(result.data.favorite_games) ? result.data.favorite_games : [];
+              setFilter((prev) => ({ ...prev, favoriteGames: favList }));
+
+              const savedFilter = localStorage.getItem('user_filter_settings');
+              const parsed = savedFilter ? JSON.parse(savedFilter) : {};
+              parsed.favoriteGames = favList;
+              localStorage.setItem('user_filter_settings', JSON.stringify(parsed));
             }
           }
         })
         .catch((err) => {
-          console.error("프로필 로드 실패/미인증:", err);
-          setNicknameInput(googleNick);
-          setOriginalNickname(googleNick);
+          // 💡 err 변수를 로그에 사용하여 ts(6133) 경고를 해결
+          console.log("기존 프로필 미확인, 신규 유저 DB 등록 시도중...", err);
+          fetch(`${API_BASE_URL}/user/profile`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({ nickname: googleNick }),
+          })
+            .then((res) => {
+              if (!res.ok) {
+                localStorage.removeItem('google_token');
+                throw new Error('Invalid Token');
+              }
+              return res.json();
+            })
+            .then((regResult) => {
+              setUserProfile({
+                email: regResult.data?.email || '구글 계정',
+                nickname: googleNick,
+                provider: 'GOOGLE',
+              });
+              setNicknameInput(googleNick);
+              setOriginalNickname(googleNick);
+            })
+            .catch((e) => {
+              console.error("신규 유저 자동 가입 실패:", e);
+              setUserProfile({ email: '로그인 필요', nickname: '게스트', provider: 'GOOGLE' });
+            });
         });
     } else {
       setUserProfile({ email: '로그인 필요', nickname: '게스트', provider: 'GOOGLE' });
@@ -288,6 +334,11 @@ export default function MyProfilePage() {
   };
 
   const autoSaveFavoriteGames = async (newFavoriteGames: string[]) => {
+    const savedFilter = localStorage.getItem('user_filter_settings');
+    const parsed = savedFilter ? JSON.parse(savedFilter) : {};
+    parsed.favoriteGames = newFavoriteGames;
+    localStorage.setItem('user_filter_settings', JSON.stringify(parsed));
+
     const token = localStorage.getItem('google_token');
     if (!token) return;
 
@@ -297,7 +348,7 @@ export default function MyProfilePage() {
         favorite_games: newFavoriteGames,
       };
 
-      await fetch('http://127.0.0.1:8000/user/profile', {
+      await fetch(`${API_BASE_URL}/user/profile`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -305,7 +356,6 @@ export default function MyProfilePage() {
         },
         body: JSON.stringify(payload)
       });
-      saveFilterSettings();
     } catch (err) {
       console.error("즐겨찾기 자동 저장 오류:", err);
     }
@@ -325,7 +375,7 @@ export default function MyProfilePage() {
         favorite_games: filter.favoriteGames,
       };
 
-      const res = await fetch('http://127.0.0.1:8000/user/profile', {
+      const res = await fetch(`${API_BASE_URL}/user/profile`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -368,7 +418,7 @@ export default function MyProfilePage() {
           favorite_games: filter.favoriteGames,
         };
 
-        await fetch('http://127.0.0.1:8000/user/profile', {
+        await fetch(`${API_BASE_URL}/user/profile`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -390,18 +440,43 @@ export default function MyProfilePage() {
   const isNicknameChanged = nicknameInput.trim() !== '' && nicknameInput !== originalNickname;
   const isGoogleSelected = filter.osType === 'ANDROID' && filter.androidStores.includes('구글 플레이 스토어');
   const isGalaxySelected = filter.osType === 'ANDROID' && filter.androidStores.includes('갤럭시 스토어');
-  const isOneStoreSelected = filter.osType === 'ANDROID' && filter.androidStores.includes('원스토어');
   const isNaverPaySelected = filter.usePays && filter.pays.includes('네이버페이');
   const isTossPaySelected = filter.usePays && filter.pays.includes('토스페이');
 
   return (
-  <div className="bg-[#F8FAFC] min-h-screen py-8 relative">
+    <div className="bg-[#F8FAFC] min-h-screen py-8 relative">
       
-      {/* 은은한 불규칙 SVG 기하학 레이어 */}
+      {/* 수직 다층 SVG 기하학 모듈 */}
       <div className="absolute top-0 right-0 w-[550px] h-[550px] pointer-events-none opacity-[0.05] z-0">
         <svg viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
           <polygon points="120,20 480,80 380,420 40,300" fill="#00D2B8" />
           <polygon points="480,80 380,420 490,480" fill="#0F172A" />
+        </svg>
+      </div>
+
+      <div className="absolute top-[20%] -left-16 w-[500px] h-[500px] pointer-events-none opacity-[0.04] z-0 rotate-12">
+        <svg viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="50,50 450,120 300,450 100,380" fill="#00D2B8" />
+          <polygon points="450,120 300,450 480,320" fill="#00E5FF" />
+        </svg>
+      </div>
+
+      <div className="absolute top-[45%] -right-20 w-[600px] h-[600px] pointer-events-none opacity-[0.05] z-0 -rotate-15">
+        <svg viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="80,100 420,30 350,480 60,320" fill="#00E5FF" />
+          <polygon points="420,30 350,480 490,250" fill="#0F172A" />
+        </svg>
+      </div>
+
+      <div className="absolute top-[70%] -left-20 w-[550px] h-[550px] pointer-events-none opacity-[0.04] z-0 rotate-45">
+        <svg viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="100,40 460,150 280,460 50,300" fill="#00D2B8" />
+        </svg>
+      </div>
+
+      <div className="absolute bottom-10 right-0 w-[500px] h-[500px] pointer-events-none opacity-[0.05] z-0">
+        <svg viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="150,30 450,100 390,450 80,350" fill="#00E5FF" />
         </svg>
       </div>
 
@@ -423,18 +498,18 @@ export default function MyProfilePage() {
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 items-start">
           
-          {/* 좌측 사이드바 (상단 헤더 높이를 고려하여 top-36으로 여백 확보) */}
+          {/* 좌측 사이드바 선택 탭 */}
           <aside className="md:col-span-1 space-y-2 sticky top-36 self-start z-20">
             <button
               type="button"
               onClick={() => scrollToSection('profile')}
-              className={`w-full text-left px-4 py-3.5 rounded-lg font-black text-sm flex items-center gap-3 transition-all cursor-pointer ${
+              className={`w-full text-left px-4 py-3.5 rounded-lg text-sm flex items-center gap-3 transition-all cursor-pointer ${
                 activeSection === 'profile'
-                  ? 'bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] text-slate-950 shadow-[0_2px_8px_rgba(0,210,184,0.3)]'
-                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                  ? 'bg-white text-slate-900 font-black border-2 border-[#00D2B8] shadow-[0_4px_14px_rgba(0,210,184,0.3)]'
+                  : 'bg-white text-slate-600 font-bold border border-slate-200 hover:bg-slate-50'
               }`}
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 text-[#00A896]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
               <span>개인 정보 & 즐겨찾기</span>
@@ -443,13 +518,13 @@ export default function MyProfilePage() {
             <button
               type="button"
               onClick={() => scrollToSection('filter')}
-              className={`w-full text-left px-4 py-3.5 rounded-lg font-black text-sm flex items-center gap-3 transition-all cursor-pointer ${
+              className={`w-full text-left px-4 py-3.5 rounded-lg text-sm flex items-center gap-3 transition-all cursor-pointer ${
                 activeSection === 'filter'
-                  ? 'bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] text-slate-950 shadow-[0_2px_8px_rgba(0,210,184,0.3)]'
-                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                  ? 'bg-white text-slate-900 font-black border-2 border-[#00D2B8] shadow-[0_4px_14px_rgba(0,210,184,0.3)]'
+                  : 'bg-white text-slate-600 font-bold border border-slate-200 hover:bg-slate-50'
               }`}
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 text-[#00A896]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
               </svg>
               <span>기본 검색 필터링</span>
@@ -485,7 +560,7 @@ export default function MyProfilePage() {
                   />
                 </div>
 
-                {/* 2. 연동된 소셜 계정 + 바로 옆 로그아웃 버튼 */}
+                {/* 2. 연동된 소셜 계정 + 로그아웃 */}
                 <div className="space-y-1.5">
                   <label className="block text-xs font-bold text-slate-600">연동된 소셜 계정</label>
                   <div className="flex items-center gap-2">
@@ -512,7 +587,6 @@ export default function MyProfilePage() {
                       </span>
                     </div>
 
-                    {/* 연동 소셜 계정 상자 바로 오른쪽에 붙는 로그아웃 버튼 */}
                     <button
                       type="button"
                       onClick={() => {
@@ -550,7 +624,7 @@ export default function MyProfilePage() {
                 </div>
               )}
 
-              {/* 즐겨찾기 게임 영역 */}
+              {/* 즐겨찾기 게임 영역 (즉시 로딩 최적화 적용) */}
               <div className="pt-4 border-t border-slate-100 space-y-3">
                 <label className="block text-xs font-bold text-slate-600 flex items-center gap-1.5">
                   <svg className="w-4 h-4 text-amber-400" fill="currentColor" viewBox="0 0 20 20">
@@ -594,6 +668,7 @@ export default function MyProfilePage() {
                                   src={gameItem.icon_url}
                                   alt={gameItem.name}
                                   referrerPolicy="no-referrer"
+                                  loading="eager"
                                   className="w-8 h-8 rounded object-cover border border-slate-200 shrink-0 shadow-2xs"
                                   onError={(e) => {
                                     e.currentTarget.onerror = null;
@@ -645,6 +720,7 @@ export default function MyProfilePage() {
                                   src={matchedGame.icon_url}
                                   alt={gameName}
                                   referrerPolicy="no-referrer"
+                                  loading="eager"
                                   className="w-7 h-7 rounded object-cover border border-slate-200 shrink-0 shadow-2xs"
                                   onError={(e) => {
                                     e.currentTarget.onerror = null;
@@ -652,7 +728,7 @@ export default function MyProfilePage() {
                                   }}
                                 />
                               ) : (
-                                <div className="w-7 h-7 rounded bg-[#00D2B8]/15 border border-[#00D2B8]/30 text-[#00A896] flex items-center justify-center font-bold text-xs shrink-0">
+                                <div className="w-7 h-7 rounded bg-[#00D2B8]/15 border border-[#00D2B8]/30 text-[#00A896] flex items-center justify-center font-bold text-xs shrink-0 animate-pulse">
                                   🎮
                                 </div>
                               )}
@@ -685,7 +761,6 @@ export default function MyProfilePage() {
                   )}
                 </div>
               </div>
-              
             </section>
 
             {/* SECTION 2: 기본 검색 조건 필터링 */}
@@ -704,12 +779,7 @@ export default function MyProfilePage() {
 
               {/* 일괄 필터 설정 바 */}
               <div className="flex items-center justify-between bg-slate-100/90 p-3.5 rounded-lg border border-slate-200">
-                <span className="text-xs font-extrabold text-slate-700 flex items-center gap-1.5">
-                  <svg className="w-4 h-4 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.381z" clipRule="evenodd" />
-                  </svg>
-                  <span>한 번에 필터 설정:</span>
-                </span>
+                <span className="text-xs font-extrabold text-slate-700">한 번에 필터 설정:</span>
                 <div className="flex items-center space-x-2">
                   <button
                     type="button"
@@ -752,9 +822,7 @@ export default function MyProfilePage() {
 
                 {filter.osType === 'ANDROID' && (
                   <div className="p-3.5 bg-slate-50 rounded-lg border border-slate-200 space-y-2.5">
-                    <span className="text-xs font-bold text-slate-700 block">
-                      이용 가능한 스토어 선택
-                    </span>
+                    <span className="text-xs font-bold text-slate-700 block">이용 가능한 스토어 선택</span>
                     <div className="flex flex-wrap gap-1.5">
                       {ANDROID_STORE_OPTIONS.map((store) => {
                         const selected = filter.androidStores.includes(store);
@@ -763,10 +831,10 @@ export default function MyProfilePage() {
                             type="button"
                             key={store}
                             onClick={() => toggleArrayItem('androidStores', store)}
-                            className={`px-3 py-1.5 rounded text-xs font-bold border transition-all cursor-pointer ${
+                            className={`px-3 py-1.5 rounded text-xs transition-all cursor-pointer ${
                               selected
-                                ? 'bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] text-slate-950 border-[#00D2B8] font-black shadow-2xs'
-                                : 'bg-white text-slate-500 border-slate-200'
+                                ? 'bg-white text-slate-900 font-black border-2 border-[#00D2B8] shadow-[0_2px_8px_rgba(0,210,184,0.35)]'
+                                : 'bg-slate-50 text-slate-500 font-bold border border-slate-200'
                             }`}
                           >
                             {selected ? '✓ ' : '+ '}{store}
@@ -774,25 +842,12 @@ export default function MyProfilePage() {
                         );
                       })}
                     </div>
-
-                    {isOneStoreSelected && (
-                      <div className="pt-2 border-t border-slate-200">
-                        <label className="flex items-center space-x-2 p-2 bg-white rounded border border-slate-200 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={filter.useTMembership}
-                            onChange={(e) => updateFilter('useTMembership', e.target.checked)}
-                            className="w-4 h-4 text-[#00D2B8] rounded"
-                          />
-                          <span className="text-xs font-bold text-slate-700">T멤버십 이용 중 (원스토어 10% 할인/적립 가능)</span>
-                        </label>
-                      </div>
-                    )}
                   </div>
                 )}
 
+                {/* 서브 등급 및 PC버전 선택 박스 */}
                 {(isGoogleSelected || isGalaxySelected) && (
-                  <div className="p-3.5 bg-gradient-to-r from-[#00D2B8]/10 to-[#00F5FF]/10 rounded-lg border border-[#00D2B8]/30 space-y-3">
+                  <div className="p-3.5 bg-gradient-to-r from-[#00D2B8]/10 via-slate-50 to-[#00F5FF]/10 rounded-lg border border-[#00D2B8]/30 space-y-3 shadow-2xs">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {isGoogleSelected && (
                         <div className="space-y-1">
@@ -882,17 +937,18 @@ export default function MyProfilePage() {
               <div className="space-y-4 pt-2 border-t border-slate-100">
                 <label className="block text-xs font-bold text-slate-700">보유 결제 수단 & 마일리지/구독 멤버십</label>
 
-                {/* 통신사 */}
+                {/* 통신사 멤버십 */}
                 <div className="space-y-2">
                   <label className="flex items-center space-x-2 p-2.5 bg-slate-50 rounded border border-slate-200 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={filter.useCarriers}
                       onChange={(e) => updateFilter('useCarriers', e.target.checked)}
-                      className="w-4 h-4 text-[#00D2B8] rounded"
+                      className="w-4 h-4 text-[#00D2B8] rounded cursor-pointer"
                     />
-                    <span className="text-xs font-bold text-slate-800">통신사 할인 사용하기</span>
+                    <span className="text-xs font-bold text-slate-800">통신사 멤버십 혜택 포함</span>
                   </label>
+
                   <div className={`flex flex-wrap gap-1.5 pl-1 ${filter.useCarriers ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
                     {CARRIER_OPTIONS.map((c) => {
                       const selected = filter.carriers.includes(c);
@@ -902,10 +958,10 @@ export default function MyProfilePage() {
                           type="button"
                           disabled={!filter.useCarriers}
                           onClick={() => toggleArrayItem('carriers', c)}
-                          className={`px-3 py-1.5 rounded text-xs font-bold border ${
+                          className={`px-3 py-1.5 rounded text-xs transition-all ${
                             selected
-                              ? 'bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] text-slate-950 border-[#00D2B8] font-black'
-                              : 'bg-slate-50 text-slate-500 border-slate-200'
+                              ? 'bg-white text-slate-950 font-black border-2 border-[#00D2B8] shadow-[0_2px_8px_rgba(0,210,184,0.35)]'
+                              : 'bg-slate-50 text-slate-500 font-bold border border-slate-200'
                           }`}
                         >
                           {selected ? '✓ ' : '+ '}{c}
@@ -915,7 +971,7 @@ export default function MyProfilePage() {
                   </div>
                 </div>
 
-                {/* 간편결제 */}
+                {/* 간편결제 페이 */}
                 <div className="space-y-2 pt-2 border-t border-slate-100">
                   <label className="flex items-center space-x-2 p-2.5 bg-slate-50 rounded border border-slate-200 cursor-pointer">
                     <input
@@ -935,10 +991,10 @@ export default function MyProfilePage() {
                           type="button"
                           disabled={!filter.usePays}
                           onClick={() => toggleArrayItem('pays', p)}
-                          className={`px-3 py-1.5 rounded text-xs font-bold border ${
+                          className={`px-3 py-1.5 rounded text-xs transition-all ${
                             selected
-                              ? 'bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] text-slate-950 border-[#00D2B8] font-black'
-                              : 'bg-slate-50 text-slate-500 border-slate-200'
+                              ? 'bg-white text-slate-950 font-black border-2 border-[#00D2B8] shadow-[0_2px_8px_rgba(0,210,184,0.35)]'
+                              : 'bg-slate-50 text-slate-500 font-bold border border-slate-200'
                           }`}
                         >
                           {selected ? '✓ ' : '+ '}{p}
@@ -996,10 +1052,10 @@ export default function MyProfilePage() {
                           type="button"
                           disabled={!filter.useVoucherBypasses}
                           onClick={() => toggleArrayItem('voucherBypasses', v)}
-                          className={`px-3 py-1.5 rounded text-xs font-bold border ${
+                          className={`px-3 py-1.5 rounded text-xs transition-all ${
                             selected
-                              ? 'bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] text-slate-950 border-[#00D2B8] font-black'
-                              : 'bg-slate-50 text-slate-500 border-slate-200'
+                              ? 'bg-white text-slate-950 font-black border-2 border-[#00D2B8] shadow-[0_2px_8px_rgba(0,210,184,0.35)]'
+                              : 'bg-slate-50 text-slate-500 font-bold border border-slate-200'
                           }`}
                         >
                           {selected ? '✓ ' : '+ '}{v}
@@ -1054,7 +1110,7 @@ export default function MyProfilePage() {
                 )}
               </div>
 
-              {/* 필터 설정 전용 저장 버튼 */}
+              {/* 필터 저장 버튼 */}
               <div className="pt-4 flex justify-end border-t border-slate-100">
                 <button
                   type="button"
@@ -1066,7 +1122,7 @@ export default function MyProfilePage() {
               </div>
             </section>
 
-            {/* 맨 아래 독립된 계정 탈퇴 전용 카드 */}
+            {/* 계정 탈퇴 카드 */}
             <section className="bg-white rounded-lg border border-slate-200/90 p-6 md:p-8 shadow-xs space-y-4">
               <h2 className="text-base font-black text-slate-900 border-b border-slate-100 pb-3 flex items-center gap-2">
                 <svg className="w-5 h-5 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
@@ -1090,14 +1146,14 @@ export default function MyProfilePage() {
                       const token = localStorage.getItem('google_token');
                       if (token) {
                         try {
-                          await fetch('http://127.0.0.1:8000/user/profile', {
+                          await fetch(`${API_BASE_URL}/user/withdraw`, {
                             method: 'DELETE',
                             headers: { 'Authorization': `Bearer ${token}` }
                           });
                         } catch (e) {}
                       }
                       localStorage.removeItem('google_token');
-                      localStorage.removeItem('user_search_filter_settings');
+                      localStorage.removeItem('user_filter_settings');
                       alert('계정이 성공적으로 삭제되었습니다.');
                       window.location.href = '/';
                     }

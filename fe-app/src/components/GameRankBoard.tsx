@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import type { RankCategoryData } from '../constants/gameRankData';
 import { FALLBACK_HOGAENG_RANK_DATA, fetchHogaengRankData } from '../constants/gameRankData';
 
+
+
 export default function GameRankBoard() {
   const [rankData, setRankData] = useState<RankCategoryData>(FALLBACK_HOGAENG_RANK_DATA);
   const [loading, setLoading] = useState<boolean>(false);
@@ -82,13 +84,24 @@ export default function GameRankBoard() {
                   <img
                     src={item.icon}
                     alt={item.name}
-                    className="w-8 h-8 md:w-9 md:h-9 rounded object-cover border border-slate-200 shrink-0 shadow-2xs"
+                    referrerPolicy="no-referrer"
+                    className="w-8 h-8 md:w-9 md:h-9 rounded object-cover border border-slate-200 shrink-0 shadow-2xs bg-white"
+                    onError={(e) => {
+                      // 이미지 링크가 유효하지 않거나 로드 실패 시 텍스트 아이콘으로 대체
+                      e.currentTarget.style.display = 'none';
+                      if (e.currentTarget.nextElementSibling) {
+                        (e.currentTarget.nextElementSibling as HTMLElement).style.display = 'flex';
+                      }
+                    }}
                   />
-                ) : (
-                  <div className="w-8 h-8 md:w-9 md:h-9 rounded bg-slate-100 flex items-center justify-center text-sm shrink-0 border border-slate-200">
-                    🎮
-                  </div>
-                )}
+                ) : null}
+
+                <div
+                  className="w-8 h-8 md:w-9 md:h-9 rounded bg-slate-100 items-center justify-center text-sm shrink-0 border border-slate-200"
+                  style={{ display: item.icon ? 'none' : 'flex' }}
+                >
+                  🎮
+                </div>
 
                 <div className="space-y-0.5">
                   <div className="flex items-center space-x-2">

@@ -1,34 +1,35 @@
-1. Git, Python, Node.js 를 로컬 컴퓨터에 인스탈
-2. VS code 들어가기
-3. ctr + ~ 를 통하여 terminal 실행
-4. cd fe-app/ ← 을 통하여 fe-app에 들어간다
-    - npm run dev ← 이것을 입력하면 링크를 주며 이를 통하여 fe-app에 들어갈수 있다
-5.  ctr + ~ 로 새로운 터미널로 명령 실행이 가능하다.’
-    - 가끔 깃허브에서 난리 날때면 git rm -r --cached node_modules 이것을 입력하여 캐시 삭제
-    - npm install 이것으로 다른 브랜치 갔다가 올때 생기는 문제 해결
-백엔드 구현 후 프런트엔드 구현
-1. 우선 gcloud auth application-default login를 통하여 g-cloud 로그인을 해야만함
-2. cd game-pay-api/ ← 이것을 입력하면 백엔드 파일 열기가능
-3. .\venv\Scripts\python.exe -m uvicorn main:app --reload --port 8000 를 통하여 실행
-
-# 백엔드 (game-pay-api 디렉토리에서)
+# 1. 백엔드 디렉토리 이동
 cd game-pay-api
-.\venv\Scripts\python.exe -m uvicorn main:app --reload --port 8000
 
-# 프론트엔드 (새 터미널, fe-app 디렉토리에서)
-cd fe-app
-npm install
-npm run dev
-
-++ 백엔드 파이썬 버전 3.12로 업데이트 하였으니, 가상환경이 아직 없다면 아래대로 새로 생성
-- # 1. 3.12 가상환경 생성 (이미 만들어져 있다면 바로 넘어갑니다)
+# 2. Python 3.12 기준 가상환경(venv) 생성 (없는 경우)
 py -3.12 -m venv venv
 
-# 2. 가상환경 전용 파이썬으로 패키지 설치
+# 3. 윈도우 한글 환경 UTF-8 인코딩 설정 (cp949 인코딩 에러 방지)
+$env:PYTHONUTF8=1
+
+# 4. 가상환경 전용 파이썬으로 필수 패키지 일괄 설치
 .\venv\Scripts\python.exe -m pip install -r requirements.txt
 
-++ .\venv\Scripts\python.exe -m pip install cachecontrol google-auth requests
-이거 다운받기
+# 5. 구글 인증 및 캐시 관련 추가 패키지 설치
+.\venv\Scripts\python.exe -m pip install cachecontrol google-auth requests
 
-# 3. 가상환경 전용 파이썬으로 백엔드 서버 실행
+# 6. 백엔드 서버 구동
 .\venv\Scripts\python.exe -m uvicorn main:app --reload --port 8000
+
+# 1. 새 터미널을 열고 프론트엔드 디렉토리 이동
+cd fe-app
+
+# 2. 의존성 패키지 설치
+npm install
+
+# 3. 프론트엔드 개발 서버 실행
+npm run dev
+
+# 위에것들을 했을경우
+cd game-pay-api
+gcloud auth application-default login 
+.\venv\Scripts\python.exe -m uvicorn main:app --reload --port 8000
+
+# 새창에서
+cd fe-app
+npm run dev

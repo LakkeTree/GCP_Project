@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFilterState } from '../hooks/useFilterState';
+import LegalModals from '../components/LegalModals';
 import type { OsType } from '../constants/searchOptions';
 import {
   ANDROID_STORE_OPTIONS,
@@ -14,6 +15,7 @@ import {
 export default function SearchPage() {
   const navigate = useNavigate();
   const [isLoggedIn] = useState(true);
+  const [modalType, setModalType] = useState<'terms' | 'privacy' | 'contact' | null>(null);
 
   const {
     filter,
@@ -43,6 +45,19 @@ export default function SearchPage() {
 
   const [allGames, setAllGames] = useState<{ id: string; name: string; company: string; icon_url: string; stores?: string[] }[]>(getInitialGames);
   const [showDropdown, setShowDropdown] = useState(false);
+
+// 💡 검색 페이지 진입 시 LocalStorage의 최신 즐겨찾기 실시간 불러오기
+  useEffect(() => {
+    const savedFilter = localStorage.getItem('user_filter_settings');
+    if (savedFilter) {
+      try {
+        const parsed = JSON.parse(savedFilter);
+        if (parsed.favoriteGames) {
+          setFilter((prev) => ({ ...prev, favoriteGames: parsed.favoriteGames }));
+        }
+      } catch (e) {}
+    }
+  }, []);
 
   useEffect(() => {
     fetch('http://127.0.0.1:8000/games')
@@ -250,7 +265,6 @@ export default function SearchPage() {
 
   const isGoogleSelected = filter.osType === 'ANDROID' && filter.androidStores.includes('구글 플레이 스토어');
   const isGalaxySelected = filter.osType === 'ANDROID' && filter.androidStores.includes('갤럭시 스토어');
-  const isOneStoreSelected = filter.osType === 'ANDROID' && filter.androidStores.includes('원스토어');
   const isNaverPaySelected = filter.usePays && filter.pays.includes('네이버페이');
   const isTossPaySelected = filter.usePays && filter.pays.includes('토스페이');
 
@@ -500,8 +514,7 @@ export default function SearchPage() {
             </header>
 
             {!selectedGame && (
-              <div className="p-4 bg-amber-50/80 rounded-lg border border-amber-300 text-amber-900 font-extrabold text-xs flex items-center gap-2.5 shadow-xs animate-pulse">
-                <span className="text-lg">🎮</span>
+              <div className="p-4 bg-amber-50/90 rounded-lg border border-amber-300/80 text-amber-900 font-extrabold text-xs shadow-xs animate-pulse">
                 <span>좌측 [1단계]에서 게임을 먼저 검색하여 선택하시면 2단계 결제 필터링이 활성화됩니다.</span>
               </div>
             )}
@@ -509,16 +522,18 @@ export default function SearchPage() {
             <div className={`space-y-5 transition-all ${!selectedGame ? 'opacity-40 pointer-events-none select-none filter blur-[0.6px]' : ''}`}>
               
               <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-slate-100/90 p-3.5 rounded-lg border border-slate-200 gap-2">
-                <span className="text-xs font-extrabold text-slate-700 flex items-center gap-1.5">
-                  ⚡ 한 번에 필터 설정:
-                </span>
+                <span className="text-xs font-extrabold text-slate-700">
+                한 번에 필터 설정:
+              </span>
                 <div className="flex items-center space-x-2 flex-wrap gap-y-1">
                   <button
                     type="button"
                     onClick={handleLoadSavedFilter}
-                    className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 font-extrabold text-xs rounded transition-all cursor-pointer shadow-2xs flex items-center gap-1"
+                    className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-300/80 text-amber-900 font-extrabold text-xs rounded transition-all cursor-pointer shadow-2xs flex items-center gap-1.5"
                   >
-                    <span>📥</span>
+                    <svg className="w-3.5 h-3.5 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
                     <span>저장된 필터 불러오기</span>
                   </button>
                   
@@ -628,19 +643,7 @@ export default function SearchPage() {
                         })}
                       </div>
 
-                      {isOneStoreSelected && isStoreSupported('원스토어', selectedGame?.stores) && (
-                        <div className="pt-2 border-t border-slate-200">
-                          <label className="flex items-center space-x-2 p-2 bg-white rounded border border-slate-200 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={filter.useTMembership}
-                              onChange={(e) => updateFilter('useTMembership', e.target.checked)}
-                              className="w-4 h-4 text-[#00D2B8] rounded"
-                            />
-                            <span className="text-xs font-bold text-slate-700">T멤버십 이용 중 (원스토어 10% 할인/적립 가능)</span>
-                          </label>
-                        </div>
-                      )}
+                      
                     </div>
                   )}
                 </div>
@@ -722,13 +725,21 @@ export default function SearchPage() {
                 </h3>
 
                 <div className="space-y-4">
-                  {/* 통신사 버블 칩 */}
+                  {/* 통신사 멤버십 영역 */}
                   <div className="space-y-2">
                     <label className="flex items-center space-x-2 p-2.5 bg-slate-50 rounded border border-slate-200 cursor-pointer">
-                      <input type="checkbox" checked={filter.useCarriers} onChange={(e) => updateFilter('useCarriers', e.target.checked)} className="w-4 h-4 text-[#00D2B8] rounded" />
-                      <span className="text-xs font-extrabold text-slate-800">통신사 할인 사용하기</span>
+                      <input
+                        type="checkbox"
+                        checked={filter.useCarriers}
+                        onChange={(e) => updateFilter('useCarriers', e.target.checked)}
+                        className="w-4 h-4 text-[#00D2B8] rounded cursor-pointer"
+                      />
+                      <span className="text-xs font-extrabold text-slate-800">
+                        통신사 멤버십 혜택 포함
+                      </span>
                     </label>
-                    <div className={`flex flex-wrap gap-1.5 ${filter.useCarriers ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+
+                    <div className={`flex flex-wrap gap-1.5 pl-1 transition-all ${filter.useCarriers ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
                       {CARRIER_OPTIONS.map((c) => {
                         const selected = filter.carriers.includes(c);
                         return (
@@ -869,9 +880,11 @@ export default function SearchPage() {
                   <button
                     type="button"
                     onClick={handleSaveAndClearDirty}
-                    className="w-full py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-extrabold text-xs md:text-sm rounded border border-slate-300 cursor-pointer flex items-center justify-center gap-2 shadow-2xs"
+                    className="w-full py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-extrabold text-xs md:text-sm rounded border border-slate-300/80 cursor-pointer flex items-center justify-center gap-2 shadow-2xs transition-colors"
                   >
-                    <span>💾</span>
+                    <svg className="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                    </svg>
                     <span>내 결제 필터 세팅 저장하기</span>
                   </button>
                 )}
@@ -880,7 +893,9 @@ export default function SearchPage() {
                   type="submit"
                   className="w-full py-4 bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] hover:brightness-105 active:scale-[0.99] text-slate-950 font-black text-base md:text-lg rounded-lg shadow-[0_4px_14px_rgba(0,210,184,0.3)] cursor-pointer flex items-center justify-center gap-2 transition-all"
                 >
-                  <span>⚡</span>
+                  <svg className="w-5 h-5 text-slate-950 fill-slate-950" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.381z" clipRule="evenodd" />
+                  </svg>
                   <span>최저가 연산하기</span>
                 </button>
               </div>
@@ -898,11 +913,19 @@ export default function SearchPage() {
                 <p className="text-[11px] text-slate-400 leading-relaxed max-w-[130px] mx-auto">실시간 최저가 검색 전용 프로모션 공간입니다.</p>
               </div>
             </div>
-            <button className="w-full py-2.5 bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] hover:brightness-105 text-slate-950 font-black text-xs rounded transition-all shadow-md cursor-pointer">광고/제휴 신청하기</button>
+            <button 
+              type="button" 
+              onClick={() => setModalType('contact')} 
+              className="w-full py-2.5 bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] hover:brightness-105 text-slate-950 font-black text-xs rounded transition-all shadow-md cursor-pointer"
+            >
+              광고/제휴 신청하기
+            </button>
           </aside>
 
         </div>
       </div>
+
+      <LegalModals type={modalType} onClose={() => setModalType(null)} />
     </form>
   );
 }
