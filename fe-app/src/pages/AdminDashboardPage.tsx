@@ -28,7 +28,52 @@ interface StatsSummary {
   generated_at: string;
 }
 
+interface DomainStatus {
+  domain: string;
+  last_status: string;
+  last_scraper_name: string;
+  last_provider_or_retailer: string | null;
+  last_rows_extracted: number;
+  last_error_type: string | null;
+  last_error_message: string | null;
+  last_finished_at: string | null;
+  hours_since_last_run: number | null;
+  is_stale: boolean;
+}
+
+interface CrawlLogRow {
+  run_id: string;
+  domain: string;
+  scraper_name: string;
+  provider_or_retailer: string | null;
+  status: string;
+  rows_extracted: number;
+  error_type: string | null;
+  error_message: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  duration_seconds: number;
+  trigger_source: string;
+}
+
+interface DataStatus {
+  stale_threshold_hours: number;
+  domains: DomainStatus[];
+  recent_logs: CrawlLogRow[];
+  generated_at: string;
+}
+
 type GuardState = 'CHECKING' | 'NO_TOKEN' | 'FORBIDDEN' | 'OK';
+type TabKey = 'users' | 'data';
+
+const DOMAIN_LABELS: Record<string, string> = {
+  card_data: '카드사',
+  epay_data: '간편결제',
+  store_data: '스토어',
+  telecom_data: '통신사',
+  voucher_data: '상품권',
+  mobile_game_data: '게임 정보',
+};
 
 function formatDateTime(iso: string | null): string {
   if (!iso) return '-';
@@ -39,12 +84,18 @@ function formatDateTime(iso: string | null): string {
 
 export default function AdminDashboardPage() {
   const [guard, setGuard] = useState<GuardState>('CHECKING');
+  const [activeTab, setActiveTab] = useState<TabKey>('users');
   const [stats, setStats] = useState<StatsSummary | null>(null);
   const [users, setUsers] = useState<AdminUserRow[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [offset, setOffset] = useState(0);
   const [loadingTable, setLoadingTable] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const [dataStatus, setDataStatus] = useState<DataStatus | null>(null);
+  const [loadingDataStatus, setLoadingDataStatus] = useState(false);
+  const [dataStatusError, setDataStatusError] = useState<string | null>(null);
+  const [dataStatusLoaded, setDataStatusLoaded] = useState(false);
 
   const authHeader = () => {
     const token = localStorage.getItem('google_token');
@@ -84,6 +135,29 @@ export default function AdminDashboardPage() {
     }
   }, []);
 
+  const loadDataStatus = useCallback(async () => {
+    const headers = authHeader();
+    if (!headers) return;
+    setLoadingDataStatus(true);
+    setDataStatusError(null);
+    try {
+      const res = await fetch(`${API_BASE}/admin/data-status`, { headers });
+      if (res.status === 403) {
+        setGuard('FORBIDDEN');
+        return;
+      }
+      if (!res.ok) throw new Error(`데이터 현황 조회 실패 (${res.status})`);
+      const result = await res.json();
+      setDataStatus(result.data);
+      setDataStatusLoaded(true);
+    } catch (err) {
+      console.error('크롤링 데이터 현황 로드 실패:', err);
+      setDataStatusError('크롤링 데이터 현황을 불러오지 못했습니다. 서버 연결을 확인해 주세요.');
+    } finally {
+      setLoadingDataStatus(false);
+    }
+  }, []);
+
   useEffect(() => {
     const headers = authHeader();
     if (!headers) {
@@ -102,6 +176,12 @@ export default function AdminDashboardPage() {
       }
     })();
   }, [loadStats, loadUsers]);
+
+  useEffect(() => {
+    if (activeTab === 'data' && !dataStatusLoaded && guard === 'OK') {
+      loadDataStatus();
+    }
+  }, [activeTab, dataStatusLoaded, guard, loadDataStatus]);
 
   if (guard === 'CHECKING') {
     return (
@@ -148,6 +228,37 @@ export default function AdminDashboardPage() {
           </div>
         )}
 
+        {/* 탭 전환 */}
+        <div className="flex gap-2 border-b border-slate-200">
+          <button
+            type="button"
+            onClick={() => setActiveTab('users')}
+            className={`px-4 py-2.5 text-sm font-black rounded-t-lg transition-colors cursor-pointer ${
+              activeTab === 'users'
+                ? 'bg-white border border-slate-200 border-b-white text-slate-900 -mb-px'
+                : 'text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            유저 모니터링
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('data')}
+            className={`px-4 py-2.5 text-sm font-black rounded-t-lg transition-colors cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'data'
+                ? 'bg-white border border-slate-200 border-b-white text-slate-900 -mb-px'
+                : 'text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            데이터 모니터링
+            {dataStatus && dataStatus.domains.some((d) => d.is_stale) && (
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-500" title="갱신이 필요한 도메인이 있습니다" />
+            )}
+          </button>
+        </div>
+
+        {activeTab === 'users' && (
+          <>
         {/* 요약 통계 카드 */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <StatCard label="총 가입자 수" value={stats?.total_users} accent />
@@ -272,7 +383,187 @@ export default function AdminDashboardPage() {
             </button>
           </div>
         </section>
+          </>
+        )}
+
+        {activeTab === 'data' && (
+          <DataMonitoringPanel
+            dataStatus={dataStatus}
+            loading={loadingDataStatus}
+            error={dataStatusError}
+            onRetry={loadDataStatus}
+          />
+        )}
       </div>
+    </div>
+  );
+}
+
+function formatHoursSince(hours: number | null): string {
+  if (hours === null) return '기록 없음';
+  if (hours < 1) return `${Math.round(hours * 60)}분 전`;
+  if (hours < 48) return `${hours.toFixed(1)}시간 전`;
+  return `${Math.round(hours / 24)}일 전`;
+}
+
+function DataMonitoringPanel({
+  dataStatus,
+  loading,
+  error,
+  onRetry,
+}: {
+  dataStatus: DataStatus | null;
+  loading: boolean;
+  error: string | null;
+  onRetry: () => void;
+}) {
+  if (loading && !dataStatus) {
+    return (
+      <div className="py-16 text-center text-slate-400 text-sm font-bold">불러오는 중...</div>
+    );
+  }
+
+  if (error && !dataStatus) {
+    return (
+      <div className="p-4 bg-rose-50 border border-rose-200 rounded-lg text-sm font-bold text-rose-700 flex items-center justify-between">
+        <span>{error}</span>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-black rounded transition-colors cursor-pointer"
+        >
+          다시 시도
+        </button>
+      </div>
+    );
+  }
+
+  if (!dataStatus) return null;
+
+  const staleCount = dataStatus.domains.filter((d) => d.is_stale).length;
+
+  return (
+    <div className="space-y-6">
+      {staleCount > 0 && (
+        <div className="p-4 bg-rose-50 border border-rose-200 rounded-lg text-sm font-bold text-rose-700">
+          ⚠️ {staleCount}개 도메인의 데이터가 {dataStatus.stale_threshold_hours}시간 이상 갱신되지 않았습니다.
+        </div>
+      )}
+
+      {/* 도메인별 최신성 카드 */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {dataStatus.domains.map((d) => (
+          <div
+            key={d.domain}
+            className={`rounded-lg border p-4 shadow-xs ${
+              d.is_stale ? 'bg-rose-50/60 border-rose-200' : 'bg-white border-slate-200/90'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-black text-slate-900">
+                {DOMAIN_LABELS[d.domain] || d.domain}
+              </span>
+              <div className="flex items-center gap-1.5">
+                {d.is_stale && (
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded border bg-rose-100 text-rose-700 border-rose-300">
+                    갱신 필요
+                  </span>
+                )}
+                <span
+                  className={`text-[11px] font-bold px-2 py-0.5 rounded border ${
+                    d.last_status === 'SUCCESS'
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : 'bg-amber-50 text-amber-700 border-amber-200'
+                  }`}
+                >
+                  {d.last_status === 'SUCCESS' ? '성공' : '실패'}
+                </span>
+              </div>
+            </div>
+            <p className="text-[11px] text-slate-400 font-medium mt-1">{d.domain}</p>
+
+            <div className="mt-3 space-y-1 text-xs text-slate-500">
+              <p>마지막 실행: <span className="font-bold text-slate-700">{formatHoursSince(d.hours_since_last_run)}</span></p>
+              <p>수집 건수: <span className="font-bold text-slate-700">{d.last_rows_extracted.toLocaleString()}건</span></p>
+              {d.last_status !== 'SUCCESS' && d.last_error_message && (
+                <p className="text-rose-600 font-bold truncate" title={d.last_error_message}>
+                  {d.last_error_type ? `[${d.last_error_type}] ` : ''}{d.last_error_message}
+                </p>
+              )}
+            </div>
+          </div>
+        ))}
+        {dataStatus.domains.length === 0 && (
+          <div className="col-span-full text-center py-8 text-slate-400 text-xs font-bold">
+            크롤링 로그가 아직 없습니다.
+          </div>
+        )}
+      </div>
+
+      {/* 최근 크롤링 실행 이력 */}
+      <section className="bg-white rounded-lg border border-slate-200/90 shadow-xs">
+        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+          <h2 className="text-base font-black text-slate-900">최근 크롤링 실행 이력</h2>
+          <span className="text-xs font-bold text-slate-400">최근 {dataStatus.recent_logs.length}건</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-slate-50 text-slate-500 text-xs font-bold border-b border-slate-100">
+                <th className="text-left px-4 py-3">도메인</th>
+                <th className="text-left px-4 py-3">스크래퍼</th>
+                <th className="text-left px-4 py-3">상태</th>
+                <th className="text-left px-4 py-3">수집 건수</th>
+                <th className="text-left px-4 py-3">실행 시각</th>
+                <th className="text-left px-4 py-3">소요 시간</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dataStatus.recent_logs.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="text-center py-8 text-slate-400 text-xs font-bold">
+                    표시할 로그가 없습니다.
+                  </td>
+                </tr>
+              )}
+              {dataStatus.recent_logs.map((log, idx) => (
+                <tr key={`${log.run_id}-${log.scraper_name}-${idx}`} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60">
+                  <td className="px-4 py-3">
+                    <span className="font-bold text-slate-800">{DOMAIN_LABELS[log.domain] || log.domain}</span>
+                  </td>
+                  <td className="px-4 py-3 text-slate-500 text-xs">
+                    <div className="flex flex-col leading-tight">
+                      <span>{log.scraper_name}</span>
+                      {log.provider_or_retailer && (
+                        <span className="text-[10px] text-slate-400">{log.provider_or_retailer}</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`text-[11px] font-bold px-2 py-0.5 rounded border ${
+                        log.status === 'SUCCESS'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : 'bg-amber-50 text-amber-700 border-amber-200'
+                      }`}
+                      title={log.error_message || undefined}
+                    >
+                      {log.status === 'SUCCESS' ? '성공' : '실패'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-slate-500 text-xs">{log.rows_extracted.toLocaleString()}건</td>
+                  <td className="px-4 py-3 text-slate-500 text-xs">{formatDateTime(log.finished_at)}</td>
+                  <td className="px-4 py-3 text-slate-500 text-xs">{log.duration_seconds.toFixed(1)}초</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <p className="text-[11px] text-slate-400 font-medium">
+        기준 시각: {formatDateTime(dataStatus.generated_at)}
+      </p>
     </div>
   );
 }

@@ -607,3 +607,93 @@ def get_admin_user_logs(
             "users": user_rows,
         },
     }
+
+
+# -----------------------------------------------------------------------------
+# 관리자 대시보드: 크롤링 데이터 신선도 모니터링 (BigQuery crawl_log)
+# -----------------------------------------------------------------------------
+
+STALE_THRESHOLD_HOURS = 24
+
+
+@app.get("/admin/data-status", summary="[관리자] 크롤러별 데이터 최신성/성공-실패 모니터링")
+def get_admin_data_status(
+    current_admin: UserModel = Depends(require_admin),
+):
+    try:
+        client = get_client()
+
+        # 도메인(크롤러 그룹)별 가장 최근 실행 1건
+        latest_query = f"""
+            SELECT domain, status, scraper_name, provider_or_retailer,
+                   rows_extracted, error_type, error_message, finished_at
+            FROM (
+                SELECT *,
+                       ROW_NUMBER() OVER (PARTITION BY domain ORDER BY finished_at DESC) AS rn
+                FROM `{PROJECT_ID}.{DATASET_ID}.crawl_log`
+            )
+            WHERE rn = 1
+            ORDER BY domain
+        """
+        latest_rows = list(client.query(latest_query).result())
+
+        # 화면 하단 상세 로그용 최근 실행 이력
+        recent_query = f"""
+            SELECT run_id, domain, scraper_name, provider_or_retailer, status,
+                   rows_extracted, error_type, error_message,
+                   started_at, finished_at, duration_seconds, trigger_source
+            FROM `{PROJECT_ID}.{DATASET_ID}.crawl_log`
+            ORDER BY finished_at DESC
+            LIMIT 100
+        """
+        recent_rows = list(client.query(recent_query).result())
+
+        now = datetime.now(timezone.utc)
+        stale_cutoff = timedelta(hours=STALE_THRESHOLD_HOURS)
+
+        domains = []
+        for row in latest_rows:
+            finished_at = row["finished_at"]
+            hours_since = (now - finished_at).total_seconds() / 3600 if finished_at else None
+            domains.append({
+                "domain": row["domain"],
+                "last_status": row["status"],
+                "last_scraper_name": row["scraper_name"],
+                "last_provider_or_retailer": row["provider_or_retailer"],
+                "last_rows_extracted": row["rows_extracted"],
+                "last_error_type": row["error_type"],
+                "last_error_message": row["error_message"],
+                "last_finished_at": finished_at.isoformat() if finished_at else None,
+                "hours_since_last_run": round(hours_since, 1) if hours_since is not None else None,
+                "is_stale": bool(finished_at and (now - finished_at) > stale_cutoff),
+            })
+
+        recent_logs = [
+            {
+                "run_id": row["run_id"],
+                "domain": row["domain"],
+                "scraper_name": row["scraper_name"],
+                "provider_or_retailer": row["provider_or_retailer"],
+                "status": row["status"],
+                "rows_extracted": row["rows_extracted"],
+                "error_type": row["error_type"],
+                "error_message": row["error_message"],
+                "started_at": row["started_at"].isoformat() if row["started_at"] else None,
+                "finished_at": row["finished_at"].isoformat() if row["finished_at"] else None,
+                "duration_seconds": row["duration_seconds"],
+                "trigger_source": row["trigger_source"],
+            }
+            for row in recent_rows
+        ]
+
+        return {
+            "status": "success",
+            "data": {
+                "stale_threshold_hours": STALE_THRESHOLD_HOURS,
+                "domains": domains,
+                "recent_logs": recent_logs,
+                "generated_at": now.isoformat(),
+            },
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"크롤링 로그 조회 실패: {str(e)}")

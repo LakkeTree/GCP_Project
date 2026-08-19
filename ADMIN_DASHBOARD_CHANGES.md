@@ -49,3 +49,33 @@
 
 - **timezone 버그**: SQLite 개발 DB로 만들었던 초기 버전은 naive datetime끼리 비교했지만, 실제 운영 DB가 Postgres(`timestamptz`)로 전환되면서 aware datetime과 naive datetime을 빼는 `TypeError`가 발생해 `/user/profile`, `/admin/*`가 전부 500 에러를 냈음 → `auth.py`, `main.py`의 관련 로직을 `datetime.now(timezone.utc)` 기준으로 통일해 해결
 - **AdminDashboardPage.tsx 로딩 무한 대기**: API 호출이 실패해도 로딩 상태(`guard`)를 빠져나오지 못해 "불러오는 중..."이 계속 뜨던 버그를 수정 — 실패 시에도 에러 배너를 보여주는 상태로 전환하도록 처리
+
+---
+
+## 2차 변경: 크롤링 데이터 신선도 모니터링 ("데이터 모니터링" 탭)
+
+### 배경 (PRD 최종 라운드 요구사항)
+관리자 대시보드에 유저 모니터링(가입자·DAU/WAU/MAU·활성 유저 목록)은 있었지만, "혜택 데이터가 최신 상태인지"를 확인할 방법이 없었다는 지적. 크롤링이 성공했는지, 마지막 갱신이 언제인지, 어느 도메인이 실패했는지 보여주는 화면이 없으면 데이터가 오래돼도 아무도 알아채지 못한다는 문제였음.
+
+### 기획 문서와 실제 구현의 차이 (확인 필요)
+`docs/최종 SRS.md`에는 로그 테이블을 **PostgreSQL**에 `crawl_status_log`라는 이름으로 두라고 되어 있으나, 실제로 팀원이 구현한 것은 **BigQuery** `positive-tuner-504502-m5.benefit.crawl_log` 테이블이다. 이번 작업은 실제 BigQuery 테이블에 직접 쿼리해 스키마를 확인하고(2026-08-19 기준 42 rows, 도메인: `card_data`/`epay_data`/`store_data`/`telecom_data`/`voucher_data`) 그 실물 스키마를 기준으로 구현했다. SRS 문서는 실제 구현에 맞게 팀과 함께 업데이트가 필요하다.
+
+`crawl_log` 실제 컬럼: `run_id`, `domain`, `scraper_name`, `provider_or_retailer`, `source_file`, `status`(`SUCCESS`/`FAILED`), `rows_extracted`, `error_type`, `error_message`, `started_at`, `finished_at`, `duration_seconds`, `trigger_source`.
+
+### 수정 파일
+
+#### `game-pay-api/main.py`
+- 신규 `GET /admin/data-status`: BigQuery `crawl_log`을 조회해
+  - 도메인별 **최근 실행 1건**(상태, 스크래퍼명, 수집 건수, 에러 사유, 마지막 실행 시각, 마지막 실행 이후 경과 시간)
+  - **최근 100건 실행 이력** 목록
+  을 함께 반환. `STALE_THRESHOLD_HOURS = 24` 기준으로 각 도메인에 `is_stale` 플래그를 계산해서 내려줌 (마지막 실행이 24시간 이상 지났으면 `true`)
+  - `require_admin` 게이트 동일 적용. BigQuery 클라이언트는 기존 `engine.loader.get_client()` 재사용
+
+#### `fe-app/src/pages/AdminDashboardPage.tsx`
+- 상단에 "유저 모니터링" / "데이터 모니터링" 탭 전환 UI 추가 (기존엔 탭 없이 단일 화면이었음). stale 도메인이 하나라도 있으면 "데이터 모니터링" 탭에 빨간 점 표시
+- "데이터 모니터링" 탭은 처음 클릭할 때만 `/admin/data-status`를 호출하는 지연 로딩 방식 (관리자가 안 열어보면 BigQuery 쿼리 비용 발생 안 함)
+- 도메인별 카드: 도메인명, 마지막 실행 경과 시간, 성공/실패 배지, 수집 건수, 실패 시 에러 메시지, 24시간 초과 시 "갱신 필요" 경고 배지
+- 최근 크롤링 실행 이력 테이블: 도메인/스크래퍼/상태/수집건수/실행시각/소요시간
+
+### 검증
+로컬 샌드박스에서 실제 GCP BigQuery `crawl_log` 테이블에 직접 연결해 `GET /admin/data-status` 엔드포인트를 end-to-end로 테스트 완료. 응답 스키마와 각 도메인의 `is_stale` 계산이 정상 동작함을 확인.
