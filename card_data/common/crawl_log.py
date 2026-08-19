@@ -7,12 +7,12 @@ run_all.py가 전부 module.scrape()를 직접 부르는 대신 이 모듈의 ru
 즉시 로그 한 행을 적재한다 — 중간에 프로세스가 죽어도(예: Playwright 브라우저
 크래시) 그때까지 끝난 스크래퍼들의 로그는 남는다.
 
-run_id는 환경변수 CRAWL_RUN_ID가 있으면 그 값을 쓰고(나중에 Cloud Scheduler가
-5개 도메인을 순차 실행할 때 하나의 배치로 묶기 위함), 없으면(로컬 수동 실행)
-프로세스 시작 시각 기준으로 이 모듈이 자동 생성한다. trigger_source도
-동일하게 환경변수(CRAWL_TRIGGER_SOURCE)로 주입 가능하고 기본값은 MANUAL —
-나중에 스케줄러가 SCHEDULED로 설정하면 관리자 페이지에서 수동 테스트 실행과
-자동 실행을 구분할 수 있다.
+run_id는 환경변수 CRAWL_RUN_ID가 있으면 그 값을 쓰고, 없으면 KST 기준 오늘 날짜
+(YYYYMMDD)로 이 모듈이 자동 생성한다. 5개 도메인이 각자 독립된 Cloud Run Job으로
+같은 날 실행되면(오케스트레이터 없이도) 날짜가 곧 run_id라 자동으로 같은 배치로
+묶인다. trigger_source도 동일하게 환경변수(CRAWL_TRIGGER_SOURCE)로 주입 가능하고
+기본값은 MANUAL — 스케줄러가 SCHEDULED로 설정하면 관리자 페이지에서 수동 테스트
+실행과 자동 실행을 구분할 수 있다.
 
 로그 적재 자체가 실패해도(네트워크 문제 등) 크롤링 결과에는 영향을 주지 않는다
 — 경고만 출력하고 원래 rows를 그대로 반환한다.
@@ -24,8 +24,11 @@ import os
 import traceback
 from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from google.cloud import bigquery
+
+KST = ZoneInfo("Asia/Seoul")
 
 PROJECT_ID = "positive-tuner-504502-m5"
 DATASET_ID = "benefit"
@@ -34,7 +37,7 @@ TABLE = f"{PROJECT_ID}.{DATASET_ID}.crawl_log"
 
 SCHEMA_PATH = Path(__file__).resolve().parents[2] / "bigquery" / "schemas" / "crawl_log_schema.json"
 
-_RUN_ID = os.environ.get("CRAWL_RUN_ID") or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+_RUN_ID = os.environ.get("CRAWL_RUN_ID") or datetime.now(KST).strftime("%Y%m%d")
 _TRIGGER_SOURCE = os.environ.get("CRAWL_TRIGGER_SOURCE", "MANUAL")
 
 _CLIENT: bigquery.Client | None = None

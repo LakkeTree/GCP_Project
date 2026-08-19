@@ -10,6 +10,7 @@ BigQuery 적재 쪽이 CSV 안의 source_file 값 단위로 scoped delete + appe
   python -m voucher_data.run_all cultureland       # 컬쳐랜드만 실행
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -23,7 +24,11 @@ load_dotenv()
 
 DOMAIN = "voucher_data"
 OUTPUT_PATH = Path(__file__).resolve().parent / "output" / "Voucher_Benefit_Info_DB.csv"
-DEST_FILENAME = "Voucher_Benefit_Info_DB.csv"
+# zeropin/gmarket/naver_brandstore는 headless 봇 차단 때문에 이 run_all(Cloud Run
+# Job)이 아니라 Xvfb+headed GCE VM에서 별도로 돌린다 — 그쪽은 같은 GCS 목적지에
+# 동시 업로드하면 서로 덮어쓸 수 있어 DEST_FILENAME_OVERRIDE로 다른 파일명을 쓴다
+# (bigquery/main.py의 TARGETS에 그 파일명이 등록돼 있어야 함).
+DEST_FILENAME = os.environ.get("DEST_FILENAME_OVERRIDE") or "Voucher_Benefit_Info_DB.csv"
 
 SCRAPERS = {
     "cultureland": "voucher_data.scrapers.cultureland_voucher",

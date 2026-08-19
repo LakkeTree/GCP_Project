@@ -65,7 +65,11 @@ EXTRA_HINT = (
 
 def scrape() -> list[dict]:
     with ScraperSession(PROVIDER_CODE, require_login=REQUIRE_LOGIN) as page:
-        page.goto(BENEFIT_PAGE_URL)
+        # 기본 wait_until="load"는 Cloud Run(데이터센터 IP)에서 30초 타임아웃으로
+        # 실패함(로컬에선 정상). domcontentloaded로 낮춰도 여전히 30초를 넘겨서
+        # (2026-08-19 확인) 단순 JS 이벤트 지연이 아니라 이 사이트가 클라우드 IP를
+        # 상대로 응답 자체를 늦추는 것으로 추정 — 타임아웃을 60초로 늘려서 대응.
+        page.goto(BENEFIT_PAGE_URL, wait_until="domcontentloaded", timeout=60000)
         try:
             page.wait_for_load_state("networkidle", timeout=10000)
         except Exception:

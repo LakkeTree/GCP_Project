@@ -44,6 +44,13 @@ TARGETS = {
     "Voucher_Benefit_Info_DB.csv": (clean_benefit_info_rows, load_benefit_info),
     "Telecom_Benefit_Info_DB.csv": (clean_benefit_info_rows, load_benefit_info),
     "Total_Platform_Connection_DB.csv": (clean_platform_connection_rows, load_platform_connection),
+    # headless 봇 차단 때문에 Cloud Run Job이 아니라 별도 Xvfb+headed GCE VM에서
+    # 도는 스크래퍼(galaxy_store/zeropin/gmarket/naver_brandstore/lgu_event_board)의
+    # 업로드 파일명. 같은 도메인의 Cloud Run Job 업로드와 GCS 목적지가 겹치면
+    # 서로 덮어쓸 수 있어 파일명을 분리했다(둘 다 동일 스키마, benefit_info로 적재).
+    "Store_Benefit_Info_DB_vm.csv": (clean_benefit_info_rows, load_benefit_info),
+    "Voucher_Benefit_Info_DB_vm.csv": (clean_benefit_info_rows, load_benefit_info),
+    "Telecom_Benefit_Info_DB_vm.csv": (clean_benefit_info_rows, load_benefit_info),
 }
 
 

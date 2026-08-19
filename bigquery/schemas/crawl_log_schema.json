@@ -1,0 +1,15 @@
+[
+  { "name": "run_id", "type": "STRING", "mode": "REQUIRED", "description": "같은 run_all.py 실행(또는 스케줄러가 주입한 배치)을 묶는 ID. 환경변수 CRAWL_RUN_ID가 있으면 그 값, 없으면 실행 시작 시각(UTC) 기반 자동 생성" },
+  { "name": "domain", "type": "STRING", "mode": "REQUIRED", "description": "크롤러 도메인 패키지명 (card_data, epay_data, store_data, voucher_data, telecom_data)" },
+  { "name": "scraper_name", "type": "STRING", "mode": "REQUIRED", "description": "각 run_all.py의 SCRAPERS 딕셔너리 키 (예: kb, ssg, samsung_pay)" },
+  { "name": "provider_or_retailer", "type": "STRING", "mode": "NULLABLE", "description": "스크래퍼 모듈의 PROVIDER_OR_RETAILER 값. import 자체가 실패하면 NULL일 수 있음" },
+  { "name": "source_file", "type": "STRING", "mode": "NULLABLE", "description": "스크래퍼 모듈의 SOURCE_FILE 값. benefit_info.source_file과 매칭해서 이 크롤이 만든 행을 추적하는 용도" },
+  { "name": "status", "type": "STRING", "mode": "REQUIRED", "description": "실행 결과 (SUCCESS, FAILED)" },
+  { "name": "rows_extracted", "type": "INTEGER", "mode": "REQUIRED", "description": "추출된 행 수. 실패 시 0" },
+  { "name": "error_type", "type": "STRING", "mode": "NULLABLE", "description": "실패 시 예외 클래스명 (성공 시 NULL)" },
+  { "name": "error_message", "type": "STRING", "mode": "NULLABLE", "description": "실패 시 예외 메시지 요약(최대 2000자, 성공 시 NULL)" },
+  { "name": "started_at", "type": "TIMESTAMP", "mode": "REQUIRED", "description": "스크래퍼 실행 시작 시각(UTC)" },
+  { "name": "finished_at", "type": "TIMESTAMP", "mode": "REQUIRED", "description": "스크래퍼 실행 종료 시각(UTC)" },
+  { "name": "duration_seconds", "type": "FLOAT", "mode": "REQUIRED", "description": "소요 시간(초)" },
+  { "name": "trigger_source", "type": "STRING", "mode": "REQUIRED", "description": "실행 트리거 (MANUAL, SCHEDULED). 환경변수 CRAWL_TRIGGER_SOURCE 기준, 기본값 MANUAL" }
+]
