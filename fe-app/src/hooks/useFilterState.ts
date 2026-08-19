@@ -257,11 +257,18 @@ export function useFilterState(startEmpty: boolean = false) {
       }
 
       // 🚫 2. 보유 결제수단 총합 최소 1개 유지 방어
+      // 💡 "제휴 카드 선택" 옵션을 켠 것 자체가 카드로 결제하겠다는 의사표시이므로,
+      //    구체적으로 어떤 카드를 골랐는지(NONE 포함)와 무관하게 보유 결제수단 1개로
+      //    인정한다. (selectedSpecialCard !== 'NONE'까지 요구하면, 옵션만 켜고 아직
+      //    구체적인 제휴카드를 고르지 않은 상태에서도 "최소 1개 이상 선택" 경고가
+      //    잘못 발생한다)
       if (isSelected && (key === 'carriers' || key === 'pays' || key === 'voucherBypasses')) {
+        const hasCardSelected = prev.useSpecialOptions;
         const totalSelected =
           (prev.useCarriers ? prev.carriers.length : 0) +
           (prev.usePays ? prev.pays.length : 0) +
-          (prev.useVoucherBypasses ? prev.voucherBypasses.length : 0);
+          (prev.useVoucherBypasses ? prev.voucherBypasses.length : 0) +
+          (hasCardSelected ? 1 : 0);
 
         if (totalSelected <= 1) {
           alert('보유 결제 수단은 최소 1개 이상 선택해야 합니다.');

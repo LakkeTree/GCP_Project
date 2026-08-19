@@ -15,6 +15,9 @@ interface FilterSectionProps {
   showSaveButton?: boolean;
   onSave?: () => void;
   onLoadSaved?: () => void;
+  /** 현재 선택된 게임이 지원하는 스토어 목록(예: ['구글', '원스', '앱스토어']).
+   *  전달되지 않으면(undefined) 게임 미선택 상태로 보고 전부 선택 가능하게 둔다. */
+  supportedStores?: string[];
 }
 
 export default function FilterSection({
@@ -23,6 +26,7 @@ export default function FilterSection({
   showSaveButton = false,
   onSave,
   onLoadSaved,
+  supportedStores,
 }: FilterSectionProps) {
   const {
     filter,
@@ -47,6 +51,24 @@ export default function FilterSection({
   const isGalaxySelected = filter.osType === 'ANDROID' && filter.androidStores.includes('갤럭시 스토어');
   const isNaverPaySelected = filter.usePays && filter.pays.includes('네이버페이');
   const isTossPaySelected = filter.usePays && filter.pays.includes('토스페이');
+
+  // 💡 선택한 게임이 지원하지 않는 스토어/OS는 아예 고를 수 없도록 비활성화한다.
+  //    supportedStores가 없으면(게임 미선택 등) 전부 지원하는 것으로 간주한다.
+  //    (SearchPage.tsx/SearchResultPage.tsx의 isStoreSupported 퍼지 매칭과 동일한 로직)
+  const isStoreSupported = (storeName: string) => {
+    if (!supportedStores || supportedStores.length === 0) return true;
+    return supportedStores.some((s) => {
+      const normS = s.trim().toLowerCase();
+      const normStore = storeName.trim().toLowerCase();
+      if (normStore.includes('구글') && (normS.includes('구글') || normS.includes('google'))) return true;
+      if (normStore.includes('원스') && (normS.includes('원스') || normS.includes('one'))) return true;
+      if (normStore.includes('갤럭시') && (normS.includes('갤스') || normS.includes('갤럭시') || normS.includes('galaxy'))) return true;
+      if ((normStore.includes('앱스토어') || normStore.includes('ios')) && (normS.includes('앱스토어') || normS.includes('ios') || normS.includes('애플') || normS.includes('apple'))) return true;
+      return normS.includes(normStore) || normStore.includes(normS);
+    });
+  };
+  const isIosSupported = isStoreSupported('앱스토어');
+  const isAndroidSupported = ANDROID_STORE_OPTIONS.some((store) => isStoreSupported(store));
 
   return (
     <div className="space-y-5">
@@ -93,20 +115,27 @@ export default function FilterSection({
 
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-2">
-            {(['ANDROID', 'IOS'] as OsType[]).map((os) => (
-              <button
-                key={os}
-                type="button"
-                onClick={() => updateFilter('osType', os)}
-                className={`py-2.5 px-3 rounded text-xs font-extrabold border transition-all cursor-pointer text-center ${
-                  filter.osType === os
-                    ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
-                    : 'bg-slate-50 text-slate-600 border-slate-200'
-                }`}
-              >
-                {os === 'ANDROID' ? '안드로이드' : 'iOS'}
-              </button>
-            ))}
+            {(['ANDROID', 'IOS'] as OsType[]).map((os) => {
+              const osSupported = os === 'ANDROID' ? isAndroidSupported : isIosSupported;
+              return (
+                <button
+                  key={os}
+                  type="button"
+                  disabled={!osSupported}
+                  title={osSupported ? undefined : '현재 선택한 게임이 지원하지 않는 OS입니다.'}
+                  onClick={() => osSupported && updateFilter('osType', os)}
+                  className={`py-2.5 px-3 rounded text-xs font-extrabold border transition-all text-center ${
+                    !osSupported
+                      ? 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed'
+                      : filter.osType === os
+                      ? 'bg-slate-900 text-white border-slate-900 shadow-xs cursor-pointer'
+                      : 'bg-slate-50 text-slate-600 border-slate-200 cursor-pointer'
+                  }`}
+                >
+                  {os === 'ANDROID' ? '안드로이드' : 'iOS'}
+                </button>
+              );
+            })}
           </div>
 
           {filter.osType === 'ANDROID' && (
@@ -115,15 +144,20 @@ export default function FilterSection({
               <div className="flex flex-wrap gap-1.5">
                 {ANDROID_STORE_OPTIONS.map((store) => {
                   const selected = filter.androidStores.includes(store);
+                  const storeSupported = isStoreSupported(store);
                   return (
                     <button
                       type="button"
                       key={store}
-                      onClick={() => handleToggle('androidStores', store)}
-                      className={`px-3 py-1.5 rounded text-xs transition-all cursor-pointer ${
-                        selected
-                          ? 'bg-white text-slate-900 font-black border-2 border-[#00D2B8] shadow-[0_2px_8px_rgba(0,210,184,0.35)]'
-                          : 'bg-slate-50 text-slate-500 font-bold border border-slate-200'
+                      disabled={!storeSupported}
+                      title={storeSupported ? undefined : '현재 선택한 게임이 지원하지 않는 스토어입니다.'}
+                      onClick={() => storeSupported && handleToggle('androidStores', store)}
+                      className={`px-3 py-1.5 rounded text-xs transition-all ${
+                        !storeSupported
+                          ? 'bg-slate-50 text-slate-300 border border-slate-100 cursor-not-allowed'
+                          : selected
+                          ? 'bg-white text-slate-900 font-black border-2 border-[#00D2B8] shadow-[0_2px_8px_rgba(0,210,184,0.35)] cursor-pointer'
+                          : 'bg-slate-50 text-slate-500 font-bold border border-slate-200 cursor-pointer'
                       }`}
                     >
                       {selected ? '✓ ' : '+ '}{store}

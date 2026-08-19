@@ -81,6 +81,9 @@ class RouteRequest(BaseModel):
     has_prev_spend: Optional[bool] = Field(False)
     has_pre_applied: Optional[bool] = Field(False)
     use_game_benefits: Optional[bool] = Field(True)
+    has_subscription: Optional[bool] = Field(False)
+    has_naver_plus: Optional[bool] = Field(False)
+    has_toss_prime: Optional[bool] = Field(False)
 
     @field_validator("platform")
     @classmethod
@@ -204,6 +207,9 @@ def get_optimal_routes(
             has_prev_spend=request.has_prev_spend,
             has_pre_applied=request.has_pre_applied,
             use_game_benefits=request.use_game_benefits,
+            has_subscription=request.has_subscription,
+            has_naver_plus=request.has_naver_plus,
+            has_toss_prime=request.has_toss_prime,
         )
 
         # 관리자 대시보드용 유저별 게임 이용 로그 (로그인 유저만 적재)

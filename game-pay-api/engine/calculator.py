@@ -48,6 +48,33 @@ UNREALISTIC_DISCOUNT_PERCENT_THRESHOLD = 100
 # null(None)로 따로 표기되므로 둘을 구분해서 처리한다.
 FALLBACK_PERCENT_CAP_KRW = 10000
 
+# user_segment == "VIP_MEMBER"인 혜택(예: 토스프라임 전용 적립, 네이버플러스 전용 적립)을
+# 실제로 어떤 유저 입력 플래그와 매칭할지 정의. 매핑에 없는 provider는 유저가 해당
+# 멤버십을 갖고 있는지 확인할 방법이 없으므로 보수적으로 제외한다(포함시키지 않는다).
+VIP_MEMBERSHIP_FLAG_BY_PROVIDER = {
+    "NAVER_PAY": "has_naver_plus",
+    "TOSS_PAY": "has_toss_prime",
+}
+
+# item_or_event_name에 "(20만원 이하)", "(20만원 초과 60만원 이하)"처럼 붙는 결제금액
+# 구간 상한 표기를 파싱한다. is_tiered_limit=True인 행에만 적용해, 무관한 텍스트에서
+# "N만원"이라는 표현이 우연히 등장해도 오탐하지 않도록 한다.
+_SPEND_TIER_UPPER_BOUND_PATTERN = re.compile(r'(\d+)\s*만\s*원\s*(?:이하|까지)')
+
+
+def _parse_spend_tier_upper_bound_krw(benefit):
+    """구간별 적립(is_tiered_limit) 행의 상한 금액(원)을 파싱한다.
+    표기를 못 찾으면 None(상한 없음)을 반환한다."""
+    if not benefit.get("is_tiered_limit"):
+        return None
+    for field in ("item_or_event_name", "condition_raw_text"):
+        text = str(benefit.get(field) or "")
+        matches = _SPEND_TIER_UPPER_BOUND_PATTERN.findall(text)
+        if matches:
+            # "20만원 초과 60만원 이하"처럼 여러 숫자가 섞여 있으면 마지막 매치(상한)를 쓴다.
+            return int(matches[-1]) * 10000
+    return None
+
 # 스토어 자체 쿠폰의 provider_or_retailer 값 -> 실제 플랫폼 코드 매핑.
 # 데이터 표기 방식이 통일되어 있지 않아 명시적 매핑표로 안전하게 비교한다.
 STORE_PROVIDER_TO_PLATFORM = {
@@ -152,7 +179,8 @@ import datetime
 def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
                              held_methods, is_first_purchase, has_prev_spend=None,
                              has_pre_applied=False, use_game_benefits=True,
-                             has_subscription=False):
+                             has_subscription=False, has_naver_plus=False,
+                             has_toss_prime=False):
     eligible = []
     warnings = []
 
@@ -257,6 +285,19 @@ def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
         if b.get("requires_pre_app") and not has_pre_applied:
             continue
 
+        # 💡 VIP_MEMBER 전용 혜택(토스프라임/네이버플러스 등) 실제 가입 여부 검증.
+        # 지금까지는 아래쪽 notes에 "특정 등급 회원 전용"이라고만 표시하고 실제로는
+        # 무조건 통과시켜서, 일반 결제와 멤버십 결제의 적립률 차이가 계산에 반영되지
+        # 않는 버그가 있었다.
+        if b.get("user_segment") == "VIP_MEMBER":
+            membership_flag_name = VIP_MEMBERSHIP_FLAG_BY_PROVIDER.get(provider_code)
+            has_required_membership = {
+                "has_naver_plus": has_naver_plus,
+                "has_toss_prime": has_toss_prime,
+            }.get(membership_flag_name, False)
+            if not has_required_membership:
+                continue
+
         # 게임 전용 혜택 검증
         b_target_raw = str(b.get("target_game") or "ALL").strip()
         req_game_norm = _normalize_game_string(game)
@@ -291,6 +332,15 @@ def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
 
         if amount < b["min_spend_krw"]:
             continue
+
+        # 💡 구간별 적립(예: 토스프라임 "20만원 이하 4% / 20만원 초과 1%") 상한 검증.
+        # min_spend_krw는 구간 하한만 표현할 수 있어, 결제 금액이 구간을 넘어서면
+        # 상위 구간 혜택만 남아야 하는데 지금까지는 하한만 보고 통과시켜서 두 구간이
+        # 동시에 계산에 잡히는 버그가 있었다.
+        tier_upper_bound = _parse_spend_tier_upper_bound_krw(b)
+        if tier_upper_bound is not None and amount > tier_upper_bound:
+            continue
+
         if b["is_first_purchase"] and not is_first_purchase:
             continue
 
@@ -772,6 +822,8 @@ def recommend_best_routes(benefit_rows, platform_rows, platform, amount, held_me
     compat_index = build_compatibility_index(platform_rows)
 
     has_subscription_flag = kwargs.get("has_subscription", False)
+    has_naver_plus_flag = kwargs.get("has_naver_plus", False)
+    has_toss_prime_flag = kwargs.get("has_toss_prime", False)
 
     eligible, warnings = filter_eligible_benefits(
         benefit_rows, compat_index, platform, game, amount, held_methods, is_first_purchase,
@@ -779,6 +831,8 @@ def recommend_best_routes(benefit_rows, platform_rows, platform, amount, held_me
         has_pre_applied=has_pre_applied,
         use_game_benefits=use_game_benefits,
         has_subscription=has_subscription_flag,
+        has_naver_plus=has_naver_plus_flag,
+        has_toss_prime=has_toss_prime_flag,
     )
 
     giftcard_benefits = [b for b in eligible if b.get("category") == "GIFT_CARD"]

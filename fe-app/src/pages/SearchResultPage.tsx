@@ -444,8 +444,11 @@ export default function SearchResultPage() {
       });
     }
 
-    if (filter.useSpecialOptions && filter.selectedSpecialCard !== 'NONE' && filter.hasPrevSpend) {
-      // 💡 유저가 선택한 정확한 카드의 코드 1개만 매핑해서 백엔드로 전송 (전월 실적 충족 체크 시에만 작동)
+    if (filter.useSpecialOptions && filter.selectedSpecialCard !== 'NONE') {
+      // 💡 유저가 선택한 정확한 카드의 코드 1개만 매핑해서 백엔드로 전송
+      //    (전월 실적 충족 여부는 has_prev_spend 필드로 별도 전달되며, 카드 자체를
+      //     결제수단 목록에 포함시키는 것과는 무관하다 — 카드를 골랐다면 실적 충족 여부와
+      //     상관없이 항상 보유 결제수단으로 전송되어야 한다)
       let cardCode = CARD_CODE_MAP[filter.selectedSpecialCard] || filter.selectedSpecialCard;
       
       if (cardCode === 'KB_NORI2_CARD' || cardCode.includes('NORI2')) {
@@ -482,6 +485,8 @@ export default function SearchResultPage() {
           has_prev_spend: filter.useSpecialOptions ? filter.hasPrevSpend : false,
           has_pre_applied: filter.hasPreApplied,
           use_game_benefits: filter.useGameBenefits,
+          has_naver_plus: filter.useNaverMembership,
+          has_toss_prime: filter.useTossPrime,
         };
 
         return fetch(BACKEND_API_URL, {
@@ -674,7 +679,14 @@ export default function SearchResultPage() {
     } finally {
       setLoading(false);
     }
-  }, []); // 💡 빈 배열로 처리하여 오직 handleReSearch 또는 직접 호출할 때만 연산되도록 설정
+  }, [filter, payAmount, activeGameTitle, currentGameObj]);
+  // 💡 [주의] 예전에는 의존성 배열을 []로 비워 "handleReSearch 등에서 직접 호출할 때만
+  //    연산되도록" 의도했지만, 그 결과 filter/payAmount/activeGameTitle 등이 마운트 시점
+  //    값으로 클로저에 고정되어 버려 체크박스를 바꾸고 "다시 검색"을 눌러도 예전 필터 값
+  //    그대로 API가 호출되는 버그가 있었다(첫 결제 미체크인데 첫결제 혜택이 남아있거나,
+  //    카드를 선택해도 반영되지 않는 문제). 아래 mount-only useEffect는 자기 자신의
+  //    의존성 배열이 []이라 fetchBackendData 참조가 바뀌어도 재실행되지 않으므로,
+  //    "필터 바뀔 때마다 자동 재검색"은 여전히 발생하지 않는다.
   const suggestedGames = gameTitle.trim()
     ? allGames.filter(
         (g) =>
@@ -1284,6 +1296,7 @@ export default function SearchResultPage() {
             {/* 💡 onFilterChange를 제거하여 사이드바 필터 클릭 시에는 즉시 연산되지 않고 [다시 검색 (재연산)] 버튼 클릭 시에만 연산됨 */}
             <FilterSection
               filterState={filterState}
+              supportedStores={currentGameObj?.stores}
             />
 
             {/* 스티키 광고 패널 */}
