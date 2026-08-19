@@ -382,3 +382,7 @@ card_data/output/
 # game-pay-api: SQLite WAL 모드 부산물 파일(로컬 DB 상태, 소스코드 아님)
 game-pay-api/*.db-shm
 game-pay-api/*.db-wal
+
+# crawl_log.py가 런타임에 읽는 스키마 파일 — 위쪽 *.json 블랭킷 규칙들에 걸려서
+# 지금까지 커밋된 적이 없었음(크롤러 컨테이너 빌드 시 누락되어 크래시 원인이 됨)
+!bigquery/schemas/crawl_log_schema.json
