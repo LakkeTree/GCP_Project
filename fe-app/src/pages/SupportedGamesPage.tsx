@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import LegalModals from '../components/LegalModals';
 
 export interface GameItem {
   id: string;
@@ -42,6 +43,7 @@ const getInitialGames = (): GameItem[] => {
 export default function SupportedGamesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGenre, setSelectedGenre] = useState('전체');
+  const [modalType, setModalType] = useState<'terms' | 'privacy' | 'contact' | null>(null);
   
   const initialData = getInitialGames();
   const [games, setGames] = useState<GameItem[]>(initialData);
@@ -106,7 +108,7 @@ export default function SupportedGamesPage() {
     return () => observer.disconnect();
   }, [games]);
 
-  const genres = ['전체', 'RPG', '캐주얼', '스포츠', '액션', '전략', '시뮬레이션', '서브컬처'];
+  const genres = ['전체', 'RPG', '캐주얼', '스포츠', '액션', '전략', '시뮬레이션'];
 
   const filtered = games.filter((g) => {
     const cleanTags = parseGenreTags(g.genre_tags);
@@ -331,13 +333,19 @@ export default function SupportedGamesPage() {
               </div>
             </div>
 
-            <button className="w-full py-2.5 bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] hover:brightness-105 text-slate-950 font-black text-xs rounded transition-all shadow-md cursor-pointer">
+            <button 
+              type="button"
+              onClick={() => setModalType('contact')}
+              className="w-full py-2.5 bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] hover:brightness-105 text-slate-950 font-black text-xs rounded transition-all shadow-md cursor-pointer"
+            >
               광고/제휴 신청하기
             </button>
           </aside>
 
         </div>
       </div>
+
+      <LegalModals type={modalType} onClose={() => setModalType(null)} />
     </div>
   );
 }

@@ -33,12 +33,9 @@ class UserModel(Base):
     preferred_store = Column(String(30), default="NONE")
     galaxy_store_tier = Column(String(30), default="NONE")
     favorite_games = Column(Text, default="NONE")
-
+    
     # DB 타임스탬프
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-
-    # 관리자 대시보드 활성 사용자(DAU/WAU/MAU) 집계용: 인증 토큰 검증(로그인) 시점마다 갱신
-    last_login_at = Column(DateTime(timezone=True), nullable=True, index=True)
 
     # 소셜 제공자 + 고유 ID 유니크 제약조건
 
@@ -66,13 +63,10 @@ class OutboundClickLogModel(Base):
     saved_amount = Column(Integer, default=0)
     clicked_at = Column(DateTime(timezone=True), server_default=func.now())
 
-
-# 관리자 대시보드: 로그인 유저의 게임 검색/경로계산 행동 로그 (유저별 선호 게임 랭킹 산출용)
-class UserGameActivityLogModel(Base):
-    __tablename__ = "user_game_activity_logs"
+    # [신규] 2차 PRD: 검색 카운트 수집 로그
+class GameSearchLogModel(Base):
+    __tablename__ = "game_search_logs"  # PostgreSQL에 별도로 생길 테이블명
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(String(50), nullable=False, index=True)
-    game_name = Column(String(100), nullable=False)
-    event_type = Column(String(20), nullable=False)  # SEARCH, ROUTE_CALC
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    game_name = Column(String(100), nullable=False, index=True)
+    searched_at = Column(DateTime(timezone=True), server_default=func.now())

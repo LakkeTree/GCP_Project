@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
+import LegalModals from './LegalModals';
 
 export default function Footer() {
   const [inquiryText, setInquiryText] = useState('');
   const [inquiryEmail, setInquiryEmail] = useState('');
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [modalType, setModalType] = useState<'terms' | 'privacy' | 'contact' | null>(null);
 
   const handleInquirySubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,11 +26,11 @@ export default function Footer() {
     <footer className="bg-slate-900 text-slate-300 mt-16 border-t border-slate-800 relative">
       <div className="max-w-[1400px] mx-auto px-4 md:px-6 py-12 space-y-10">
         
-        {/* 하단 문의사항 폼 패널 */}
+        {/* 하단 24시간 피드백 문의사항 폼 패널 */}
         <div className="bg-slate-800/90 p-6 md:p-8 rounded-lg border border-slate-700/80 grid grid-cols-1 md:grid-cols-12 gap-6 items-center shadow-lg">
           <div className="md:col-span-5 space-y-2">
             <span className="px-2.5 py-1 bg-gradient-to-r from-[#00D2B8]/15 to-[#00E5FF]/15 text-[#00D2B8] font-black text-xs rounded border border-[#00D2B8]/30 inline-block">
-              💬 24시간 피드백
+              24시간 피드백
             </span>
             <h3 className="text-lg md:text-xl font-black text-white tracking-tight">
               잘못된 할인 정보나 문의사항이 있으신가요?
@@ -52,7 +54,7 @@ export default function Footer() {
                 disabled={isSubmitted}
                 className="py-2.5 bg-gradient-to-r from-[#00D2B8] to-[#00E5FF] hover:brightness-105 text-slate-950 font-black text-xs rounded transition-all shadow-md cursor-pointer disabled:opacity-50"
               >
-                {isSubmitted ? '제출 중...' : '✉️ 문의 및 제보 보내기'}
+                {isSubmitted ? '제출 중...' : '문의 및 제보 보내기'}
               </button>
             </div>
             <textarea
@@ -65,15 +67,23 @@ export default function Footer() {
           </form>
         </div>
 
-        {/* 브랜드 하단 정보 */}
+        {/* 브랜드 하단 정보 (푸터 로고: 호+갱탈출 동일 사이즈 수평 1자 정렬) */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-t border-slate-800 pt-8 text-xs text-slate-400">
           <div className="space-y-1">
-            <div className="flex items-center space-x-2">
-              <span className="text-base font-black bg-gradient-to-r from-[#00D2B8] to-[#00E5FF] bg-clip-text text-transparent flex items-center gap-1.5 tracking-tight">
-                <span className="text-[#00D2B8]">🛡️</span>
-                <span>호갱탈출</span>
+            <div className="flex items-center">
+              {/* 로고 '호' - 위로 1.5px 올려 수직 위치 교정 */}
+              <img
+                src="/logo.png"
+                alt="호"
+                className="h-6 w-auto object-contain shrink-0 block -translate-y-[1.5px]"
+              />
+              {/* 마진을 -ml-1로 조절하여 겹침 현상을 풀고 적정 자간 확보 */}
+              <span className="text-base font-black bg-gradient-to-r from-[#00D2B8] to-[#00E5FF] bg-clip-text text-transparent tracking-tight leading-none -ml-1">
+                갱탈출
               </span>
-              <span className="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-slate-400 border border-slate-700 font-bold">v1.0.0</span>
+              <span className="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-slate-400 border border-slate-700 font-bold ml-2">
+                v1.0.0
+              </span>
             </div>
             <p className="text-[11px] opacity-70">
               호갱탈출은 스토어/카드사/상품권 우회 혜택을 실시간 조합해 최적가를 비교 안내합니다.
@@ -81,17 +91,37 @@ export default function Footer() {
           </div>
 
           <div className="flex flex-wrap gap-4 text-slate-400 font-semibold text-[11px]">
-            <a href="#terms" className="hover:text-[#00D2B8] transition-colors">이용약관</a>
-            <a href="#privacy" className="hover:text-[#00D2B8] font-bold text-slate-300 transition-colors">개인정보처리방침</a>
-            <a href="#partnership" className="hover:text-[#00D2B8] transition-colors">제휴/광고 문의</a>
+            <button
+              type="button"
+              onClick={() => setModalType('terms')}
+              className="hover:text-[#00D2B8] transition-colors cursor-pointer"
+            >
+              이용약관
+            </button>
+            <button
+              type="button"
+              onClick={() => setModalType('privacy')}
+              className="hover:text-[#00D2B8] font-bold text-slate-300 transition-colors cursor-pointer"
+            >
+              개인정보처리방침
+            </button>
+            <button
+              type="button"
+              onClick={() => setModalType('contact')}
+              className="hover:text-[#00D2B8] transition-colors cursor-pointer"
+            >
+              제휴/광고 문의
+            </button>
           </div>
         </div>
- 
+
         <p className="text-center text-[10px] text-slate-500 pt-4 border-t border-slate-800/60">
           © 2026 호갱탈출 Project. All rights reserved.
         </p>
 
       </div>
+
+      <LegalModals type={modalType} onClose={() => setModalType(null)} />
     </footer>
   );
 }

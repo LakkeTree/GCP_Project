@@ -1,20 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFilterState } from '../hooks/useFilterState';
-import type { OsType } from '../constants/searchOptions';
-import {
-  ANDROID_STORE_OPTIONS,
-  CARRIER_OPTIONS,
-  PAY_OPTIONS,
-  VOUCHER_OPTIONS,
-  GOOGLE_PLAY_TIERS,
-  GALAXY_STORE_TIERS,
-} from '../constants/searchOptions';
+import LegalModals from '../components/LegalModals';
+import FilterSection from '../components/FilterSection';
 
 export default function SearchPage() {
   const navigate = useNavigate();
   const [isLoggedIn] = useState(true);
+  const [modalType, setModalType] = useState<'terms' | 'privacy' | 'contact' | null>(null);
 
+  const filterState = useFilterState(true);
   const {
     filter,
     setFilter,
@@ -22,10 +17,7 @@ export default function SearchPage() {
     loadSavedFilter,
     addRecentGame,
     removeRecentGame,
-    selectAll,
-    deselectAll,
-    toggleArrayItem,
-  } = useFilterState(true);
+  } = filterState;
 
   const [gameTitle, setGameTitle] = useState('');
   const [amount, setAmount] = useState<number | ''>(0);
@@ -44,7 +36,7 @@ export default function SearchPage() {
   const [allGames, setAllGames] = useState<{ id: string; name: string; company: string; icon_url: string; stores?: string[] }[]>(getInitialGames);
   const [showDropdown, setShowDropdown] = useState(false);
 
-// 💡 검색 페이지 진입 시 LocalStorage의 최신 즐겨찾기 실시간 불러오기
+  // 💡 검색 페이지 진입 시 LocalStorage의 최신 즐겨찾기 실시간 불러오기
   useEffect(() => {
     const savedFilter = localStorage.getItem('user_filter_settings');
     if (savedFilter) {
@@ -55,7 +47,7 @@ export default function SearchPage() {
         }
       } catch (e) {}
     }
-  }, []);
+  }, [setFilter]);
 
   useEffect(() => {
     fetch('http://127.0.0.1:8000/games')
@@ -99,14 +91,9 @@ export default function SearchPage() {
         androidStores: prev.androidStores.filter((st) => isStoreSupported(st, selectedGame.stores)),
       }));
     }
-  }, [gameTitle, selectedGame]);
+  }, [gameTitle, selectedGame, setFilter]);
 
   const [isDirty, setIsDirty] = useState(false);
-
-  const updateFilter = <K extends keyof typeof filter>(key: K, value: typeof filter[K]) => {
-    setFilter((prev) => ({ ...prev, [key]: value }));
-    setIsDirty(true);
-  };
 
   const handleLoadSavedFilter = () => {
     const success = loadSavedFilter();
@@ -134,11 +121,6 @@ export default function SearchPage() {
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [isDirty]);
-
-  const handleOsChange = (targetOs: OsType) => {
-    updateFilter('osType', targetOs);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -197,75 +179,6 @@ export default function SearchPage() {
 
     navigate(`/search-result?${params.toString()}`);
   };
-
-  const [dynamicCardOptions, setDynamicCardOptions] = useState<{ label: string; value: string }[]>([
-    { label: '선택 안 함 (일반 신용/체크카드 / 기본 결제)', value: 'NONE' }
-  ]);
-
-  useEffect(() => {
-    fetch('http://127.0.0.1:8000/payments')
-      .then((res) => res.json())
-      .then((result) => {
-        if (result.status === 'ok' && Array.isArray(result.data)) {
-          const EXCLUDE_KEYWORDS = [
-            'GIFTCARD', 'GIFT_CARD', 'SSG', '11STREET', 'GMARKET',
-            'CONVENIENCE', 'CU_', 'GS25', 'SEVEN', 'ZEROPIN', 'NAVER_STORE', 'APPLE_GIFT',
-            'CREDIT_CHECK_CARD', 'CREDIT'
-          ];
-
-          const EXCLUDE_TITLES = [
-            'CREDIT CHECK CARD', '삼성페이', '결제수단별', '기본 적립률', '기본/이벤트 혜택'
-          ];
-
-          const genuineCardMethods = result.data.filter((m: any) => {
-            const isCardCategory = m.category === 'CARD' || m.code.includes('CARD');
-            const isExcluded = EXCLUDE_KEYWORDS.some((kw) => m.code.toUpperCase().includes(kw));
-            return isCardCategory && !isExcluded;
-          });
-
-          const cardOptions: { label: string; value: string }[] = [
-            { label: '선택 안 함 (일반 신용/체크카드 / 기본 결제)', value: 'NONE' }
-          ];
-
-          const addedCardTitles = new Set<string>();
-
-          genuineCardMethods.forEach((c: any) => {
-            if (c.benefits && c.benefits.length > 0) {
-              c.benefits.forEach((b: any) => {
-                const cardName = b.title || c.name;
-                const isTitleExcluded = EXCLUDE_TITLES.some((t) => cardName.includes(t));
-
-                if (!addedCardTitles.has(cardName) && !isTitleExcluded) {
-                  addedCardTitles.add(cardName);
-                  cardOptions.push({
-                    label: cardName,
-                    value: c.code,
-                  });
-                }
-              });
-            } else {
-              const isTitleExcluded = EXCLUDE_TITLES.some((t) => c.name.includes(t));
-              if (!addedCardTitles.has(c.name) && !isTitleExcluded) {
-                addedCardTitles.add(c.name);
-                cardOptions.push({
-                  label: c.name,
-                  value: c.code,
-                });
-              }
-            }
-          });
-
-          setDynamicCardOptions(cardOptions);
-        }
-      })
-      .catch((err) => console.error('제휴 카드 동적 로드 실패:', err));
-  }, []);
-
-  const isGoogleSelected = filter.osType === 'ANDROID' && filter.androidStores.includes('구글 플레이 스토어');
-  const isGalaxySelected = filter.osType === 'ANDROID' && filter.androidStores.includes('갤럭시 스토어');
-  const isOneStoreSelected = filter.osType === 'ANDROID' && filter.androidStores.includes('원스토어');
-  const isNaverPaySelected = filter.usePays && filter.pays.includes('네이버페이');
-  const isTossPaySelected = filter.usePays && filter.pays.includes('토스페이');
 
   return (
     <form onSubmit={handleSearch} className="bg-[#F8FAFC] min-h-screen py-6 md:py-8 relative">
@@ -520,363 +433,12 @@ export default function SearchPage() {
 
             <div className={`space-y-5 transition-all ${!selectedGame ? 'opacity-40 pointer-events-none select-none filter blur-[0.6px]' : ''}`}>
               
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-slate-100/90 p-3.5 rounded-lg border border-slate-200 gap-2">
-                <span className="text-xs font-extrabold text-slate-700">
-                한 번에 필터 설정:
-              </span>
-                <div className="flex items-center space-x-2 flex-wrap gap-y-1">
-                  <button
-                    type="button"
-                    onClick={handleLoadSavedFilter}
-                    className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-300/80 text-amber-900 font-extrabold text-xs rounded transition-all cursor-pointer shadow-2xs flex items-center gap-1.5"
-                  >
-                    <svg className="w-3.5 h-3.5 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
-                    <span>저장된 필터 불러오기</span>
-                  </button>
-                  
-                  <button
-                    type="button"
-                    onClick={() => { selectAll(); setIsDirty(true); }}
-                    className="px-3.5 py-1.5 bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] hover:brightness-105 text-slate-950 font-black text-xs rounded cursor-pointer shadow-xs"
-                  >
-                    모든 결제수단 선택
-                  </button>
-                  
-                  <button
-                    type="button"
-                    onClick={() => { deselectAll(); setIsDirty(true); }}
-                    className="px-3.5 py-1.5 bg-white hover:bg-slate-200 text-slate-700 font-extrabold text-xs rounded border border-slate-300 cursor-pointer"
-                  >
-                    모든 선택 취소
-                  </button>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-lg border border-slate-200/90 p-5 shadow-xs space-y-4">
-                <h3 className="text-xs font-black text-slate-900 border-b border-slate-100 pb-2.5 flex items-center justify-between">
-                  <span>스마트폰 OS 및 이용 스토어 선택</span>
-                  <span className="text-[10px] text-[#00A896] font-black">* 필수</span>
-                </h3>
-
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-2">
-                    {(['ANDROID', 'IOS'] as OsType[]).map((os) => (
-                      <button
-                        key={os}
-                        type="button"
-                        onClick={() => handleOsChange(os)}
-                        className={`py-2 px-3 rounded text-xs font-extrabold border transition-all cursor-pointer text-center ${
-                          filter.osType === os ? 'bg-slate-900 text-white border-slate-900 shadow-xs' : 'bg-slate-50 text-slate-600 border-slate-200'
-                        }`}
-                      >
-                        {os === 'ANDROID' ? '안드로이드' : 'iOS'}
-                      </button>
-                    ))}
-                  </div>
-
-                  {filter.osType === 'IOS' && (() => {
-                    const isIosSupported = isStoreSupported('앱스토어', selectedGame?.stores);
-                    return (
-                      <div className="p-3 bg-slate-50 rounded border border-slate-200 space-y-2">
-                        <span className="text-[11px] font-bold text-slate-700 block">
-                          이용 가능한 스토어 선택 <span className="text-[#00A896] font-black">* 필수</span>
-                        </span>
-                        <div className="flex flex-wrap gap-1.5">
-                          <button
-                            type="button"
-                            disabled={!isIosSupported}
-                            className={`px-3 py-1 rounded text-xs font-bold border transition-all ${
-                              !isIosSupported
-                                ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed blur-[0.6px] opacity-40 line-through'
-                                : 'bg-white text-slate-900 font-black border-2 border-[#00D2B8] shadow-[0_2px_8px_rgba(0,210,184,0.35)] cursor-default'
-                            }`}
-                            title={!isIosSupported ? '해당 게임은 iOS 앱스토어를 지원하지 않습니다.' : ''}
-                          >
-                            {!isIosSupported ? '✕ ' : '✓ '}앱스토어
-                          </button>
-                        </div>
-                        {!isIosSupported && (
-                          <p className="text-[10px] font-extrabold text-rose-500">
-                            ⚠️ 선택하신 게임은 iOS(앱스토어)를 지원하지 않는 게임입니다.
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })()}
-
-                  {filter.osType === 'ANDROID' && (
-                    <div className="p-3 bg-slate-50 rounded border border-slate-200 space-y-2">
-                      <span className="text-[11px] font-bold text-slate-700 block">
-                        이용 가능한 스토어 선택 <span className="text-[#00A896] font-black">* 필수</span>
-                      </span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {ANDROID_STORE_OPTIONS.map((store) => {
-                          const isSupported = isStoreSupported(store, selectedGame?.stores);
-                          const selected = filter.androidStores.includes(store);
-                          return (
-                            /* 💡 [개선] 입체감 있는 소프트 그라데이션 + 민트 보더 버블 칩 스타일 적용 */
-                            <button
-                              type="button"
-                              key={store}
-                              disabled={!isSupported}
-                              onClick={() => {
-                                if (isSupported) {
-                                  toggleArrayItem('androidStores', store);
-                                  setIsDirty(true);
-                                }
-                              }}
-                              className={`px-2.5 py-1.5 rounded text-xs transition-all ${
-                                !isSupported
-                                  ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed blur-[0.6px] opacity-40 line-through select-none'
-                                  : selected
-                                  ? 'bg-white text-slate-900 font-black border-2 border-[#00D2B8] shadow-[0_2px_8px_rgba(0,210,184,0.35)] cursor-pointer'
-                                  : 'bg-slate-50 text-slate-600 font-bold border border-slate-200 cursor-pointer hover:border-[#00D2B8]/60'
-                              }`}
-                              title={!isSupported ? '선택한 게임에서 지원하지 않는 스토어입니다.' : ''}
-                            >
-                              {!isSupported ? '✕ ' : selected ? '✓ ' : '+ '}{store}
-                            </button>
-                          );
-                        })}
-                      </div>
-
-                      {isOneStoreSelected && isStoreSupported('원스토어', selectedGame?.stores) && (
-                        <div className="pt-2 border-t border-slate-200">
-                          <label className="flex items-center space-x-2 p-2 bg-white rounded border border-slate-200 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={filter.useTMembership}
-                              onChange={(e) => updateFilter('useTMembership', e.target.checked)}
-                              className="w-4 h-4 text-[#00D2B8] rounded"
-                            />
-                            <span className="text-xs font-bold text-slate-700">T멤버십 이용 중 (원스토어 10% 할인/적립 가능)</span>
-                          </label>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* 💡 [개선] 등급 선택 서브 박스 그라데이션 틴트 적용 */}
-                {(isGoogleSelected || isGalaxySelected) && (
-                  <div className="p-3 bg-gradient-to-r from-[#00D2B8]/10 via-slate-50 to-[#00F5FF]/10 rounded border border-[#00D2B8]/30 space-y-3 shadow-2xs">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {isGoogleSelected && (
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-slate-900 block">Google Play Points 등급</label>
-                          <select
-                            value={filter.googlePlayTier}
-                            onChange={(e) => updateFilter('googlePlayTier', e.target.value)}
-                            className="w-full px-2.5 py-1.5 text-xs rounded border border-[#00D2B8]/40 bg-white font-medium text-slate-800"
-                          >
-                            {GOOGLE_PLAY_TIERS.map((tier) => (
-                              <option key={tier.value} value={tier.value}>{tier.label}</option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
-
-                      {isGalaxySelected && (
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-slate-900 block">Galaxy Store 멤버십 등급</label>
-                          <select
-                            value={filter.galaxyStoreTier}
-                            onChange={(e) => updateFilter('galaxyStoreTier', e.target.value)}
-                            className="w-full px-2.5 py-1.5 text-xs rounded border border-[#00D2B8]/40 bg-white font-medium text-slate-800"
-                          >
-                            {GALAXY_STORE_TIERS.map((tier) => (
-                              <option key={tier.value} value={tier.value}>{tier.label}</option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
-                    </div>
-
-                    {isGoogleSelected && (
-                      <div className="pt-2 border-t border-[#00D2B8]/20">
-                        <label className="flex items-center space-x-2 p-2 bg-white rounded border border-[#00D2B8]/30 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={filter.isPcVersion}
-                            onChange={(e) => updateFilter('isPcVersion', e.target.checked)}
-                            className="w-4 h-4 text-[#00D2B8] rounded"
-                          />
-                          <span className="text-xs font-bold text-slate-800">PC 버전 (Google Play Games) 접속 결제 대상</span>
-                        </label>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div className="bg-white rounded-lg border border-slate-200/90 p-5 shadow-xs space-y-3">
-                <h3 className="text-xs font-black text-slate-900 border-b border-slate-100 pb-2.5">보너스 이벤트 적용 여부</h3>
-                <div className="space-y-2">
-                  <label className="flex items-center space-x-2 p-2.5 bg-slate-50 rounded border border-slate-200 cursor-pointer">
-                    <input type="checkbox" checked={filter.useGameBenefits} onChange={(e) => updateFilter('useGameBenefits', e.target.checked)} className="w-4 h-4 text-[#00D2B8] rounded" />
-                    <span className="text-xs font-bold text-slate-700">선택한 게임 전용 혜택 포함</span>
-                  </label>
-                  <label className="flex items-center space-x-2 p-2.5 bg-slate-50 rounded border border-slate-200 cursor-pointer">
-                    <input type="checkbox" checked={filter.hasPreApplied} onChange={(e) => updateFilter('hasPreApplied', e.target.checked)} className="w-4 h-4 text-[#00D2B8] rounded" />
-                    <span className="text-xs font-bold text-slate-700">사전 응모 완료 혜택 포함</span>
-                  </label>
-                  <label className="flex items-center space-x-2 p-2.5 bg-slate-50 rounded border border-slate-200 cursor-pointer">
-                    <input type="checkbox" checked={filter.isFirstPayment} onChange={(e) => updateFilter('isFirstPayment', e.target.checked)} className="w-4 h-4 text-[#00D2B8] rounded" />
-                    <span className="text-xs font-bold text-slate-700">첫 결제 이벤트 대상</span>
-                  </label>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-lg border border-slate-200/90 p-5 shadow-xs space-y-4">
-                <h3 className="text-xs font-black text-slate-900 border-b border-slate-100 pb-2.5 flex items-center justify-between">
-                  <span>보유 결제 수단 필터</span>
-                  <span className="text-[10px] text-[#00A896] font-black">* 최소 1개 필수</span>
-                </h3>
-
-                <div className="space-y-4">
-                  {/* 통신사 버블 칩 */}
-                  <div className="space-y-2">
-                    <label className="flex items-center space-x-2 p-2.5 bg-slate-50 rounded border border-slate-200 cursor-pointer">
-                      <input type="checkbox" checked={filter.useCarriers} onChange={(e) => updateFilter('useCarriers', e.target.checked)} className="w-4 h-4 text-[#00D2B8] rounded" />
-                      <span className="text-xs font-extrabold text-slate-800">통신사 할인 사용하기</span>
-                    </label>
-                    <div className={`flex flex-wrap gap-1.5 ${filter.useCarriers ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
-                      {CARRIER_OPTIONS.map((c) => {
-                        const selected = filter.carriers.includes(c);
-                        return (
-                          <button
-                            type="button"
-                            key={c}
-                            disabled={!filter.useCarriers}
-                            onClick={() => {
-                              toggleArrayItem('carriers', c);
-                              setIsDirty(true);
-                            }}
-                            className={`px-3 py-1.5 rounded text-xs transition-all ${
-                              selected
-                                ? 'bg-white text-slate-900 font-black border-2 border-[#00D2B8] shadow-[0_2px_8px_rgba(0,210,184,0.35)] cursor-pointer'
-                                : 'bg-slate-50 text-slate-600 font-bold border border-slate-200 cursor-pointer hover:border-[#00D2B8]/60'
-                            }`}
-                          >
-                            {selected ? '✓ ' : '+ '}{c}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* 간편결제 버블 칩 */}
-                  <div className="space-y-2 pt-2 border-t border-slate-100">
-                    <label className="flex items-center space-x-2 p-2.5 bg-slate-50 rounded border border-slate-200 cursor-pointer">
-                      <input type="checkbox" checked={filter.usePays} onChange={(e) => updateFilter('usePays', e.target.checked)} className="w-4 h-4 text-[#00D2B8] rounded" />
-                      <span className="text-xs font-extrabold text-slate-800">사용 간편결제 (페이) 선택</span>
-                    </label>
-                    <div className={`flex flex-wrap gap-1.5 ${filter.usePays ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
-                      {PAY_OPTIONS.map((p) => {
-                        const selected = filter.pays.includes(p);
-                        return (
-                          <button
-                            type="button"
-                            key={p}
-                            disabled={!filter.usePays}
-                            onClick={() => {
-                              toggleArrayItem('pays', p);
-                              setIsDirty(true);
-                            }}
-                            className={`px-3 py-1.5 rounded text-xs transition-all ${
-                              selected
-                                ? 'bg-white text-slate-900 font-black border-2 border-[#00D2B8] shadow-[0_2px_8px_rgba(0,210,184,0.35)] cursor-pointer'
-                                : 'bg-slate-50 text-slate-600 font-bold border border-slate-200 cursor-pointer hover:border-[#00D2B8]/60'
-                            }`}
-                          >
-                            {selected ? '✓ ' : '+ '}{p}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {isNaverPaySelected && (
-                      <div className="pt-2 pl-2">
-                        <label className="flex items-center space-x-2 p-2 bg-emerald-50/80 rounded border border-emerald-200 cursor-pointer">
-                          <input type="checkbox" checked={filter.useNaverMembership} onChange={(e) => updateFilter('useNaverMembership', e.target.checked)} className="w-4 h-4 text-emerald-600 rounded" />
-                          <span className="text-xs font-bold text-emerald-900">네이버플러스 멤버십 가입 중 (+4% 추가 적립)</span>
-                        </label>
-                      </div>
-                    )}
-
-                    {isTossPaySelected && (
-                      <div className="pt-2 pl-2">
-                        <label className="flex items-center space-x-2 p-2 bg-blue-50/80 rounded border border-blue-200 cursor-pointer">
-                          <input type="checkbox" checked={filter.useTossPrime} onChange={(e) => updateFilter('useTossPrime', e.target.checked)} className="w-4 h-4 text-blue-600 rounded" />
-                          <span className="text-xs font-bold text-blue-900">토스프라임 구독 중 (+4% 추가 적립)</span>
-                        </label>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* 문화상품권 버블 칩 */}
-                  <div className="space-y-2 pt-2 border-t border-slate-100">
-                    <label className="flex items-center space-x-2 p-2.5 bg-slate-50 rounded border border-slate-200 cursor-pointer">
-                      <input type="checkbox" checked={filter.useVoucherBypasses} onChange={(e) => updateFilter('useVoucherBypasses', e.target.checked)} className="w-4 h-4 text-[#00D2B8] rounded" />
-                      <span className="text-xs font-extrabold text-slate-800">문화상품권 우회 충전 할인</span>
-                    </label>
-                    <div className={`flex flex-wrap gap-1.5 ${filter.useVoucherBypasses ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
-                      {VOUCHER_OPTIONS.map((v) => {
-                        const selected = filter.voucherBypasses.includes(v);
-                        return (
-                          <button
-                            type="button"
-                            key={v}
-                            disabled={!filter.useVoucherBypasses}
-                            onClick={() => {
-                              toggleArrayItem('voucherBypasses', v);
-                              setIsDirty(true);
-                            }}
-                            className={`px-3 py-1.5 rounded text-xs transition-all ${
-                              selected
-                                ? 'bg-white text-slate-900 font-black border-2 border-[#00D2B8] shadow-[0_2px_8px_rgba(0,210,184,0.35)] cursor-pointer'
-                                : 'bg-slate-50 text-slate-600 font-bold border border-slate-200 cursor-pointer hover:border-[#00D2B8]/60'
-                            }`}
-                          >
-                            {selected ? '✓ ' : '+ '}{v}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-lg border border-slate-200/90 p-5 shadow-xs space-y-3">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                  <h3 className="text-xs font-black text-slate-900">카드 선택 (옵션)</h3>
-                  <label className="flex items-center space-x-1.5 cursor-pointer">
-                    <input type="checkbox" checked={filter.useSpecialOptions} onChange={(e) => updateFilter('useSpecialOptions', e.target.checked)} className="w-4 h-4 text-[#00D2B8] rounded" />
-                    <span className="text-xs font-bold text-[#00A896]">옵션 {filter.useSpecialOptions ? '열림' : '닫힘'}</span>
-                  </label>
-                </div>
-
-                {filter.useSpecialOptions && (
-                  <div className="space-y-3 pt-1">
-                    <select value={filter.selectedSpecialCard} onChange={(e) => updateFilter('selectedSpecialCard', e.target.value)} className="w-full px-3 py-2 text-xs rounded border border-slate-300 bg-white font-medium text-slate-800">
-                      {dynamicCardOptions.map((card) => (
-                        <option key={card.value} value={card.value}>{card.label}</option>
-                      ))}
-                    </select>
-
-                    {filter.selectedSpecialCard !== 'NONE' && (
-                      <div className="p-2.5 bg-slate-50 rounded border border-slate-200">
-                        <label className="flex items-center space-x-2 cursor-pointer">
-                          <input type="checkbox" checked={filter.hasPrevSpend} onChange={(e) => updateFilter('hasPrevSpend', e.target.checked)} className="w-4 h-4 text-[#00D2B8] rounded" />
-                          <span className="text-xs font-bold text-slate-700">카드 전월 실적 충족 (20만~50만원)</span>
-                        </label>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+              {/* 💡 공통 필터 컴포넌트 적용 (중복 바 없이 단 1개만 노출) */}
+              <FilterSection
+                filterState={filterState}
+                onFilterChange={() => setIsDirty(true)}
+                onLoadSaved={handleLoadSavedFilter}
+              />
 
               <div className="pt-4 space-y-3 border-t border-slate-200">
                 {isLoggedIn && (
@@ -916,11 +478,19 @@ export default function SearchPage() {
                 <p className="text-[11px] text-slate-400 leading-relaxed max-w-[130px] mx-auto">실시간 최저가 검색 전용 프로모션 공간입니다.</p>
               </div>
             </div>
-            <button className="w-full py-2.5 bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] hover:brightness-105 text-slate-950 font-black text-xs rounded transition-all shadow-md cursor-pointer">광고/제휴 신청하기</button>
+            <button 
+              type="button" 
+              onClick={() => setModalType('contact')} 
+              className="w-full py-2.5 bg-gradient-to-r from-[#00D2B8] to-[#00F5FF] hover:brightness-105 text-slate-950 font-black text-xs rounded transition-all shadow-md cursor-pointer"
+            >
+              광고/제휴 신청하기
+            </button>
           </aside>
 
         </div>
       </div>
+
+      <LegalModals type={modalType} onClose={() => setModalType(null)} />
     </form>
   );
 }

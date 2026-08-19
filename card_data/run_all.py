@@ -10,17 +10,18 @@ BigQuery 적재 쪽이 CSV 안의 source_file 값 단위로 scoped delete + appe
   python -m card_data.run_all kb        # KB국민카드만 실행
 """
 
-import importlib
 import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
 
 from card_data.common import normalize
+from card_data.common.crawl_log import run_and_log
 from card_data.common.gcs_upload import upload_to_incoming
 
 load_dotenv()
 
+DOMAIN = "card_data"
 OUTPUT_PATH = Path(__file__).resolve().parent / "output" / "Card_Benefit_Info_DB.csv"
 DEST_FILENAME = "Card_Benefit_Info_DB.csv"
 
@@ -37,9 +38,8 @@ def main() -> None:
     targets = sys.argv[1:] or list(SCRAPERS.keys())
     all_rows = []
     for name in targets:
-        module = importlib.import_module(SCRAPERS[name])
         print(f"[{name}] 크롤링 시작")
-        rows = module.scrape()
+        rows = run_and_log(domain=DOMAIN, scraper_name=name, module_path=SCRAPERS[name])
         print(f"[{name}] {len(rows)}건 추출")
         all_rows.extend(rows)
 
