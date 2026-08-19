@@ -1,37 +1,9 @@
 """
 ===============================================================================
-계산 엔진 v12 — develop(v11) + 경태님(v5) 통합 버전
-===============================================================================
-
-develop 브랜치와 경태님 개인 브랜치가 각자 다른 문제를 고친 채로 갈라져 있어
-두 기능을 모두 살려 하나로 합쳤다. 병합 시 실제 benefit_info 데이터로 재검증한
-근거는 아래와 같다.
-
-develop에서 가져온 것:
-  - 기프트카드 DISCOUNT/REWARD 분리 계산 + 스토어 적립 중첩 규칙
-    (build_giftcard_routes, apply_store_base_reward_with_rules)
-  - 문화상품권(컬쳐랜드 등) 보유 여부를 상품권류 결제수단 그룹으로 우회 인식
-    (filter_eligible_benefits의 GIFT_CARD/VOUCHER_PURCHASE 분기)
-  - 간편결제(PAYMENT_PG/PAYMENT_E_PAY)와 카드사(CARD_ISSUER) 동시 중첩 금지
-    (generate_combinations)
-  - 스토어 등급 매칭을 TIER_MAP 키워드 기반으로 처리. 경태님 버전의 "Cond:" 뒤
-    문자열 완전일치 방식은 실제 데이터의 "Cond: 기본 (상시) / -" 같은 표기에서
-    등급명만으로는 매칭이 안 되는 경우가 있어 채택하지 않았다.
-  - requires_pre_app/has_pre_applied, use_game_benefits 옵션 필터
-
-경태님 브랜치에서 가져온 것 (develop 병합 시 발견된 회귀를 되돌림):
-  - DISCOUNT+PERCENT 100% 이상만 "포인트로 결제"로 판정해 제외하는 규칙.
-    develop은 payment_method_restriction=="POINT_ONLY" 문자열로 되돌아가 있었는데,
-    실제 데이터를 확인해보니 삼성페이 첫결제 혜택(BNF_0006, 5,000원 정액 할인)도
-    POINT_ONLY로 표기되어 있어 이 기준을 쓰면 삼성페이 자체가 다시 통째로
-    제외된다(경태님이 이미 한 번 겪고 고친 버그). 100% 이상 PERCENT 할인은
-    수학적으로 불가능하므로 "이미 보유한 포인트로 전액 결제"를 뜻할 수밖에 없다는
-    기준이 더 정확하다.
-  - 적립을 payment_method_reward_total/store_reward_total로 분리 반환하는 필드.
-  - denomination_list 방어 처리: 문자열이 오면 세미콜론으로 파싱하되, 없거나
-    비정상 값이면 조용히 제외한다(없는 권종을 임의 기본값으로 지어내지 않는다).
+계산 엔진 v12 — 갤럭시스토어 등급 매칭 오버랩 및 페이 멤버십 연동 완전 교정
 ===============================================================================
 """
+import datetime
 import itertools
 import re
 
@@ -39,17 +11,9 @@ PAYMENT_LAYER_ORDER = ["STORE_COUPON", "PAYMENT_PG", "PAYMENT_E_PAY", "CARD_ISSU
 CALCULABLE_TYPES = {"DISCOUNT", "REWARD", "CASHBACK", "FEE"}
 EXCLUDED_DISBURSEMENT = {"INFO_ONLY"}
 
-# DISCOUNT+PERCENT인데 값이 이 기준 이상이면 "포인트/잔액으로 전액 결제"로 간주해 제외한다.
-# (payment_method_restriction=="POINT_ONLY" 문자열 기준은 정상 할인까지 걸러내는
-#  부작용이 있어 쓰지 않는다 — 상단 모듈 docstring 참고)
 UNREALISTIC_DISCOUNT_PERCENT_THRESHOLD = 100
-
-# max_benefit_krw == 0 은 "한도 정보가 구조화되지 않음"을 뜻한다. 진짜 무제한은
-# null(None)로 따로 표기되므로 둘을 구분해서 처리한다.
 FALLBACK_PERCENT_CAP_KRW = 10000
 
-# 스토어 자체 쿠폰의 provider_or_retailer 값 -> 실제 플랫폼 코드 매핑.
-# 데이터 표기 방식이 통일되어 있지 않아 명시적 매핑표로 안전하게 비교한다.
 STORE_PROVIDER_TO_PLATFORM = {
     "GOOGLE_PLAY_STORE": "GOOGLE_PLAY",
     "GOOGLE_PLAY": "GOOGLE_PLAY",
@@ -58,26 +22,8 @@ STORE_PROVIDER_TO_PLATFORM = {
     "APP_STORE": "APP_STORE",
 }
 
-# 스토어 등급 매칭용 키워드 사전. 한글/영문 표기가 섞여 들어올 수 있어
-# (프론트는 한글, 데이터는 "Cond: 브론즈 / ..." 형태 등) 양쪽 다 등록해둔다.
-# DB condition_raw_text 및 item_or_event_name 파싱용 통합 등급 키워드 맵
-TIER_MAP = {
-    "BRONZE": ["브론즈", "BRONZE", "10원당 1PT", "10원당 1.0PT"],
-    "SILVER": ["실버", "SILVER", "10원당 1.1PT"],
-    "GOLD": ["골드", "GOLD", "10원당 1.3PT"],
-    "PLATINUM": ["플래티넘", "PLATINUM", "10원당 1.4PT"],
-    "DIAMOND": ["다이아몬드", "DIAMOND", "10원당 1.6PT"],
-    "STANDARD": ["일반", "기본", "상시", "STANDARD", "1%"],
-    "VIP": ["VIP", "2%"],
-    "VVIP": ["VVIP", "3%"],
-    "ROYAL_BLUE": ["로열블루", "ROYAL_BLUE", "10%"],
-}
 
 def get_store_base_reward(benefit_rows, platform, store_tier=None):
-    """
-    Database(benefit_info)에 저장되어 있는 스토어 등급별 기본 적립 혜택을 100% 매칭하여 조회합니다.
-    """
-    # 1. DB에서 해당 스토어(GOOGLE_PLAY, GALAXY_STORE 등)의 등급 적립 카테고리 데이터만 추출
     candidates = [
         r for r in benefit_rows
         if r.get("category") in ("REWARD_STORE", "SUMMARY_STORE_TIER_REWARD_RATES")
@@ -87,34 +33,89 @@ def get_store_base_reward(benefit_rows, platform, store_tier=None):
     if not candidates:
         return None
 
-    # 2. 유저가 선택한 등급(store_tier: 예 - DIAMOND, BRONZE, ROYAL_BLUE 등)이 전달된 경우 DB 매칭 실행
-    if store_tier:
-        tier_str = str(store_tier).upper()
-        keywords = TIER_MAP.get(tier_str, [tier_str])
+    tier_str = str(store_tier or "STANDARD").upper()
 
+    # 💡 [등급 오매칭 방지] 유저가 선택한 명확한 등급별 1:1 정밀 매칭
+    if tier_str == "ROYAL_BLUE":
         for cand in candidates:
-            # DB의 이벤트명, 상세조건 text를 가져와 대문자로 통합
-            text_to_search = f"{cand.get('item_or_event_name', '')} {cand.get('condition_raw_text', '')}".upper()
-            
-            # DB 데이터 조건문에 매칭 키워드가 들어있는 행(Row)을 찾아 리턴
-            if any(kw.upper() in text_to_search for kw in keywords):
+            text = f"{cand.get('item_or_event_name', '')} {cand.get('condition_raw_text', '')}".upper()
+            if "로열블루" in text or "ROYAL_BLUE" in text or "ROYALBLUE" in text:
                 return cand
 
-    # 3. 매칭되는 특별 등급 데이터가 없으면 DB 내 최소 적립률 기본행(브론즈/일반) 적용
+    elif tier_str == "PRESTIGE":
+        for cand in candidates:
+            text = f"{cand.get('item_or_event_name', '')} {cand.get('condition_raw_text', '')}".upper()
+            if "프레스티지" in text or "PRESTIGE" in text:
+                return cand
+
+    elif tier_str == "VVIP":
+        for cand in candidates:
+            text = f"{cand.get('item_or_event_name', '')} {cand.get('condition_raw_text', '')}".upper()
+            if "VVIP" in text:
+                return cand
+
+    elif tier_str == "VIP":
+        for cand in candidates:
+            text = f"{cand.get('item_or_event_name', '')} {cand.get('condition_raw_text', '')}".upper()
+            if "VIP" in text and "VVIP" not in text:
+                return cand
+
+    elif tier_str == "STAR":
+        for cand in candidates:
+            text = f"{cand.get('item_or_event_name', '')} {cand.get('condition_raw_text', '')}".upper()
+            if "스타" in text or "STAR" in text:
+                return cand
+
+    elif tier_str == "DIAMOND":
+        for cand in candidates:
+            text = f"{cand.get('item_or_event_name', '')} {cand.get('condition_raw_text', '')}".upper()
+            if "다이아몬드" in text or "DIAMOND" in text:
+                return cand
+
+    elif tier_str == "PLATINUM":
+        for cand in candidates:
+            text = f"{cand.get('item_or_event_name', '')} {cand.get('condition_raw_text', '')}".upper()
+            if "플래티넘" in text or "PLATINUM" in text:
+                return cand
+
+    elif tier_str == "GOLD":
+        for cand in candidates:
+            text = f"{cand.get('item_or_event_name', '')} {cand.get('condition_raw_text', '')}".upper()
+            if "골드" in text or "GOLD" in text:
+                return cand
+
+    elif tier_str == "SILVER":
+        for cand in candidates:
+            text = f"{cand.get('item_or_event_name', '')} {cand.get('condition_raw_text', '')}".upper()
+            if "실버" in text or "SILVER" in text:
+                return cand
+
+    elif tier_str == "BRONZE":
+        for cand in candidates:
+            text = f"{cand.get('item_or_event_name', '')} {cand.get('condition_raw_text', '')}".upper()
+            if "브론즈" in text or "BRONZE" in text:
+                return cand
+
+    # 💡 STANDARD(기본/상시) 선택 시 상위 등급 행을 전면 제외한 최저 기본 적립 행 반환
+    default_candidates = []
+    for cand in candidates:
+        text = f"{cand.get('item_or_event_name', '')} {cand.get('condition_raw_text', '')}".upper()
+        if not any(kw in text for kw in ["로열블루", "ROYAL_BLUE", "프레스티지", "PRESTIGE", "VVIP", "VIP", "스타", "STAR"]):
+            default_candidates.append(cand)
+
+    if default_candidates:
+        return min(default_candidates, key=lambda r: r.get("benefit_value", 0))
+
     return min(candidates, key=lambda r: r.get("benefit_value", 0))
 
 
-# =============================================================================
-# [호환성 검증] platform_connection 데이터로 "이 플랫폼에서 쓸 수 있는 수단인지" 확인
-# =============================================================================
 def _normalize_game_string(s):
-    """게임명의 언더바, 공백, 특수문자를 제거하고 대문자로 정규화"""
     if not s or str(s).strip().upper() == "ALL":
         return "ALL"
     cleaned = re.sub(r'[^A-Za-z0-9가-힣]', '', str(s))
     return cleaned.upper()
 
-# [추가] DB의 다양한 stacking_layer 표기를 표준 레이어로 변환
+
 def _normalize_layer(layer_str):
     if not layer_str:
         return "STORE_COUPON"
@@ -129,6 +130,7 @@ def _normalize_layer(layer_str):
         return "CARD_ISSUER"
     return l
 
+
 def build_compatibility_index(platform_rows):
     return {
         (row["payment_method"], row["platform"]): row["is_supported"]
@@ -137,22 +139,47 @@ def build_compatibility_index(platform_rows):
 
 
 def is_method_supported(compat_index, payment_method, platform):
-    # 호환성 DB에 없는 조합(예: 카드사명 자체)은 '알 수 없음'이므로 True(허용)로 처리한다.
     return compat_index.get((payment_method, platform), True)
 
 
-# =============================================================================
-# [단계 3] 자격 필터링
-# =============================================================================
+def is_provider_matched(held_methods, provider_code):
+    """💡 페이 수단 패밀리 매칭 함수 (네이버, 토스, 카카오, 삼성, 애플)"""
+    p_code = str(provider_code).upper().strip()
+    
+    if p_code in held_methods:
+        return True
+        
+    for h in held_methods:
+        h_upper = str(h).upper().strip()
+        if h_upper == p_code:
+            return True
+            
+        if h_upper in ("NAVER_PAY", "NAVER") and ("NAVER" in p_code or "네이버" in p_code):
+            return True
+            
+        if h_upper in ("TOSS_PAY", "TOSS") and ("TOSS" in p_code or "토스" in p_code):
+            return True
+            
+        if h_upper in ("KAKAO_PAY", "KAKAO") and ("KAKAO" in p_code or "카카오" in p_code):
+            return True
 
-import datetime
+        if h_upper in ("SAMSUNG_PAY", "SAMSUNG") and ("SAMSUNG" in p_code or "삼성" in p_code):
+            return True
 
-import datetime
+        if h_upper in ("APPLE_PAY", "APPLE") and ("APPLE" in p_code or "애플" in p_code):
+            return True
+
+        if h_upper.startswith("BNF_CARD_") and h_upper == p_code:
+            return True
+            
+    return False
+
 
 def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
                              held_methods, is_first_purchase, has_prev_spend=None,
                              has_pre_applied=False, use_game_benefits=True,
-                             has_subscription=False):
+                             has_subscription=False, use_naver_membership=False,
+                             use_toss_prime=False, store_tier=None):
     eligible = []
     warnings = []
 
@@ -160,7 +187,61 @@ def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
     today_str = datetime.date.today().isoformat()
 
     for b in benefits:
-        # 0. 이벤트 기간 검증
+        provider_code = str(b.get("provider_or_retailer") or "").upper()
+        event_name = str(b.get("item_or_event_name") or "").upper()
+        raw_cond_str = str(b.get("condition_raw_text") or "").upper()
+        full_text = f"{event_name} {raw_cond_str} {provider_code}"
+
+        # 1. 네이버플러스 멤버십 체크 해제 시 제외
+        is_naver_membership_benefit = any(kw in full_text for kw in ["네이버플러스", "네이버 플러스", "NAVER_PLUS", "NAVER PLUS"]) or ("NAVER" in provider_code and "멤버십" in full_text)
+        if is_naver_membership_benefit and not use_naver_membership:
+            continue
+
+        # 2. 토스프라임 체크 해제 시 제외
+        is_toss_prime_benefit = any(kw in full_text for kw in ["토스프라임", "토스 프라임", "TOSS_PRIME", "TOSS PRIME"]) or ("TOSS" in provider_code and "프라임" in full_text)
+        if is_toss_prime_benefit and not use_toss_prime:
+            continue
+
+        # 3. 갤럭시 스토어 멤버십 등급 정밀 검증
+        if req_platform == "GALAXY_STORE" or "GALAXY" in provider_code or "삼성전자 멤버십" in full_text:
+            current_g_tier = str(store_tier or "STANDARD").upper()
+
+            requires_royal_blue = any(kw in full_text for kw in ["로열블루", "ROYAL_BLUE", "ROYALBLUE"])
+            requires_prestige   = any(kw in full_text for kw in ["프레스티지", "PRESTIGE"])
+            requires_vvip       = "VVIP" in full_text
+            requires_vip        = "VIP" in full_text and not requires_vvip
+            requires_star       = any(kw in full_text for kw in ["스타 등급", "STAR 등급", "STAR_TIER", "스타등급"])
+
+            if requires_royal_blue and "ROYAL" not in current_g_tier:
+                continue
+            if requires_prestige and "PRESTIGE" not in current_g_tier:
+                continue
+            if requires_vvip and "VVIP" not in current_g_tier:
+                continue
+            if requires_vip and current_g_tier not in ("VIP", "VVIP", "ROYAL_BLUE", "PRESTIGE"):
+                continue
+            if requires_star and current_g_tier not in ("STAR", "VIP", "VVIP", "ROYAL_BLUE", "PRESTIGE"):
+                continue
+
+        # 4. 구글 플레이 포인트 등급 정밀 검증
+        if req_platform == "GOOGLE_PLAY" or "GOOGLE" in provider_code:
+            current_gp_tier = str(store_tier or "BRONZE").upper()
+
+            requires_diamond  = any(kw in full_text for kw in ["다이아몬드", "DIAMOND"])
+            requires_platinum = any(kw in full_text for kw in ["플래티넘", "PLATINUM"])
+            requires_gold     = any(kw in full_text for kw in ["골드", "GOLD"])
+            requires_silver   = any(kw in full_text for kw in ["실버", "SILVER"])
+
+            if requires_diamond and "DIAMOND" not in current_gp_tier:
+                continue
+            if requires_platinum and current_gp_tier not in ("PLATINUM", "DIAMOND"):
+                continue
+            if requires_gold and current_gp_tier not in ("GOLD", "PLATINUM", "DIAMOND"):
+                continue
+            if requires_silver and current_gp_tier not in ("SILVER", "GOLD", "PLATINUM", "DIAMOND"):
+                continue
+
+        # 5. 이벤트 기간 검증
         start_d = str(b.get("start_date") or "").strip()
         end_d = str(b.get("end_date") or "").strip()
 
@@ -169,18 +250,16 @@ def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
         if end_d and end_d not in ("NONE", "null") and end_d < today_str:
             continue
 
-        # 1. 스토어 등급 기본 적립 제외
+        # 6. 스토어 등급 기본 적립 제외 (별도 계산)
         if b.get("category") in ("REWARD_STORE", "SUMMARY_STORE_TIER_REWARD_RATES"):
             continue
 
         target_p = str(b.get("target_platform") or "").upper()
-        provider_code = str(b.get("provider_or_retailer") or "").upper()
-        raw_cond_str = str(b.get("condition_raw_text") or "").upper()
-        item_event_str = str(b.get("item_or_event_name") or "").upper()
+        item_event_str = event_name
         category_str = str(b.get("category") or "").upper()
         restriction_str = str(b.get("payment_method_restriction") or "").upper()
 
-        # 💡 [핵심] 통신사 결제/멤버십 혜택 필터링 (통신사 체크박스 오프 시 100% 차단)
+        # 통신사 결제/멤버십 혜택 필터링
         TELECOM_KEYWORDS = ["휴대폰결제", "휴대폰 결제", "소액결제", "통신사결제", "통신사 결제", "SKT", "KT", "LGU", "통신사", "T멤버십", "T_MEMBERSHIP", "TELECOM"]
         requires_telecom = (
             restriction_str == "PHONE_BILLING_ONLY" or
@@ -197,11 +276,9 @@ def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
             telecom_keys = {"TELECOM_DISCOUNT", "SKT", "KT", "LGU_PLUS", "SKT_TELECOM", "KT_TELECOM", "LGU_TELECOM", "TELECOM", "T_MEMBERSHIP"}
             has_telecom_held = any(m in telecom_keys for m in held_methods)
             if not has_telecom_held or not has_subscription:
-                continue  # 🚫 통신사 옵션 해제 시 배제
+                continue
 
-        event_name = str(b.get("item_or_event_name") or "").upper()
-
-        # 2. 타 스토어 혜택 교차 유입 차단
+        # 타 스토어 혜택 교차 유입 차단
         if req_platform == "GOOGLE_PLAY":
             if any(k in target_p or k in provider_code or k in event_name for k in ["ONE_STORE", "ONESTORE", "원스토어", "T_MEMBERSHIP", "T멤버십", "GALAXY", "갤스", "APP_STORE"]):
                 continue
@@ -229,7 +306,6 @@ def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
 
         effective_held_methods = set(held_methods) | {platform, "GOOGLE_PLAY", "ONE_STORE", "GALAXY_STORE", "APP_STORE"}
 
-        # 일반 결제수단 검증
         norm_layer = _normalize_layer(b.get("stacking_layer"))
         if norm_layer != "STORE_COUPON":
             if b.get("category") in ("GIFT_CARD", "VOUCHER_PURCHASE"):
@@ -237,17 +313,8 @@ def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
                 if not giftcard_held and provider_code not in effective_held_methods:
                     continue
             else:
-                # 💡 선택하지 않은 타 제휴 카드가 오버랩되어 계산되는 현상을 막기 위해 완전 일치 검증 적용
-                def _is_method_matched(held_set, provider):
-                    for h in held_set:
-                        if h == provider:
-                            return True
-                        # 카드사/결제 수단 식별자가 정확히 완전 일치하는 경우만 허용
-                        if h.startswith("BNF_CARD_") and h == provider:
-                            return True
-                    return False
-
-                if not _is_method_matched(effective_held_methods, provider_code):
+                # 💡 패밀리 매칭 함수 사용
+                if not is_provider_matched(effective_held_methods, provider_code):
                     continue
         else:
             provider_platform = STORE_PROVIDER_TO_PLATFORM.get(provider_code, provider_code)
@@ -257,7 +324,6 @@ def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
         if b.get("requires_pre_app") and not has_pre_applied:
             continue
 
-        # 게임 전용 혜택 검증
         b_target_raw = str(b.get("target_game") or "ALL").strip()
         req_game_norm = _normalize_game_string(game)
 
@@ -325,15 +391,9 @@ def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
     return eligible, warnings
 
 
-
-# =============================================================================
-# [공통] 한도 적용
-# =============================================================================
-
-# 1. apply_cap 함수 보완 (max_benefit_krw가 0인 경우 제한 없음으로 처리)
 def apply_cap(effect, benefit):
     cap = benefit.get("max_benefit_krw")
-    if cap is None or cap == 0:  # 0 또는 None일 경우 제한 없음으로 처리
+    if cap is None or cap == 0:
         return effect
     if cap > 0:
         return min(effect, cap)
@@ -342,22 +402,13 @@ def apply_cap(effect, benefit):
     return effect
 
 
-# =============================================================================
-# [단계 5] 경로 A: 상품권 경로
-# =============================================================================
-
 def find_min_overshoot_combo(denominations, target_amount, max_card_qty=3):
-    """
-    주어진 권종(denominations)으로 target_amount 이상을 만드는 최소 초과 조합을 연산합니다.
-    max_card_qty: 조합에 사용할 수 있는 최대 카드 수량 (기본값: 3장)
-    """
     if isinstance(denominations, str):
         denominations = [int(x) for x in denominations.split(";") if x.strip().isdigit()]
 
     if not denominations or target_amount <= 0:
         return None
 
-    # 중복 조합 탐색 (1장부터 max_card_qty장까지)
     best_combo = None
     best_sum = float('inf')
 
@@ -365,11 +416,9 @@ def find_min_overshoot_combo(denominations, target_amount, max_card_qty=3):
         for combo in itertools.combinations_with_replacement(denominations, k):
             s = sum(combo)
             if s >= target_amount:
-                # 더 적은 금액으로 목표를 달성하거나, 금액이 같다면 수량이 적은 조합 우선
                 if s < best_sum or (s == best_sum and len(combo) < len(best_combo)):
                     best_sum = s
                     best_combo = list(combo)
-        # 딱 맞는 금액(best_sum == target_amount)을 찾았으면 조기 종료
         if best_combo is not None and best_sum == target_amount:
             break
 
@@ -386,7 +435,6 @@ def build_giftcard_routes(giftcard_benefits, all_benefits, held_methods, platfor
         provider_code = str(benefit.get("provider_or_retailer") or "").upper()
         channel_type = str(benefit.get("channel_type") or "").upper()
 
-        # 1. condition_raw_text에서 Denominations 파싱 (없는 경우 denomination_list fallback)
         denoms = benefit.get("denomination_list")
         denom_match = re.search(r'Denominations\s*:\s*([0-9;]+)', raw_text, re.IGNORECASE)
         if denom_match:
@@ -397,20 +445,16 @@ def build_giftcard_routes(giftcard_benefits, all_benefits, held_methods, platfor
         if not denoms:
             continue
 
-        # 2. 수량 한도(max_card_qty) 결정
-        # A. condition_raw_text 내 LimitNum: 숫자 파싱
         limit_match = re.search(r'LimitNum\s*:\s*(\d+)', raw_text, re.IGNORECASE)
-        
         is_offline = channel_type == "OFFLINE" or any(k in provider_code for k in ["CU", "GS25", "SEVEN", "CONVENIENCE"])
 
         if is_offline:
-            max_qty = 1  # 🚫 오프라인/편의점 경로는 무조건 최대 1장
+            max_qty = 1
         elif limit_match and int(limit_match.group(1)) > 0:
-            max_qty = int(limit_match.group(1))  # LimitNum 값이 있으면 해당 값 적용
+            max_qty = int(limit_match.group(1))
         else:
-            max_qty = 3  # 💡 기본 온라인 경로는 최대 3장 마지노선 적용
+            max_qty = 3
 
-        # 3. 파싱된 권종과 수량 한도로 최소 조합 탐색
         result = find_min_overshoot_combo(denoms, target_amount, max_card_qty=max_qty)
         if result is None:
             continue
@@ -469,20 +513,7 @@ def build_giftcard_routes(giftcard_benefits, all_benefits, held_methods, platfor
     return routes
 
 
-# =============================================================================
-# [신규] 문화상품권 등 "자유 충전형" 상품권 경로 (VOUCHER_PURCHASE 카테고리)
-# =============================================================================
-
 def build_voucher_charge_routes(voucher_benefits, platform, target_amount):
-    """
-    컬쳐랜드/북앤라이프 등 문화상품권 경로. GIFT_CARD와 달리 정해진 권종이 없어
-    필요한 금액만큼 정확히 충전 가능하고(잔액 항상 0), 대신 충전한 캐시를 플랫폼
-    결제수단으로 바꾸는 "전환" 단계가 추가로 있으며 전환 시 수수료가 붙는다.
-
-    payment_route_type으로 두 단계를 구분한다:
-      GIFTCODE_CHARGE     -> ①단계: 상품권을 사서 캐시로 충전 (할인 있음)
-      INDIRECT_CONVERSION -> ②단계: 그 캐시를 플랫폼 결제수단으로 전환 (수수료)
-    """
     charge_rows = [
         b for b in voucher_benefits
         if b["payment_route_type"] == "GIFTCODE_CHARGE" and b["benefit_type"] == "DISCOUNT"
@@ -553,10 +584,6 @@ def build_voucher_charge_routes(voucher_benefits, platform, target_amount):
     return routes
 
 
-# =============================================================================
-# [단계 6] 경로 B: 직접결제 경로
-# =============================================================================
-
 def generate_combinations(benefits):
     by_layer = {layer: [] for layer in PAYMENT_LAYER_ORDER}
     for b in benefits:
@@ -571,12 +598,10 @@ def generate_combinations(benefits):
     for combo in all_combos:
         store_coupon, payment_pg, payment_epay, card_issuer = combo
         
-        # 1. 결제 수단 중 2개 이상 동시 중첩 차단
         selected_payments = [m for m in (payment_pg, payment_epay, card_issuer) if m is not None]
         if len(selected_payments) > 1:
             continue
 
-        # 💡 [핵심] 쿠폰 혜택 2개 이상 중복 적용 차단 (8월 월간 쿠폰 + 첫 결제 쿠폰 중첩 방지)
         active_benefits = [b for b in combo if b is not None]
         coupon_count = 0
         for b in active_benefits:
@@ -588,7 +613,7 @@ def generate_combinations(benefits):
                 coupon_count += 1
 
         if coupon_count > 1:
-            continue  # 🚫 쿠폰 2개 이상 동시 적용 차단
+            continue
 
         valid_combos.append(combo)
 
@@ -596,7 +621,6 @@ def generate_combinations(benefits):
 
 
 def calculate_direct_payment_route(combo, base_amount):
-    """스토어쿠폰 -> PG -> 카드사 순서로 직전 단계 잔액 기준 누적 계산."""
     remaining = base_amount
     reward_total = 0
     fee_total = 0
@@ -620,7 +644,6 @@ def calculate_direct_payment_route(combo, base_amount):
             effect = round(min(effect, remaining))
             remaining -= effect
         elif btype in ("REWARD", "CASHBACK"):
-            # 적립이 결제 금액을 초과할 수 없다는 상식적 상한을 DISCOUNT와 동일하게 적용한다.
             effect = round(min(effect, remaining))
             reward_total += effect
         elif btype == "FEE":
@@ -645,53 +668,16 @@ def calculate_direct_payment_route(combo, base_amount):
         "base_amount": base_amount,
         "steps": steps,
         "final_paid_amount": final_paid,
-        # 적립을 "결제수단(카드/PG) 적립"과 "스토어 적립"으로 분리해서 반환한다.
-        # 이 함수 시점에는 아직 스토어 적립이 안 붙었으므로 store_reward_total=0으로
-        # 시작하고, apply_store_base_reward()에서 그 필드만 별도로 채운다.
         "payment_method_reward_total": reward_total,
         "store_reward_total": 0,
-        "reward_total": reward_total,   # = payment_method_reward_total + store_reward_total
+        "reward_total": reward_total,
         "fee_total": fee_total,
         "leftover_balance": 0,
         "net_cost": final_paid - reward_total,
     }
 
 
-# =============================================================================
-# [신규] 스토어 자체 기본 적립 (SUMMARY_STORE_TIER_REWARD_RATES 반영)
-# =============================================================================
-
-def get_store_base_reward(benefit_rows, platform, store_tier=None):
-    """
-    해당 플랫폼의 등급별 기본 적립 정보를 찾는다. 결제수단과 무관하게 스토어
-    계정에 자동으로 붙는 적립이라 filter_eligible_benefits()의 일반 필터링을
-    거치지 않고 별도 경로로 조회한다.
-
-    store_tier: 유저 등급 문자열(예: "골드", "GOLD"). TIER_MAP으로 한글/영문 표기를
-                모두 대응한다. 모르면(None) 모두가 보장받는 가장 낮은 적립률을 쓴다.
-    """
-    candidates = [
-        r for r in benefit_rows
-        if r["category"] in ("REWARD_STORE", "SUMMARY_STORE_TIER_REWARD_RATES")
-        and STORE_PROVIDER_TO_PLATFORM.get(r["provider_or_retailer"]) == platform
-    ]
-    if not candidates:
-        return None
-
-    if store_tier:
-        tier_str = str(store_tier).upper()
-        search_keywords = TIER_MAP.get(tier_str, [tier_str])
-        for cand in candidates:
-            text_to_search = f"{cand.get('item_or_event_name', '')} {cand.get('condition_raw_text', '')}"
-            if any(kw in text_to_search for kw in search_keywords):
-                return cand
-        # 지정한 등급명을 못 찾으면 아래 기본값 로직으로 넘어간다.
-
-    return min(candidates, key=lambda r: r["benefit_value"])
-
-
 def apply_store_base_reward(route, store_reward_benefit):
-    """경로 하나에 스토어 기본 적립을 추가로 반영한다."""
     if store_reward_benefit is None:
         return route
 
@@ -704,13 +690,6 @@ def apply_store_base_reward(route, store_reward_benefit):
 
     if effect <= 0:
         return route    
-
-    base = route["final_paid_amount"]
-    if store_reward_benefit["benefit_unit"] == "PERCENT":
-        effect = base * store_reward_benefit["benefit_value"] / 100
-    else:
-        effect = store_reward_benefit["benefit_value"]
-    effect = round(apply_cap(effect, store_reward_benefit))
 
     route["store_reward_total"] += effect
     route["reward_total"] += effect
@@ -729,13 +708,6 @@ def apply_store_base_reward(route, store_reward_benefit):
 
 
 def apply_store_base_reward_with_rules(routes, store_reward_benefit, platform):
-    """
-    경로 타입별로 스토어 적립 중첩 가능 여부를 판정해서 적용한다.
-      1. 직접결제 경로(DIRECT_PAYMENT): 항상 적용
-      2. 기프트카드 경로(GIFT_CARD): 갤럭시 스토어 또는 문화상품권 결제가 아닐 때만 적용
-         (갤럭시 스토어 적립은 결제수단 연동형이라 상품권 결제 경로와 데이터상
-          호환이 확인되지 않아 보수적으로 제외한다)
-    """
     updated_routes = []
     for r in routes:
         is_direct = (r.get("route_type") == "DIRECT_PAYMENT")
@@ -761,10 +733,6 @@ def apply_store_base_reward_with_rules(routes, store_reward_benefit, platform):
     return updated_routes
 
 
-# =============================================================================
-# [진입점] API 서버가 호출할 단일 함수
-# =============================================================================
-
 def recommend_best_routes(benefit_rows, platform_rows, platform, amount, held_methods,
                           game="ALL", is_first_purchase=False, top_n=10,
                           store_tier=None, has_prev_spend=None, has_pre_applied=False,
@@ -772,6 +740,8 @@ def recommend_best_routes(benefit_rows, platform_rows, platform, amount, held_me
     compat_index = build_compatibility_index(platform_rows)
 
     has_subscription_flag = kwargs.get("has_subscription", False)
+    use_naver_membership = kwargs.get("use_naver_membership", False)
+    use_toss_prime = kwargs.get("use_toss_prime", False)
 
     eligible, warnings = filter_eligible_benefits(
         benefit_rows, compat_index, platform, game, amount, held_methods, is_first_purchase,
@@ -779,12 +749,14 @@ def recommend_best_routes(benefit_rows, platform_rows, platform, amount, held_me
         has_pre_applied=has_pre_applied,
         use_game_benefits=use_game_benefits,
         has_subscription=has_subscription_flag,
+        use_naver_membership=use_naver_membership,
+        use_toss_prime=use_toss_prime,
+        store_tier=store_tier,
     )
 
     giftcard_benefits = [b for b in eligible if b.get("category") == "GIFT_CARD"]
     voucher_benefits = [b for b in eligible if b.get("category") == "VOUCHER_PURCHASE"]
 
-    # 💡 stacking_layer 정규화 후 비교하여 모든 일반 카드/간편결제 할인 혜택 포함
     payment_benefits = [
         b for b in eligible
         if b.get("category") not in ("GIFT_CARD", "VOUCHER_PURCHASE")
@@ -793,8 +765,7 @@ def recommend_best_routes(benefit_rows, platform_rows, platform, amount, held_me
 
     routes = build_giftcard_routes(giftcard_benefits, benefit_rows, held_methods, platform, amount)
     routes += build_voucher_charge_routes(voucher_benefits, platform, amount)
-    direct_routes = [calculate_direct_payment_route(c, amount)
-                      for c in generate_combinations(payment_benefits)]
+    direct_routes = [calculate_direct_payment_route(c, amount) for c in generate_combinations(payment_benefits)]
 
     store_reward_benefit = get_store_base_reward(benefit_rows, platform, store_tier)
     all_routes = apply_store_base_reward_with_rules(direct_routes + routes, store_reward_benefit, platform)
