@@ -8,7 +8,7 @@ import {
 } from '../constants/searchOptions';
 
 const FILTER_STORAGE_KEY = 'user_search_filter_settings';
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE_URL = 'https://game-cloud-run-935566182756.asia-northeast3.run.app';
 
 export interface CardOption {
   label: string;

@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 
-const API_BASE = 'http://127.0.0.1:8000';
+const API_BASE = 'https://game-cloud-run-935566182756.asia-northeast3.run.app';
 const PAGE_SIZE = 20;
 
 interface TopGame {

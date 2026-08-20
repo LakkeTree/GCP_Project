@@ -349,7 +349,7 @@ export default function SearchResultPage() {
   }, []);
 
   useEffect(() => {
-    fetch('http://127.0.0.1:8000/games')
+    fetch('https://game-cloud-run-935566182756.asia-northeast3.run.app/games')
       .then((res) => res.json())
       .then((result) => {
         if (result.status === 'ok' && Array.isArray(result.data)) {
@@ -383,7 +383,7 @@ export default function SearchResultPage() {
 
     const token = localStorage.getItem('google_token');
     if (token) {
-      fetch('http://127.0.0.1:8000/user/profile', {
+      fetch('https://game-cloud-run-935566182756.asia-northeast3.run.app/user/profile', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -442,7 +442,7 @@ export default function SearchResultPage() {
     const gameToQuery = targetGameName || activeGameTitle;
 
     try {
-      fetch('http://127.0.0.1:8000/games/search-log', {
+      fetch('https://game-cloud-run-935566182756.asia-northeast3.run.app/games/search-log', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ game_name: gameToQuery }),
