@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 
@@ -33,7 +34,21 @@ IS_DEBUG = os.getenv("DEBUG", "False").lower() in ("true", "1", "t")
 _cached_session = cachecontrol.CacheControl(requests.Session())
 _google_auth_request = google_requests.Request(session=_cached_session)
 
+# 관리자 대시보드 활성 사용자(DAU/WAU/MAU) 집계용 last_login_at 갱신 주기.
+# 매 인증 요청마다 DB 쓰기가 발생하지 않도록 5분 단위로만 갱신한다.
+_LAST_LOGIN_THROTTLE = timedelta(minutes=5)
 
+
+def _touch_last_login(user: UserModel, db: Session) -> None:
+    now = datetime.now(timezone.utc)
+    # Postgres(timestamptz)는 timezone-aware 값을 돌려주지만, SQLite로 개발하던 시절 값이 섞여있을 수 있어
+    # naive 값이면 UTC로 간주해 aware로 맞춰준다 (naive - aware는 TypeError가 나기 때문).
+    last_login = user.last_login_at
+    if last_login and last_login.tzinfo is None:
+        last_login = last_login.replace(tzinfo=timezone.utc)
+    if not last_login or (now - last_login) > _LAST_LOGIN_THROTTLE:
+        user.last_login_at = now
+        db.commit()
 
 
 def verify_google_token_and_get_user(
@@ -54,6 +69,7 @@ def verify_google_token_and_get_user(
         try:
             user = db.query(UserModel).filter(UserModel.user_id == token).first()
             if user:
+                _touch_last_login(user, db)
                 return user
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -127,6 +143,7 @@ def verify_google_token_and_get_user(
                 user = db.query(UserModel).filter(UserModel.user_id == user_id_val).first()
 
 
+        _touch_last_login(user, db)
         return user
 
 
@@ -145,6 +162,18 @@ def verify_google_token_and_get_user(
 
 
 
+def require_admin(
+    current_user: UserModel = Depends(verify_google_token_and_get_user),
+) -> UserModel:
+    """관리자 전용 API 접근 제어. UserModel.role == 'ROLE_ADMIN'인 회원만 통과시킨다."""
+    if current_user.role != "ROLE_ADMIN":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="관리자 권한이 필요합니다.",
+        )
+    return current_user
+
+
 def verify_google_token_optional(
     credentials: Optional[HTTPAuthorizationCredentials] = Security(optional_security),
     db: Session = Depends(get_db)
@@ -156,59 +185,3 @@ def verify_google_token_optional(
         return verify_google_token_and_get_user(credentials, db)
     except HTTPException:
         return None
-
-# database.py
-import os
-from dotenv import load_dotenv
-from sqlalchemy import create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
-
-
-load_dotenv()
-
-
-# 1. .env 파일에서 GCP PostgreSQL 접속 정보 읽기
-DB_HOST = os.getenv("DB_HOST")
-DB_PORT = os.getenv("DB_PORT", "5432")
-DB_NAME = os.getenv("DB_NAME")
-DB_USER = os.getenv("DB_USER")
-DB_PASSWORD = os.getenv("DB_PASSWORD")
-
-
-# 2. 필수 값 검증 (설정이 빠져있으면 즉시 알림)
-if not all([DB_HOST, DB_NAME, DB_USER, DB_PASSWORD]):
-    raise ValueError(
-        "❌ [DB ERROR] .env 파일에 DB_HOST, DB_NAME, DB_USER, DB_PASSWORD 중 누락된 값이 있습니다. "
-        "GCP PostgreSQL 접속 정보를 확인해 주세요."
-    )
-
-
-# 3. PostgreSQL 전용 Connection URL 생성
-DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-
-
-print(f"📡 [DB CONNECTING] GCP PostgreSQL로 연결을 시도합니다... (Host: {DB_HOST})")
-
-
-# 4. SQLAlchemy 엔진 생성 (GCP PostgreSQL 전용 설정)
-engine = create_engine(
-    DATABASE_URL,
-    pool_pre_ping=True,       # 끊긴 커넥션 감지 및 자동 재연결
-    pool_size=10,             # 커넥션 풀 유지 개수
-    max_overflow=20,          # 초과 허용 커넥션 수
-    connect_args={"connect_timeout": 5} # 5초 내 응답 없으면 타임아웃
-)
-
-
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
-
-
-
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()

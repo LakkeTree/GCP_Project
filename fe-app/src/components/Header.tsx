@@ -60,6 +60,7 @@ export default function Header() {
           nickname: result.data?.nickname || googleNick,
           picture: googleData?.picture || null,
           provider: 'GOOGLE',
+          role: result.data?.role || 'ROLE_USER',
         });
       } else if (res.status === 401 || res.status === 404) {
         // 2. 백엔드 DB에 유저가 없는 신규 회원일 경우 POST 요청으로 백엔드 자동 가입(Upsert) 실행
@@ -79,6 +80,7 @@ export default function Header() {
             nickname: regResult.data?.nickname || googleNick,
             picture: googleData?.picture || null,
             provider: 'GOOGLE',
+            role: regResult.data?.role || 'ROLE_USER',
           });
         } else {
           setUser({
@@ -86,6 +88,7 @@ export default function Header() {
             nickname: googleNick,
             picture: googleData?.picture || null,
             provider: 'GOOGLE',
+            role: 'ROLE_USER',
           });
         }
       }
@@ -96,6 +99,7 @@ export default function Header() {
         nickname: googleNick,
         picture: googleData?.picture || null,
         provider: 'GOOGLE',
+        role: 'ROLE_USER',
       });
     } finally {
       // 💡 2. 로딩 끝남 처리 (성공/실패 상관없이 실행)
@@ -213,6 +217,17 @@ export default function Header() {
 
           {/* 프로필 및 구글 로그인 버튼 */}
           <div className="shrink-0 flex items-center gap-2">
+            {!isAuthLoading && user && user.role === 'ROLE_ADMIN' && (
+              <Link
+                to="/admin"
+                className="flex items-center gap-1.5 bg-slate-800 border border-[#00D2B8]/50 rounded-md px-3 py-1.5 shadow-sm hover:bg-slate-750 hover:border-[#00D2B8] transition-all text-[11px] font-black text-[#00D2B8]"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>관리자 대시보드</span>
+              </Link>
+            )}
             {isAuthLoading ? (
               /* 💡 프로필 불러오는 찰나의 순간 동안 보여줄 스켈레톤 로더 */
               <div className="w-28 h-9 bg-slate-800 animate-pulse rounded-md border border-slate-700/50" />

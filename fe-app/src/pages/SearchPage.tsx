@@ -140,10 +140,20 @@ export default function SearchPage() {
       return;
     }
 
+    // 💡 "제휴 카드 선택" 옵션을 켠 것 자체가 카드로 결제하겠다는 의사표시다.
+    //    드롭다운 기본값인 "선택 안 함 (일반 신용/체크카드 / 기본 결제)"도 문자 그대로
+    //    "일반 신용/체크카드로 결제"라는 유효한 선택지이지, "결제수단이 없음"이 아니다.
+    //    selectedSpecialCard가 특정 제휴카드 코드인지 NONE인지와 무관하게, 옵션이
+    //    열려 있으면 보유 결제수단 1개로 인정해야 한다.
+    //    (이전에는 selectedSpecialCard !== 'NONE' 조건을 추가로 요구해서, 옵션만 켜고
+    //     구체적인 제휴카드를 아직 고르지 않은 상태에서도 "결제수단 최소 1개 이상 선택"
+    //     경고가 잘못 발생했다)
+    const hasCardSelectedForSearch = filter.useSpecialOptions;
     const totalSelectedPayments =
       (filter.useCarriers ? filter.carriers.length : 0) +
       (filter.usePays ? filter.pays.length : 0) +
-      (filter.useVoucherBypasses ? filter.voucherBypasses.length : 0);
+      (filter.useVoucherBypasses ? filter.voucherBypasses.length : 0) +
+      (hasCardSelectedForSearch ? 1 : 0);
 
     if (totalSelectedPayments === 0) {
       alert('보유 결제 수단을 최소 1개 이상 선택해 주세요.');
@@ -154,8 +164,6 @@ export default function SearchPage() {
 
     const activeSubscriptions: string[] = [];
     if (filter.useTMembership && filter.osType === 'ANDROID') activeSubscriptions.push('T멤버십 (원스토어 10% 할인/적립)');
-    if (filter.useNaverMembership) activeSubscriptions.push('네이버플러스 멤버십 (+4% 적립)');
-    if (filter.useTossPrime) activeSubscriptions.push('토스프라임 (+4% 적립)');
 
     const params = new URLSearchParams({
       game: gameTitle,
@@ -438,6 +446,7 @@ export default function SearchPage() {
                 filterState={filterState}
                 onFilterChange={() => setIsDirty(true)}
                 onLoadSaved={handleLoadSavedFilter}
+                supportedStores={selectedGame?.stores}
               />
 
               <div className="pt-4 space-y-3 border-t border-slate-200">

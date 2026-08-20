@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useFilterState } from '../hooks/useFilterState';
 import FilterSection from '../components/FilterSection';
+import { resolveCardProviderCode } from '../constants/searchOptions';
 
 interface GameItem {
   id: string;
@@ -333,9 +334,14 @@ export default function MyProfilePage() {
           telecom: filter.useCarriers && filter.carriers.length > 0 ? filter.carriers[0] : null,
           use_t_membership: filter.useTMembership,
           held_epay: filter.usePays ? filter.pays : [],
-          has_naver_plus: filter.useNaverMembership,
-          has_toss_prime: filter.useTossPrime,
-          held_cards: filter.useSpecialOptions && filter.selectedSpecialCard !== 'NONE' ? [filter.selectedSpecialCard] : [],
+          // 💡 "토스페이 프라임"을 결제수단으로 선택한 것 자체가 토스프라임 회원이라는
+          //    뜻이라, 별도 체크박스 없이 pays 선택 여부로 판단한다.
+          has_toss_prime: filter.usePays && filter.pays.includes('토스페이 프라임'),
+          // 💡 selectedSpecialCard는 "카드사코드::혜택id" 형태라, 프로필에는 백엔드가
+          //    이해하는 순수 카드사 코드만 저장한다 (resolveCardProviderCode 참고).
+          held_cards: filter.useSpecialOptions && filter.selectedSpecialCard !== 'NONE'
+            ? [resolveCardProviderCode(filter.selectedSpecialCard)]
+            : [],
           held_vouchers: filter.useVoucherBypasses ? filter.voucherBypasses : [],
           favorite_games: filter.favoriteGames,
         };
