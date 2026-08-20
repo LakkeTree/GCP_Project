@@ -14,6 +14,25 @@ EXCLUDED_DISBURSEMENT = {"INFO_ONLY"}
 UNREALISTIC_DISCOUNT_PERCENT_THRESHOLD = 100
 FALLBACK_PERCENT_CAP_KRW = 10000
 
+# item_or_event_name에 "(20만원 이하)", "(20만원 초과 60만원 이하)"처럼 붙는 결제금액
+# 구간 상한 표기를 파싱한다. is_tiered_limit=True인 행에만 적용해, 무관한 텍스트에서
+# "N만원"이라는 표현이 우연히 등장해도 오탐하지 않도록 한다.
+_SPEND_TIER_UPPER_BOUND_PATTERN = re.compile(r'(\d+)\s*만\s*원\s*(?:이하|까지)')
+
+
+def _parse_spend_tier_upper_bound_krw(benefit):
+    """구간별 적립(is_tiered_limit) 행의 상한 금액(원)을 파싱한다.
+    표기를 못 찾으면 None(상한 없음)을 반환한다."""
+    if not benefit.get("is_tiered_limit"):
+        return None
+    for field in ("item_or_event_name", "condition_raw_text"):
+        text = str(benefit.get(field) or "")
+        matches = _SPEND_TIER_UPPER_BOUND_PATTERN.findall(text)
+        if matches:
+            # "20만원 초과 60만원 이하"처럼 여러 숫자가 섞여 있으면 마지막 매치(상한)를 쓴다.
+            return int(matches[-1]) * 10000
+    return None
+
 STORE_PROVIDER_TO_PLATFORM = {
     "GOOGLE_PLAY_STORE": "GOOGLE_PLAY",
     "GOOGLE_PLAY": "GOOGLE_PLAY",
@@ -357,6 +376,15 @@ def filter_eligible_benefits(benefits, compat_index, platform, game, amount,
 
         if amount < b["min_spend_krw"]:
             continue
+
+        # 💡 구간별 적립(예: 토스프라임 "20만원 이하 4% / 20만원 초과 1%") 상한 검증.
+        # min_spend_krw는 구간 하한만 표현할 수 있어, 결제 금액이 구간을 넘어서면
+        # 상위 구간 혜택만 남아야 하는데 하한만 보고 통과시키면 두 구간이 동시에
+        # 계산에 잡히는 버그가 생긴다.
+        tier_upper_bound = _parse_spend_tier_upper_bound_krw(b)
+        if tier_upper_bound is not None and amount > tier_upper_bound:
+            continue
+
         if b["is_first_purchase"] and not is_first_purchase:
             continue
 

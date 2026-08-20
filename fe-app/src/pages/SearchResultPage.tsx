@@ -659,6 +659,13 @@ export default function SearchResultPage() {
       setLoading(false);
     }
   }, [activeGameTitle, filter, payAmount, currentGameObj]);
+  // 💡 [주의] 예전에는 의존성 배열을 []로 비워 "handleReSearch 등에서 직접 호출할 때만
+  //    연산되도록" 의도했지만, 그 결과 filter/payAmount/activeGameTitle 등이 마운트 시점
+  //    값으로 클로저에 고정되어 버려 체크박스를 바꾸고 "다시 검색"을 눌러도 예전 필터 값
+  //    그대로 API가 호출되는 버그가 있었다(첫 결제 미체크인데 첫결제 혜택이 남아있거나,
+  //    카드를 선택해도 반영되지 않는 문제). 아래 mount-only useEffect는 자기 자신의
+  //    의존성 배열이 []이라 fetchBackendData 참조가 바뀌어도 재실행되지 않으므로,
+  //    "필터 바뀔 때마다 자동 재검색"은 여전히 발생하지 않는다.
 
   useEffect(() => {
     fetchBackendData();
@@ -1090,7 +1097,11 @@ export default function SearchResultPage() {
               </form>
             </div>
 
-            <FilterSection filterState={filterState} />
+            {/* 💡 onFilterChange를 제거하여 사이드바 필터 클릭 시에는 즉시 연산되지 않고 [다시 검색 (재연산)] 버튼 클릭 시에만 연산됨 */}
+            <FilterSection
+              filterState={filterState}
+              supportedStores={currentGameObj?.stores}
+            />
 
             <div className="sticky top-28 bg-[#0B132B] rounded-2xl border border-slate-800 p-6 flex flex-col items-center justify-between text-center shadow-xl h-[580px] z-30">
               <span className="px-3 py-1 bg-slate-800/90 text-slate-300 font-bold text-[10px] rounded-full border border-slate-700/80 tracking-wider">
