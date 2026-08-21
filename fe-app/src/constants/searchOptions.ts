@@ -144,7 +144,7 @@ export const REVERSE_PAYMENT_MAP: Record<string, string> = Object.fromEntries(
 // 3. API 엔드포인트 및 공통 헬퍼 유틸리티
 // ==========================================
 export const BACKEND_API_URL =
-  (import.meta as any).env?.VITE_API_BASE_URL || 'http://127.0.0.1:8000/routes';
+  'https://game-cloud-run-935566182756.asia-northeast3.run.app/routes';
 
 export const getGameIcon = (title: string): string => {
   if (title.includes('쿠키런')) return '🍪';

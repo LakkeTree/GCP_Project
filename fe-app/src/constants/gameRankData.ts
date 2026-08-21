@@ -45,7 +45,7 @@ export const FALLBACK_HOGAENG_RANK_DATA: RankCategoryData = {
 export const fetchHogaengRankData = async (): Promise<RankCategoryData> => {
   try {
     // 1. 랭킹 API와 게임목록 API를 동시에 병렬(Promise.all) 로출
-    const rankPromise = fetch('http://127.0.0.1:8000/ranks').then((r) => r.json());
+    const rankPromise = fetch('https://game-cloud-run-935566182756.asia-northeast3.run.app/ranks').then((r) => r.json());
 
     // 캐시된 게임 목록 확인
     let gameIconMap: Record<string, string> = {};
@@ -60,7 +60,7 @@ export const fetchHogaengRankData = async (): Promise<RankCategoryData> => {
       });
       gamesPromise = Promise.resolve(null);
     } else {
-      gamesPromise = fetch('http://127.0.0.1:8000/games').then((r) => r.json());
+      gamesPromise = fetch('https://game-cloud-run-935566182756.asia-northeast3.run.app/games').then((r) => r.json());
     }
 
     const [rankResult, gamesResult] = await Promise.all([rankPromise, gamesPromise]);

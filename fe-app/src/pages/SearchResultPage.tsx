@@ -6,12 +6,12 @@ import FilterSection from '../components/FilterSection';
 import type { OsType } from '../constants/searchOptions';
 import { getGameCode } from '../constants/gameMapping';
 import {
-  CARD_CODE_MAP,
   PLATFORM_CODE_MAP,
   PAYMENT_METHOD_MAP,
   LAYER_NAME_MAP,
   REVERSE_PAYMENT_MAP,
   BACKEND_API_URL,
+  resolveCardProviderCode,
 } from '../constants/searchOptions';
 
 const FILTER_STORAGE_KEY = 'user_search_filter_settings';
@@ -349,7 +349,7 @@ export default function SearchResultPage() {
   }, []);
 
   useEffect(() => {
-    fetch('http://127.0.0.1:8000/games')
+    fetch('https://game-cloud-run-935566182756.asia-northeast3.run.app/games')
       .then((res) => res.json())
       .then((result) => {
         if (result.status === 'ok' && Array.isArray(result.data)) {
@@ -383,7 +383,7 @@ export default function SearchResultPage() {
 
     const token = localStorage.getItem('google_token');
     if (token) {
-      fetch('http://127.0.0.1:8000/user/profile', {
+      fetch('https://game-cloud-run-935566182756.asia-northeast3.run.app/user/profile', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -442,7 +442,7 @@ export default function SearchResultPage() {
     const gameToQuery = targetGameName || activeGameTitle;
 
     try {
-      fetch('http://127.0.0.1:8000/games/search-log', {
+      fetch('https://game-cloud-run-935566182756.asia-northeast3.run.app/games/search-log', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ game_name: gameToQuery }),
@@ -472,7 +472,7 @@ export default function SearchResultPage() {
     }
 
     if (filter.useSpecialOptions && filter.selectedSpecialCard !== 'NONE') {
-      let cardCode = CARD_CODE_MAP[filter.selectedSpecialCard] || filter.selectedSpecialCard;
+      let cardCode = resolveCardProviderCode(filter.selectedSpecialCard);
       if (cardCode === 'KB_NORI2_CARD' || cardCode.includes('NORI2')) {
         cardCode = 'KB_KOOKMIN_CARD';
       }
@@ -507,8 +507,7 @@ export default function SearchResultPage() {
           has_prev_spend: filter.useSpecialOptions ? filter.hasPrevSpend : false,
           has_pre_applied: filter.hasPreApplied,
           use_game_benefits: filter.useGameBenefits,
-          use_naver_membership: filter.usePays && filter.pays.includes('네이버페이') && filter.useNaverMembership,
-          use_toss_prime: filter.usePays && filter.pays.includes('토스페이') && filter.useTossPrime,
+          has_toss_prime: filter.usePays && filter.pays.includes('토스페이 프라임'),
         };
 
         return fetch(BACKEND_API_URL, {

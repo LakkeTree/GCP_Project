@@ -78,7 +78,7 @@ export default function MainPage() {
       }
     } catch (e) {}
 
-    fetch('http://127.0.0.1:8000/payments')
+    fetch('https://game-cloud-run-935566182756.asia-northeast3.run.app/payments')
       .then((res) => res.json())
       .then((result) => {
         if (result.status === 'ok' && Array.isArray(result.data)) {

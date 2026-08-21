@@ -29,7 +29,16 @@ from models import GameRequestLogModel, GameSearchLogModel, OutboundClickLogMode
 PROJECT_ID = os.getenv("GCP_PROJECT_ID", "positive-tuner-504502-m5")
 DATASET_ID = os.getenv("BIGQUERY_DATASET_ID", "benefit")
 
-Base.metadata.create_all(bind=engine)
+# ❌ 기존 코드 (DB 연결 실패 시 컨테이너가 즉시 터짐)
+# Base.metadata.create_all(bind=engine)
+
+# ⭕ 변경 후 코드 (DB 연결에 실패해도 백엔드 서버는 일단 8080 포트를 띄움)
+try:
+    Base.metadata.create_all(bind=engine)
+    print("✅ [DB] PostgreSQL 테이블 구조 생성/검증 완료")
+except Exception as e:
+    print(f"⚠️ [DB Warn] 시작 시 DB 연동 지연 발생 (요청 처리 시 재시도됨): {e}")
+
 
 app = FastAPI(
     title="Optimal Payment Route API",
@@ -39,7 +48,22 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        # 1. 실제 서버 배포 환경 (운영 프론트엔드 Cloud Run 주소)
+        "https://fe-app-935566182756.asia-northeast3.run.app",
+        
+        # 2. 로컬 컴퓨터 개발 환경 (Vite 기본 포트)
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        
+        # 3. 로컬 빌드 테스트 환경 (Vite preview 포트)
+        "http://localhost:4173",
+        "http://127.0.0.1:4173",
+        
+        # 4. 기타 테스트용 기본 포트
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -207,7 +231,7 @@ def get_optimal_routes(
             has_pre_applied=request.has_pre_applied,
             use_game_benefits=request.use_game_benefits,
             has_subscription=request.has_subscription,
-            has_toss_prime=request.has_toss_prime,
+            use_toss_prime=request.has_toss_prime,
         )
 
         # 관리자 대시보드용 유저별 게임 이용 로그 (로그인 유저만 적재)

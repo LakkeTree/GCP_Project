@@ -50,7 +50,7 @@ export default function SearchPage() {
   }, [setFilter]);
 
   useEffect(() => {
-    fetch('http://127.0.0.1:8000/games')
+    fetch('https://game-cloud-run-935566182756.asia-northeast3.run.app/games')
       .then((res) => res.json())
       .then((result) => {
         if (result.status === 'ok' && Array.isArray(result.data)) {
