@@ -1,0 +1,7 @@
+__pycache__
+*.pyc
+.git
+*.db
+*.db-shm
+*.db-wal
+Log.md

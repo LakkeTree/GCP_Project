@@ -1,0 +1,63 @@
+name: Deploy backend (game-pay-api)
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - "game-pay-api/**"
+      - ".github/workflows/deploy-backend.yml"
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: false
+
+env:
+  SERVICE_NAME: game-cloud-run
+  IMAGE: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/game-pay-api/game-pay-api
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.DEPLOY_SA }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ vars.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Build image
+        run: |
+          docker build -t "${{ env.IMAGE }}:${{ github.sha }}" -t "${{ env.IMAGE }}:latest" game-pay-api
+
+      - name: Push image
+        run: |
+          docker push "${{ env.IMAGE }}:${{ github.sha }}"
+          docker push "${{ env.IMAGE }}:latest"
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy "${{ env.SERVICE_NAME }}" \
+            --image="${{ env.IMAGE }}:${{ github.sha }}" \
+            --region="${{ vars.GCP_REGION }}" \
+            --platform=managed \
+            --add-cloudsql-instances="${{ vars.CLOUDSQL_INSTANCE }}" \
+            --min-instances=1 \
+            --max-instances=5 \
+            --set-env-vars="DB_HOST=/cloudsql/${{ vars.CLOUDSQL_INSTANCE }},DB_PORT=5432,DB_NAME=user_db,DB_USER=postgres,GOOGLE_CLIENT_ID=935566182756-asr2dmtfcsegvsuk7tfodk6kdv5chm0s.apps.googleusercontent.com,DEBUG=False,GCP_PROJECT_ID=${{ vars.GCP_PROJECT_ID }},BIGQUERY_DATASET_ID=benefit" \
+            --set-secrets="DB_PASSWORD=DB_PASSWORD:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,GEMINI_API_KEY=gemini-api-key:latest" \
+            --quiet
