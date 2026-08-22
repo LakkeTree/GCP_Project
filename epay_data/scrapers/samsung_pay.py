@@ -21,6 +21,15 @@
 zeropin_voucher.py 등 다른 스크래퍼처럼 짧은 타임아웃 + try/except로 무시하고
 넘어가는 패턴으로 수정함(콘텐츠 자체는 networkidle 없이 'load' 이벤트만으로도
 이미 다 렌더링돼 있는 것을 headless fetch로 확인했음).
+
+2026-08-22 기준 스케줄 크롤링 대상에서 완전히 제외함(Cloud Run Job 인자, VM
+vm_crawl_entrypoint.py 양쪽 모두). www.samsung.com이 Cloud Run/GCE 등 Google
+호스팅 IP를 카테고리째로 차단하는 것으로 추정 — VM(별도 IP)으로 옮겨서 시도해도
+동일하게 TimeoutError 재현됨(store_data/galaxy_store_tier.py도 같은 도메인, 같은
+증상). 2026-08-18 수동 크롤링 결과 4건을 benefit_info에
+source_file='legacy_manual_db'로 재태깅해 수동 관리 데이터로 남겨뒀다 — 계산
+엔진은 source_file을 안 보므로 계산 결과엔 영향 없음. 이 파일 자체는 나중에
+우회 경로를 찾으면 다시 스케줄에 넣을 수 있도록 그대로 둔다.
 """
 
 from card_data.common import normalize
