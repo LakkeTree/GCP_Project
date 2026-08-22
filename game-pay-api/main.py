@@ -715,7 +715,7 @@ def get_admin_user_logs(
 # 관리자 대시보드: 크롤링 데이터 신선도 모니터링 (BigQuery crawl_log)
 # -----------------------------------------------------------------------------
 
-STALE_THRESHOLD_HOURS = 24
+STALE_THRESHOLD_HOURS = 24 * 7  # 1주일
 
 
 @app.get("/admin/data-status", summary="[관리자] 크롤러별 데이터 최신성/성공-실패 모니터링")
