@@ -11,6 +11,13 @@
 | 스택 | React · FastAPI · BigQuery · Cloud SQL · Cloud Run · Playwright · Gemini |
 | 배포 | 지금은 내려가 있다. 부트캠프 GCP 프로젝트가 교육 종료와 함께 삭제됐다. 아래 화면으로 대신한다 |
 
+## 시연
+
+
+https://github.com/user-attachments/assets/89397d82-d3a6-4468-987d-2038ffc9c4b9
+
+
+
 ## 화면
 
 | | |
