@@ -118,6 +118,5 @@ u.role = 'ROLE_ADMIN'; db.commit()"
 |---|---|
 | [@LakkeTree](https://github.com/LakkeTree) — 박지헌 | 데이터 파이프라인 · GCP 인프라. 크롤러 통합, GCS → BigQuery 자동 적재, 크롤링 자동화(Cloud Run Job · VM), CI/CD. 위 「결정과 근거」 1~5 |
 | [@Hoon123450](https://github.com/Hoon123450) | 프론트엔드 화면 전반, 계산 엔진 |
-| [@kyung06123-crypto](https://github.com/kyung06123-crypto) — Kyungtae Lee | 초기 혜택 크롤링 파이프라인과 스키마 설계, 관리자 대시보드 |
-
+| [@kyung06123-crypto](https://github.com/kyung06123-crypto) | 초기 혜택 크롤링 파이프라인과 스키마 설계, 관리자 대시보드 |
 | [@choi10-hub](https://github.com/choi10-hub) | 백엔드 API · 구글 로그인, Cloud Run 배포, 캐싱 |
