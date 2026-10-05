@@ -22,6 +22,10 @@
 
 ## 구조
 
+![아키텍처 — React 프론트, Cloud Run 의 FastAPI·Gemini 추천 엔진, BigQuery·Cloud SQL 데이터 계층, 크롤링·CI/CD 파이프라인](docs/screenshots/architecture_diagram.png)
+
+크롤링 파이프라인을 펼치면 이렇다.
+
 ```text
 Cloud Scheduler ─┬─ Cloud Run Job  (크롤러 21개)  ─┐
                  └─ GCE VM, headed (크롤러 6개)   ─┴─▶ GCS ─▶ Cloud Function ─▶ BigQuery
