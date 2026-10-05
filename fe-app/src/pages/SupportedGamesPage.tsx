@@ -58,7 +58,7 @@ export default function SupportedGamesPage() {
     const fetchGames = async () => {
       try {
         if (games.length === 0) setLoading(true);
-        const res = await fetch('http://127.0.0.1:8000/games');
+        const res = await fetch('https://game-cloud-run-935566182756.asia-northeast3.run.app/games');
         if (!res.ok) throw new Error('서버 응답 오류');
         const result = await res.json();
         

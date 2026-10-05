@@ -6,6 +6,15 @@
 실제로 확인된 내용(2026-08-12 기준): 일반/스타 0.1%, 프레스티지 0.1%+1%,
 로열블루 0.1%+2%. 이 페이지는 삼성전자 멤버십 전체(가전제품 포함)를 다루므로
 갤럭시 스토어 관련 내용만 추출하도록 강하게 지시한다.
+
+2026-08-22 기준 스케줄 크롤링 대상에서 제외함(benefit-crawler-store Job 인자에서
+galaxy_store_tier 삭제). www.samsung.com이 Cloud Run/GCE 등 Google 호스팅 IP를
+카테고리째로 차단하는 것으로 추정(samsung_pay.py와 동일 증상 — VM으로 옮겨도
+TimeoutError 재현됨, 2026-08-22 확인). 등급별 적립률은 자주 바뀌는 값이 아니라서,
+2026-08-18 수동 크롤링 결과 4건을 benefit_info에 source_file='legacy_manual_db'로
+재태깅해 수동 관리 데이터로 남겨뒀다 — 계산 엔진(game-pay-api/engine)은
+source_file을 안 보므로 계산 결과엔 영향 없음. 이 파일 자체는 나중에 우회 경로를
+찾으면 다시 스케줄에 넣을 수 있도록 그대로 둔다.
 """
 
 from card_data.common import normalize

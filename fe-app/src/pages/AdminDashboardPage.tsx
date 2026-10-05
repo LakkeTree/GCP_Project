@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 
-const API_BASE = 'http://127.0.0.1:8000';
+const API_BASE = 'https://game-cloud-run-935566182756.asia-northeast3.run.app';
 const PAGE_SIZE = 20;
 
 interface TopGame {
@@ -319,7 +319,7 @@ export default function AdminDashboardPage() {
                       </td>
                       <td className="px-4 py-3">
                         <span
-                          className={`text-[11px] font-bold px-2 py-0.5 rounded border ${
+                          className={`text-[11px] font-bold px-2 py-0.5 rounded border whitespace-nowrap ${
                             u.role === 'ROLE_ADMIN'
                               ? 'bg-amber-50 text-amber-700 border-amber-200'
                               : 'bg-slate-50 text-slate-500 border-slate-200'

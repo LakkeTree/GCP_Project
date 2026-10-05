@@ -35,7 +35,7 @@ export default function Header() {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // API BASE URL 선언 (환경변수 또는 로컬)
-  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+  const API_BASE_URL = 'https://game-cloud-run-935566182756.asia-northeast3.run.app';
 
   const fetchUserProfile = async (token: string) => {
     if (!token || token === 'undefined' || token === 'null') {
